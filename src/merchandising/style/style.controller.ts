@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type AuthUser from 'src/auth/dto/auth-user';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
@@ -32,7 +32,7 @@ export class StyleController {
   @Get(':id')
   @ApiOperation({ summary: 'Get by id', description: 'Retrieve specific style' })
   @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
-  async findOne(@Param('id', new ParseIntPipe()) id: number) {
+  async findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     const style = await this.styleService.findOne(id);
     return new BaseResponseDto(style, 'Style retrieved successfully');
   }
@@ -55,7 +55,7 @@ export class StyleController {
   @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
   async update(
     @CurrentUser() user: AuthUser,
-    @Param('id', new ParseIntPipe()) id: number,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateStyleDto,
   ) {
     dto.updated_by_id = user.userId;
@@ -66,21 +66,21 @@ export class StyleController {
   @Delete(':id')
   @ApiOperation({ summary: 'delete style' })
   @ApiResponse({ status: 200, description: 'Style delete successfully', type: BaseResponseDto })
-  async remove(@Param('id', new ParseIntPipe()) id: number) {
+  async remove(@Param('id', new ParseUUIDPipe()) id: string) {
     const result = await this.styleService.remove(id);
     return new BaseResponseDto(result, 'Style deleted successfully');
   }
 
   @Delete(':id/permanent')
   @ApiOperation({ summary: 'delete style permanently' })
-  async permanentRemove(@Param('id', new ParseIntPipe()) id: number) {
+  async permanentRemove(@Param('id', new ParseUUIDPipe()) id: string) {
     const result = await this.styleService.permanentRemove(id);
     return new BaseResponseDto(result, 'Style deleted permanently');
   }
 
   @Post(':id/restore')
   @ApiOperation({ summary: 'restore style' })
-  async restore(@Param('id', new ParseIntPipe()) id: number) {
+  async restore(@Param('id', new ParseUUIDPipe()) id: string) {
     const result = await this.styleService.restore(id);
     return new BaseResponseDto(result, 'Style restored successfully');
   }

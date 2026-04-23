@@ -3,7 +3,10 @@ import { Currency } from 'src/app-configuration/currency/entity/currency.entity'
 import { Files } from 'src/files/entities/file.entity';
 import { Buyer } from 'src/merchandising/buyer/entity/buyer.entity';
 import { BaseEntity } from 'src/common/entities/base.entity';
-import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { StyleToEmbellishmentMap } from './style-to-embellishment-map.entity';
+import { StyleToColorMap } from './style-to-color-map.entity';
+import { StyleToSizeMap } from './style-to-size-map.entity';
 
 @Entity('styles')
 export class Style extends BaseEntity {
@@ -97,4 +100,16 @@ export class Style extends BaseEntity {
   @ManyToOne(() => Files, { nullable: true })
   @JoinColumn({ name: 'image_id' })
   image?: Files;
+
+  @OneToMany(() => StyleToColorMap, (styleToColorMap) => styleToColorMap.style)
+  @ApiProperty({ description: 'Style to color maps', type: () => [StyleToColorMap], required: false })
+  styleToColorMaps?: StyleToColorMap[];
+
+  @OneToMany(() => StyleToSizeMap, (styleToSizeMap) => styleToSizeMap.style)
+  @ApiProperty({ description: 'Style to size maps', type: () => [StyleToSizeMap], required: false })
+  styleToSizeMaps?: StyleToSizeMap[];
+
+  @OneToMany(() => StyleToEmbellishmentMap, (styleToEmbellishmentMap) => styleToEmbellishmentMap.style)
+  @ApiProperty({ description: 'Style to embellishment maps', type: () => [StyleToEmbellishmentMap], required: false })
+  styleToEmbellishmentMaps?: StyleToEmbellishmentMap[];
 }

@@ -1,8 +1,12 @@
-import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { ApiProperty, OmitType } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Style } from '../entity/style.entity';
+import { CreateStyleToColorMapDto } from './create-style-to-color-map.dto';
+import { CreateStyleToEmbellishmentMapDto } from './create-style-to-embellishment-map.dto';
+import { CreateStyleToSizeMapDto } from './create-style-to-size-map.dto';
 
-export class CreateStyleDto extends PartialType(Style) {
+export class CreateStyleDto extends OmitType(Style, ['styleToColorMaps', 'styleToSizeMaps', 'styleToEmbellishmentMaps'] as const) {
   @ApiProperty({ description: 'Product type', example: 'Woven' })
   @IsOptional()
   @IsString()
@@ -72,9 +76,8 @@ export class CreateStyleDto extends PartialType(Style) {
   remarks?: string;
 
   @ApiProperty({ description: 'Active status', example: true })
-  @IsOptional()
   @IsBoolean()
-  isActive?: boolean;
+  isActive: boolean;
 
   @ApiProperty({ description: 'Item UOM', example: 'Pcs' })
   @IsOptional()
@@ -85,4 +88,34 @@ export class CreateStyleDto extends PartialType(Style) {
   @IsOptional()
   @IsString()
   productFamily?: string;
+
+  @ApiProperty({
+    description: 'Style to color maps',
+    required: false,
+    type: () => [CreateStyleToColorMapDto],
+  })
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => CreateStyleToColorMapDto)
+  styleToColorMaps?: CreateStyleToColorMapDto[];
+
+  @ApiProperty({
+    description: 'Style to size maps',
+    required: false,
+    type: () => [CreateStyleToSizeMapDto],
+  })
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => CreateStyleToSizeMapDto)
+  styleToSizeMaps?: CreateStyleToSizeMapDto[];
+
+  @ApiProperty({
+    description: 'Style to embellishment maps',
+    required: false,
+    type: () => [CreateStyleToEmbellishmentMapDto],
+  })
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => CreateStyleToEmbellishmentMapDto)
+  styleToEmbellishmentMaps?: CreateStyleToEmbellishmentMapDto[];
 }

@@ -17,6 +17,9 @@ import { Uom } from './app-configuration/uom/entity/uom.entity';
 import { Country } from './app-configuration/country/entity/country.entity';
 import { Buyer } from './merchandising/buyer/entity/buyer.entity';
 import { Style } from './merchandising/style/entity/style.entity';
+import { StyleToColorMap } from './merchandising/style/entity/style-to-color-map.entity';
+import { StyleToEmbellishmentMap } from './merchandising/style/entity/style-to-embellishment-map.entity';
+import { StyleToSizeMap } from './merchandising/style/entity/style-to-size-map.entity';
 
 @Injectable()
 
@@ -49,7 +52,10 @@ export class AppService implements TypeOrmOptionsFactory {
         Uom,
         Country,
         Buyer,
-        Style
+        Style,
+        StyleToColorMap,
+        StyleToEmbellishmentMap,
+        StyleToSizeMap
       ],
       synchronize: false, // Never use synchronize in production
       logging: isDevelopment,
