@@ -23,4 +23,8 @@ export class Color extends BaseEntity {
   @ApiProperty({ description: 'Color description', example: 'Deep blue shade used for denim.' })
   @Column({ type: 'text', nullable: true })
   color_description: string;
+
+  @ApiProperty({ description: 'Active status', example: true })
+  @Column({ type: 'boolean', default: true, nullable: false })
+  is_active: boolean;
 }

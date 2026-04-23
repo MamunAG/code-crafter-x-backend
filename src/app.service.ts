@@ -10,6 +10,7 @@ import { DeleteAccount } from './users/entities/delete-account.entity';
 import { Contact } from './contact/entity/contact.entity';
 import { UserLocation } from './user-location/entities/user-location.entity';
 import { Color } from './merchandising/basic-setup/color/entity/color.entity';
+import { Size } from './merchandising/basic-setup/size/entity/size.entity';
 
 @Injectable()
 
@@ -35,7 +36,8 @@ export class AppService implements TypeOrmOptionsFactory {
         DeleteAccount,
         Contact,
         UserLocation,
-        Color
+        Color,
+        Size
       ],
       synchronize: false, // Never use synchronize in production
       logging: isDevelopment,

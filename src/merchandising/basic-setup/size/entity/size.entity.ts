@@ -11,4 +11,8 @@ export class Size extends BaseEntity {
   @ApiProperty({ description: 'Color name', example: 'Blue' })
   @Column({ nullable: false })
   size_name: string;
+
+  @ApiProperty({ description: 'Active status', example: true })
+  @Column({ type: 'boolean', default: true, nullable: false })
+  is_active: boolean;
 }
