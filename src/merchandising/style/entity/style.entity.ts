@@ -1,5 +1,4 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Country } from 'src/app-configuration/country/entity/country.entity';
 import { Currency } from 'src/app-configuration/currency/entity/currency.entity';
 import { Files } from 'src/files/entities/file.entity';
 import { Buyer } from 'src/merchandising/buyer/entity/buyer.entity';
@@ -9,8 +8,8 @@ import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 't
 @Entity('styles')
 export class Style extends BaseEntity {
   @ApiProperty({ description: 'Primary ID' })
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
   @ApiProperty({ description: 'Product type', example: 'Woven' })
   @Column({ name: 'product_type', type: 'varchar', length: 255, nullable: true })
