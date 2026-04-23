@@ -67,10 +67,13 @@ export class User {
   @Column({ type: 'timestamp', nullable: true })
   last_seen_at?: Date;
 
-
   @ApiProperty()
   @Column({ type: 'boolean', default: true, nullable: false })
   is_enable_notifications: boolean;
+
+  @ApiProperty()
+  @Column({ type: 'boolean', default: true, nullable: false })
+  is_email_verified: boolean;
 
   //====================================================================
   @ApiProperty({ description: 'Created by user id', example: 'xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', })

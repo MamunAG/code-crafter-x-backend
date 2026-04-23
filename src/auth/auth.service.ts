@@ -46,15 +46,15 @@ export class AuthService {
   async register(createUserDto: CreateUserDto) {
     // UsersService.create already hashes the password.
     // Pass the DTO directly to avoid double-hashing.
-    const existingUser = await this.usersService.findByEmailOrPhoneNumberOrUserName(createUserDto.email);
+    const existingUser = await this.usersService.findByEmailOrUserName(createUserDto.email);
     if (existingUser) {
       throw new BadRequestException('Email already exists');
     }
-    const existingUserByUserName = await this.usersService.findByEmailOrPhoneNumberOrUserName(createUserDto.user_name);
+    const existingUserByUserName = await this.usersService.findByEmailOrUserName(createUserDto.user_name);
     if (existingUserByUserName) {
       throw new BadRequestException('Username already exists');
     }
-    const existingUserByPhoneNo = await this.usersService.findByEmailOrPhoneNumberOrUserName(createUserDto.phone_no);
+    const existingUserByPhoneNo = await this.usersService.findByEmailOrUserName(createUserDto.phone_no);
     if (existingUserByPhoneNo) {
       throw new BadRequestException('Phone number already exists');
     }
@@ -69,7 +69,7 @@ export class AuthService {
   }
 
   async login(email: string, password: string) {
-    const user = await this.usersService.findByEmailOrPhoneNumberOrUserName(email);
+    const user = await this.usersService.findByEmailOrUserName(email);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }

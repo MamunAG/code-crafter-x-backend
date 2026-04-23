@@ -20,7 +20,7 @@ export class ContactController {
     ) { }
 
     @Get()
-    @ApiOperation({ summary: 'Get all with pagination and filters', description: 'Retrieves a paginated list of all active with optional filtering by role, department, and search terms. Requires authentication.', })
+    @ApiOperation({ summary: 'Get all', description: 'Retrieve all items', })
     @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required', })
     async getIncomingRequests(@Query() filters: FilterContactDto) {
         const { page, limit, ...contactsFilters } = filters;
@@ -29,9 +29,8 @@ export class ContactController {
         return new BaseResponseDto(contacts, 'Contacts retrieved successfully');
     }
 
-
     @Get(':id')
-    @ApiOperation({ summary: 'Get by id', description: 'Retrieves a paginated list of all active with optional filtering by role, department, and search terms. Requires authentication.', })
+    @ApiOperation({ summary: 'Get by id', description: 'Retrive specific item', })
     @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required', })
     async getOutgoingRequests(@Param('id', new ParseUUIDPipe()) id: string) {
         const contacts = await this.contactService.findOne(id);
@@ -39,9 +38,9 @@ export class ContactController {
     }
 
     @Post()
-    @ApiOperation({ summary: 'save contact' })
-    @ApiResponse({ status: 201, description: 'Contact save successfully', type: BaseResponseDto, })
-    @ApiResponse({ status: 400, description: 'Contact already exists', })
+    @ApiOperation({ summary: 'save item' })
+    @ApiResponse({ status: 201, description: 'Item save successfully', type: BaseResponseDto, })
+    @ApiResponse({ status: 400, description: 'Item already exists', })
     @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required', })
     async sendChatRequest(@CurrentUser() user: AuthUser, @Body() dto: CreateContactDto,) {
         dto.user_id = user.userId;
@@ -50,9 +49,9 @@ export class ContactController {
     }
 
     @Patch(':id')
-    @ApiOperation({ summary: 'update contact' })
-    @ApiResponse({ status: 201, description: 'Contact update successfully', type: BaseResponseDto, })
-    @ApiResponse({ status: 400, description: 'Contact already exists', })
+    @ApiOperation({ summary: 'update item' })
+    @ApiResponse({ status: 201, description: 'Item update successfully', type: BaseResponseDto, })
+    @ApiResponse({ status: 400, description: 'Item already exists', })
     @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required', })
     async acceptChatRequest(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: UpdateContactDto,) {
         const result = await this.contactService.update(id, dto);
@@ -60,22 +59,22 @@ export class ContactController {
     }
 
     @Delete(':id')
-    @ApiOperation({ summary: 'delete contact' })
-    @ApiResponse({ status: 200, description: 'Contact delete successfully', type: BaseResponseDto, })
+    @ApiOperation({ summary: 'delete item' })
+    @ApiResponse({ status: 200, description: 'Item delete successfully', type: BaseResponseDto, })
     async deleteContact(@Param('id', new ParseUUIDPipe()) id: string) {
         const result = await this.contactService.remove(id);
         return new BaseResponseDto(result, `Contact deleted successfully`);
     }
 
     @Delete(':id/permanent')
-    @ApiOperation({ summary: 'delete contact permanently' })
+    @ApiOperation({ summary: 'delete item permanently' })
     async deleteContactPermanently(@Param('id', new ParseUUIDPipe()) id: string) {
         const result = await this.contactService.permanentRemove(id);
         return new BaseResponseDto(result, `Contact deleted permanently`);
     }
 
     @Post(':id/restore')
-    @ApiOperation({ summary: 'restore contact' })
+    @ApiOperation({ summary: 'restore item' })
     async restoreContact(@Param('id', new ParseUUIDPipe()) id: string) {
         const result = await this.contactService.restore(id);
         return new BaseResponseDto(result, `Contact restored successfully`);

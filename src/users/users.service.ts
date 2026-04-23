@@ -15,7 +15,6 @@ import { User } from './entities/user.entity';
 import { DeleteAccount } from './entities/delete-account.entity';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { Cron } from '@nestjs/schedule';
-import { Status } from '../common/enums';
 import { UpdateProfileBirthDateGenderDto } from './dto/update-profile-birth-date-gender.dto';
 import { UpdateProfilePhoneNoDto } from './dto/update-profile-phone-number.dto';
 import { UpdateProfileRollaDto } from './dto/update-profile-rolla.dto';
@@ -39,7 +38,7 @@ export class UsersService {
 
   async create(createUserDto: CreateUserDto) {
     // Hash the password before saving
-    const existingUser = await this.findByEmailOrPhoneNumberOrUserName(createUserDto.email);
+    const existingUser = await this.findByEmailOrUserName(createUserDto.email);
     console.log(existingUser);
     if (existingUser) {
       throw new BadRequestException('Email already exists');
@@ -195,12 +194,11 @@ export class UsersService {
     }));
   }
 
-  findByEmailOrPhoneNumberOrUserName(email: string) {
+  findByEmailOrUserName(email: string) {
     return this.userRepository
       .createQueryBuilder('user')
       .addSelect('user.password')
       .where('user.email = :email', { email })
-      .orWhere('user.phone_no = :phone_no', { phone_no: email })
       .orWhere('user.user_name = :user_name', { user_name: email })
       .getOne();
   }

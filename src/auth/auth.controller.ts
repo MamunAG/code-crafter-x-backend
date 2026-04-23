@@ -163,7 +163,7 @@ export class AuthController {
       const userInfo = await this.googleAuthService.verifyGoogleIdToken(body.idToken);
 
       // 1) find user by email
-      const user = await this.usersService.findByEmailOrPhoneNumberOrUserName(userInfo.email);
+      const user = await this.usersService.findByEmailOrUserName(userInfo.email);
 
       // 2) create user if not exists
       if (!user) {
@@ -211,7 +211,7 @@ export class AuthController {
       }
 
       // 1) find user by email
-      const user = await this.usersService.findByEmailOrPhoneNumberOrUserName(userInfo.email);
+      const user = await this.usersService.findByEmailOrUserName(userInfo.email);
 
       // 2) create user if not exists
       if (!user) {

@@ -31,7 +31,7 @@ export class PasswordResetService {
     const { email } = forgotPasswordDto;
 
     // Check if user exists
-    const user = await this.usersService.findByEmailOrPhoneNumberOrUserName(email);
+    const user = await this.usersService.findByEmailOrUserName(email);
     if (!user) {
       // For security, don't reveal if email exists or not
       // Just return success to prevent email enumeration
