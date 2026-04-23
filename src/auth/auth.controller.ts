@@ -174,7 +174,6 @@ export class AuthController {
           password: temporaryPassword,
           role: RolesEnum.user,
           user_name: userInfo.name!,
-          display_name: userInfo.name!,
           phone_no: '+0991'
         });
         console.log('New user created:', newUser);
@@ -224,7 +223,6 @@ export class AuthController {
           role: RolesEnum.user,
           created_by: '',
           user_name: '',
-          display_name: 'Apple User',
           phone_no: '+0991'
         });
 

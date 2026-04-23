@@ -20,6 +20,7 @@ import { UomModule } from './app-configuration/uom/uom.module';
 import { CountryModule } from './app-configuration/country/country.module';
 import { BuyerModule } from './merchandising/buyer/buyer.module';
 import { StyleModule } from './merchandising/style/style.module';
+import { CommonController } from './common/common.controller';
 
 @Module({
   imports: [
@@ -46,7 +47,7 @@ import { StyleModule } from './merchandising/style/style.module';
     BuyerModule,
     StyleModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, CommonController],
   providers: [
     AppService,
     // AuditInterceptorProvider,

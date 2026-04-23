@@ -62,11 +62,6 @@ export class CreateUserDto {
   @IsNumber()
   profile_pic_id?: number;
 
-  @ApiProperty({ description: 'User display name', example: 'My Name', required: true, })
-  @IsString()
-  @IsNotEmpty()
-  display_name: string;
-
   @ApiProperty({ description: 'User bio', example: 'abc efg ijk', required: false, })
   @IsOptional()
   @IsString()
