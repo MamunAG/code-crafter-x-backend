@@ -1,6 +1,4 @@
 Please follow contact.module.ts single entity.
-Do not make migration file.
-update package.json "migration:generate": "cross-env NODE_ENV=development ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:generate -d src/config/data-source.ts src/migrations/user-up",
-this line if ever migration needed for example at the last of the line 'user-up' will update to 'contact-added' if i want to migrate contact entity.
-use yarn migration:generate command to generate migration file.
-use yarn migration:run command to run migration file.
+use 'yarn migration:generate' command to generate migration file.
+use 'yarn migration:run' command to run migration file.
+app.service.ts file must have the entity included. please check and confirm.

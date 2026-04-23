@@ -43,7 +43,7 @@ export class ContactController {
     @ApiResponse({ status: 400, description: 'Item already exists', })
     @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required', })
     async sendChatRequest(@CurrentUser() user: AuthUser, @Body() dto: CreateContactDto,) {
-        dto.user_id = user.userId;
+        dto.created_by_id = user.userId;
         const result = await this.contactService.create(dto);
         return new BaseResponseDto(result, 'Contact saved successfully');
     }

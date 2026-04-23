@@ -74,6 +74,9 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
     // Import UserStatus enum from the appropriate location
+    if (!user.is_email_verified) {
+      throw new UnauthorizedException('Please varify your email address');
+    }
     if (user.status !== StatusEnum.active) {
       throw new UnauthorizedException('User account is inactive');
     }

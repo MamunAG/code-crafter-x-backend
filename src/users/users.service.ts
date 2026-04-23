@@ -14,7 +14,6 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './entities/user.entity';
 import { DeleteAccount } from './entities/delete-account.entity';
 import { DeleteAccountDto } from './dto/delete-account.dto';
-import { Cron } from '@nestjs/schedule';
 import { UpdateProfileBirthDateGenderDto } from './dto/update-profile-birth-date-gender.dto';
 import { UpdateProfilePhoneNoDto } from './dto/update-profile-phone-number.dto';
 import { UpdateProfileRollaDto } from './dto/update-profile-rolla.dto';
@@ -270,20 +269,20 @@ export class UsersService {
   }
 
 
-  @Cron('*/5 * * * *')
-  async deactivateUserAccountAfterSpecificTime() {
-    // Permanently remove soft-deleted users after 14 days.
-    console.log('Delete account checking start.')
-    await this.userRepository
-      .createQueryBuilder()
-      .delete()
-      .from(User)
-      .where('deleted_at IS NOT NULL')
-      .andWhere('deleted_at < :threshold', {
-        threshold: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
-      })
-      .execute();
-    console.log('Delete account checking end.')
-  }
+  // @Cron('*/5 * * * *')
+  // async deactivateUserAccountAfterSpecificTime() {
+  //   // Permanently remove soft-deleted users after 14 days.
+  //   console.log('Delete account checking start.')
+  //   await this.userRepository
+  //     .createQueryBuilder()
+  //     .delete()
+  //     .from(User)
+  //     .where('deleted_at IS NOT NULL')
+  //     .andWhere('deleted_at < :threshold', {
+  //       threshold: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
+  //     })
+  //     .execute();
+  //   console.log('Delete account checking end.')
+  // }
 
 }

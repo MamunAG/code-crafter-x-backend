@@ -9,6 +9,7 @@ import { FileReference } from './files/entities/file-reference.entity';
 import { DeleteAccount } from './users/entities/delete-account.entity';
 import { Contact } from './contact/entity/contact.entity';
 import { UserLocation } from './user-location/entities/user-location.entity';
+import { Color } from './merchandising/basic-setup/color/entity/color.entity';
 
 @Injectable()
 
@@ -34,6 +35,7 @@ export class AppService implements TypeOrmOptionsFactory {
         DeleteAccount,
         Contact,
         UserLocation,
+        Color
       ],
       synchronize: false, // Never use synchronize in production
       logging: isDevelopment,
