@@ -17,6 +17,9 @@ import { SizeModule } from './merchandising/basic-setup/size/size.module';
 import { EmbellishmentModule } from './merchandising/basic-setup/embellishment/embellishment.module';
 import { CurrencyModule } from './app-configuration/currency/currency.module';
 import { UomModule } from './app-configuration/uom/uom.module';
+import { CountryModule } from './app-configuration/country/country.module';
+import { BuyerModule } from './merchandising/buyer/buyer.module';
+import { StyleModule } from './merchandising/style/style.module';
 
 @Module({
   imports: [
@@ -39,6 +42,9 @@ import { UomModule } from './app-configuration/uom/uom.module';
     EmbellishmentModule,
     CurrencyModule,
     UomModule,
+    CountryModule,
+    BuyerModule,
+    StyleModule,
   ],
   controllers: [AppController],
   providers: [

@@ -14,6 +14,9 @@ import { Size } from './merchandising/basic-setup/size/entity/size.entity';
 import { Embellishment } from './merchandising/basic-setup/embellishment/entity/embellishment.entity';
 import { Currency } from './app-configuration/currency/entity/currency.entity';
 import { Uom } from './app-configuration/uom/entity/uom.entity';
+import { Country } from './app-configuration/country/entity/country.entity';
+import { Buyer } from './merchandising/buyer/entity/buyer.entity';
+import { Style } from './merchandising/style/entity/style.entity';
 
 @Injectable()
 
@@ -43,7 +46,10 @@ export class AppService implements TypeOrmOptionsFactory {
         Size,
         Embellishment,
         Currency,
-        Uom
+        Uom,
+        Country,
+        Buyer,
+        Style
       ],
       synchronize: false, // Never use synchronize in production
       logging: isDevelopment,
