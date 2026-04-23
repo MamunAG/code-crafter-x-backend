@@ -1,0 +1,186 @@
+<html lang='en'>
+  <head>
+    <meta charset='UTF-8' />
+    <meta name='viewport' content='width=device-width, initial-scale=1.0' />
+    <title>Welcome to Rillo</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
+          Cantarell, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        background-color: #f8f9fa;
+      }
+
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background-color: #ffffff;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      .header h1 {
+        color: white;
+        margin: 0;
+        font-size: 28px;
+        font-weight: 600;
+      }
+
+      .header p {
+        color: rgba(255, 255, 255, 0.9);
+        margin: 10px 0 0 0;
+        font-size: 16px;
+      }
+
+      .content {
+        padding: 40px 30px;
+      }
+
+      .welcome-message {
+        background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+        padding: 25px;
+        border-radius: 8px;
+        margin: 20px 0;
+        text-align: center;
+      }
+
+      .features {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 25px;
+        margin: 25px 0;
+      }
+
+      .features h3 {
+        color: #f37e2c;
+        margin-top: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .features ul {
+        list-style: none;
+        padding: 0;
+        margin: 15px 0 0 0;
+      }
+
+      .features li {
+        padding: 8px 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .features li:before {
+        content: '🔥';
+        font-size: 16px;
+      }
+
+      .cta {
+        background-color: #f37e2c;
+        color: white;
+        padding: 12px 24px;
+        text-decoration: none;
+        border-radius: 6px;
+        display: inline-block;
+        font-weight: 600;
+        margin: 20px 0;
+      }
+
+      .support {
+        background-color: #ffe8d9;
+        border-left: 4px solid #f37e2c;
+        padding: 15px;
+        margin: 25px 0;
+        border-radius: 4px;
+      }
+
+      .support p {
+        margin: 0;
+        color: #b54e00;
+      }
+
+      .footer {
+        background-color: #f8f9fa;
+        padding: 25px 30px;
+        text-align: center;
+        border-top: 1px solid #dee2e6;
+      }
+
+      .footer p {
+        margin: 5px 0;
+        color: #666;
+        font-size: 14px;
+      }
+
+      .brand {
+        color: #f37e2c;
+        font-weight: 600;
+      }
+
+      .emoji {
+        font-size: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class='container'>
+      <div class='header' style="background: orange; padding: 40px 20px; text-align: center;">
+        <h1>🎉 Welcome to Rillo!</h1>
+        <p>Your trading journey begins here</p>
+      </div>
+
+      <div class='content'>
+        <div class='welcome-message'>
+          <h2 style='margin: 0; color: #f37e2c;'>Hello {{fullName}}! 👋</h2>
+          <p style='margin: 15px 0 0 0; font-size: 16px;'>We're thrilled to have
+            you join the Rillo community!</p>
+        </div>
+
+        <p>Your Rillo account has been successfully created.</p>
+
+        <div class='features'>
+          <h3><span class='emoji'>⚔</span> What you can do with Rillo:</h3>
+          <ul>
+            <li>Participate in exciting clashes and competitions</li>
+            <li>Track your performance and ranking</li>           
+            <li>Receive rewards, bonuses, and updates</li>
+            <li>Manage your Rillo account securely</li>
+            <li>Stay updated with event and tournament notifications</li>
+            <li>Get access to exclusive Rillo features</li>
+            <li>Connect with support for any help or questions</li>
+          </ul>
+        </div>
+
+        <div style='text-align: center;'>
+          <a href='https://rillo.com/' class='cta'>🚀 Start Trading Now</a>
+        </div>
+
+        <div class='support'>
+          <p><strong>💡 Need Help?</strong>
+            Our support team is here to assist you anytime. Feel free to reach
+            out if you have any questions about your Rillo experience!</p>
+        </div>
+
+        <p>We're excited to have you with us and can’t wait for you to experience
+          the thrill of Rillo! 🔥</p>
+      </div>
+
+      <div class='footer'>
+        <p>Best regards,<br /><span class='brand'>The Rillo Team</span></p>
+        <p style='margin-top: 15px; font-size: 12px; color: #999;'>
+          This email was sent automatically. Please do not reply to this email.
+        </p>
+        <p style='font-size: 12px; color: #999;'>
+          For assistance, contact our support team at support@rillo.com.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
