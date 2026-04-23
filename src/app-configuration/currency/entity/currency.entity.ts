@@ -9,26 +9,26 @@ export class Currency extends BaseEntity {
   id: number;
 
   @ApiProperty({ description: 'Currency name', example: 'Bangladeshi Taka' })
-  @Column({ nullable: false })
-  currencyname: string;
+  @Column({ name: 'currencyname', nullable: false })
+  currencyName: string;
 
   @ApiProperty({ description: 'Currency code', example: 'BDT' })
-  @Column({ nullable: false })
-  currencycode: string;
+  @Column({ name: 'currencycode', nullable: false })
+  currencyCode: string;
 
   @ApiProperty({ description: 'Exchange rate', example: 1.0 })
-  @Column({ type: 'double precision', nullable: false })
+  @Column({ name: 'rate', type: 'double precision', nullable: false })
   rate: number;
 
   @ApiProperty({ description: 'Currency symbol', example: 'BDT' })
-  @Column({ nullable: false })
+  @Column({ name: 'symbol', nullable: false })
   symbol: string;
 
   @ApiProperty({ description: 'Default currency flag', example: true })
-  @Column({ type: 'boolean', default: false, nullable: false })
-  is_default: boolean;
+  @Column({ name: 'is_default', type: 'boolean', default: false, nullable: false })
+  isDefault: boolean;
 
   @ApiProperty({ description: 'Active status', example: true })
-  @Column({ type: 'boolean', default: true, nullable: false })
-  is_active: boolean;
+  @Column({ name: 'is_active', type: 'boolean', default: true, nullable: false })
+  isActive: boolean;
 }

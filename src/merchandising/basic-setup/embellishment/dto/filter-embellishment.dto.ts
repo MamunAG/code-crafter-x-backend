@@ -13,5 +13,5 @@ export class FilterEmbellishmentDto extends PaginationDto {
 
   @ApiProperty({ description: 'Active status', example: 'Y', required: false })
   @IsOptional()
-  is_active: string;
+  isActive: string;
 }

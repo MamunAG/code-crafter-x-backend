@@ -18,11 +18,11 @@ const toBoolean = ({ value }: { value: unknown }) => {
 export class FilterCurrencyDto extends PaginationDto {
   @ApiProperty({ description: 'Currency name', example: 'Bangladeshi Taka', required: false })
   @IsOptional()
-  currencyname?: string;
+  currencyName?: string;
 
   @ApiProperty({ description: 'Currency code', example: 'BDT', required: false })
   @IsOptional()
-  currencycode?: string;
+  currencyCode?: string;
 
   @ApiProperty({ description: 'Currency symbol', example: 'BDT', required: false })
   @IsOptional()
@@ -31,10 +31,10 @@ export class FilterCurrencyDto extends PaginationDto {
   @ApiProperty({ description: 'Default currency flag', example: false, required: false })
   @Transform(toBoolean)
   @IsOptional()
-  is_default?: boolean;
+  isDefault?: boolean;
 
   @ApiProperty({ description: 'Active status', example: true, required: false })
   @Transform(toBoolean)
   @IsOptional()
-  is_active?: boolean;
+  isActive?: boolean;
 }

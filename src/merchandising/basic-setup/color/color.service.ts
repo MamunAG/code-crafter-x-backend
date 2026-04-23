@@ -17,7 +17,7 @@ export class ColorService {
   ) { }
 
   async create(colorDto: CreateColorDto) {
-    await this.ensureColorNameIsUnique(colorDto.color_name);
+    await this.ensureColorNameIsUnique(colorDto.colorName);
     const color = this.colorRepository.create(colorDto);
     const saved = await this.colorRepository.save(color);
     return this.findOne(saved.id);
@@ -38,19 +38,19 @@ export class ColorService {
       .take(limit)
       .orderBy('color.created_at', 'DESC');
 
-    if (filters?.color_name) {
-      queryBuilder.andWhere('color.color_name ILIKE :color_name', {
-        color_name: `%${filters.color_name}%`,
+    if (filters?.colorName) {
+      queryBuilder.andWhere('color.colorName ILIKE :colorName', {
+        colorName: `%${filters.colorName}%`,
       });
     }
-    if (filters?.color_display_name) {
-      queryBuilder.andWhere('color.color_display_name ILIKE :color_display_name', {
-        color_display_name: `%${filters.color_display_name}%`,
+    if (filters?.colorDisplayName) {
+      queryBuilder.andWhere('color.colorDisplayName ILIKE :colorDisplayName', {
+        colorDisplayName: `%${filters.colorDisplayName}%`,
       });
     }
-    if (filters?.color_description) {
-      queryBuilder.andWhere('color.color_description ILIKE :color_description', {
-        color_description: `%${filters.color_description}%`,
+    if (filters?.colorDescription) {
+      queryBuilder.andWhere('color.colorDescription ILIKE :colorDescription', {
+        colorDescription: `%${filters.colorDescription}%`,
       });
     }
 
@@ -83,7 +83,7 @@ export class ColorService {
   }
 
   async update(id: number, dto: UpdateColorDto) {
-    await this.ensureColorNameIsUnique(dto.color_name, id);
+    await this.ensureColorNameIsUnique(dto.colorName, id);
     await this.colorRepository.update(id, dto);
     return this.findOne(id);
   }
@@ -93,7 +93,7 @@ export class ColorService {
 
     const queryBuilder = this.colorRepository
       .createQueryBuilder('color')
-      .where('LOWER(TRIM(color.color_name)) = :colorName', {
+      .where('LOWER(TRIM(color.colorName)) = :colorName', {
         colorName: normalizedColorName,
       })
       .andWhere('color.deleted_at IS NULL');

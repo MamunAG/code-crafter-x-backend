@@ -9,14 +9,14 @@ export class Uom extends BaseEntity {
   id: number;
 
   @ApiProperty({ description: 'UOM name', example: 'Kilogram' })
-  @Column({ nullable: false })
+  @Column({ name: 'name', nullable: false })
   name: string;
 
   @ApiProperty({ description: 'UOM short name', example: 'KG' })
-  @Column({ nullable: false })
-  short_name: string;
+  @Column({ name: 'short_name', nullable: false })
+  shortName: string;
 
   @ApiProperty({ description: 'Active status', example: 'Y' })
-  @Column({ type: 'varchar', length: 10, default: 'Y', nullable: false })
-  is_active: string;
+  @Column({ name: 'is_active', type: 'varchar', length: 10, default: 'Y', nullable: false })
+  isActive: string;
 }

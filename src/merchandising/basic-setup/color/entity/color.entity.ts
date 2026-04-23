@@ -13,18 +13,18 @@ export class Color extends BaseEntity {
   id: number;
 
   @ApiProperty({ description: 'Color name', example: 'Blue' })
-  @Column({ nullable: false })
-  color_name: string;
+  @Column({ name: 'color_name', nullable: false })
+  colorName: string;
 
   @ApiProperty({ description: 'Color display name', example: 'Ocean Blue' })
-  @Column({ nullable: true })
-  color_display_name: string;
+  @Column({ name: 'color_display_name', nullable: true })
+  colorDisplayName: string;
 
   @ApiProperty({ description: 'Color description', example: 'Deep blue shade used for denim.' })
-  @Column({ type: 'text', nullable: true })
-  color_description: string;
+  @Column({ name: 'color_description', type: 'text', nullable: true })
+  colorDescription: string;
 
   @ApiProperty({ description: 'Active status', example: true })
-  @Column({ type: 'boolean', default: true, nullable: false })
-  is_active: boolean;
+  @Column({ name: 'is_active', type: 'boolean', default: true, nullable: false })
+  isActive: boolean;
 }

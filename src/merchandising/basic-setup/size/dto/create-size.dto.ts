@@ -5,5 +5,5 @@ import { Size } from '../entity/size.entity';
 export class CreateSizeDto extends PartialType(Size) {
   @ApiProperty({ description: 'Size name', example: 'M' })
   @IsNotEmpty()
-  size_name: string;
+  sizeName: string;
 }

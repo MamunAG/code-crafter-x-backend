@@ -9,9 +9,9 @@ export class CreateUomDto extends PartialType(Uom) {
 
   @ApiProperty({ description: 'UOM short name', example: 'KG' })
   @IsNotEmpty()
-  short_name: string;
+  shortName: string;
 
   @ApiProperty({ description: 'Active status', example: 'Y' })
   @IsOptional()
-  is_active: string;
+  isActive: string;
 }

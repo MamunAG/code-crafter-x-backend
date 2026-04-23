@@ -48,9 +48,9 @@ export class EmbellishmentService {
         remarks: `%${filters.remarks}%`,
       });
     }
-    if (filters?.is_active) {
-      queryBuilder.andWhere('embellishment.is_active = :is_active', {
-        is_active: filters.is_active,
+    if (filters?.isActive) {
+      queryBuilder.andWhere('embellishment.isActive = :isActive', {
+        isActive: filters.isActive,
       });
     }
 

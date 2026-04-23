@@ -13,10 +13,10 @@ export class Embellishment extends BaseEntity {
   name: string;
 
   @ApiProperty({ description: 'Remarks', example: 'Hand-sewn beads for decoration.' })
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'remarks', type: 'text', nullable: true })
   remarks: string;
 
   @ApiProperty({ description: 'Active status', example: 'Y' })
-  @Column({ type: 'varchar', length: 10, default: 'Y', nullable: false })
-  is_active: string;
+  @Column({ name: 'is_active', type: 'varchar', length: 10, default: 'Y', nullable: false })
+  isActive: string;
 }

@@ -17,7 +17,7 @@ export class SizeService {
   ) { }
 
   async create(sizeDto: CreateSizeDto) {
-    await this.ensureSizeNameIsUnique(sizeDto.size_name);
+    await this.ensureSizeNameIsUnique(sizeDto.sizeName);
     const size = this.sizeRepository.create(sizeDto);
     const saved = await this.sizeRepository.save(size);
     return this.findOne(saved.id);
@@ -38,9 +38,9 @@ export class SizeService {
       .take(limit)
       .orderBy('size.created_at', 'DESC');
 
-    if (filters?.size_name) {
-      queryBuilder.andWhere('LOWER(TRIM(size.size_name)) LIKE :size_name', {
-        size_name: `%${filters.size_name.trim().toLowerCase()}%`,
+    if (filters?.sizeName) {
+      queryBuilder.andWhere('LOWER(TRIM(size.sizeName)) LIKE :sizeName', {
+        sizeName: `%${filters.sizeName.trim().toLowerCase()}%`,
       });
     }
 
@@ -73,7 +73,7 @@ export class SizeService {
   }
 
   async update(id: number, dto: UpdateSizeDto) {
-    await this.ensureSizeNameIsUnique(dto.size_name, id);
+    await this.ensureSizeNameIsUnique(dto.sizeName, id);
     await this.sizeRepository.update(id, dto);
     return this.findOne(id);
   }
@@ -95,7 +95,7 @@ export class SizeService {
 
     const queryBuilder = this.sizeRepository
       .createQueryBuilder('size')
-      .where('LOWER(TRIM(size.size_name)) = :sizeName', {
+      .where('LOWER(TRIM(size.sizeName)) = :sizeName', {
         sizeName: normalizedSizeName,
       })
       .andWhere('size.deleted_at IS NULL');

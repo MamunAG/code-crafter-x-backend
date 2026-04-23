@@ -17,7 +17,7 @@ export class CurrencyService {
   ) { }
 
   async create(currencyDto: CreateCurrencyDto) {
-    await this.ensureCurrencyCodeIsUnique(currencyDto.currencycode);
+    await this.ensureCurrencyCodeIsUnique(currencyDto.currencyCode);
     const currency = this.currencyRepository.create(currencyDto);
     const saved = await this.currencyRepository.save(currency);
     return this.findOne(saved.id);
@@ -38,15 +38,15 @@ export class CurrencyService {
       .take(limit)
       .orderBy('currency.created_at', 'DESC');
 
-    if (filters?.currencyname) {
-      queryBuilder.andWhere('currency.currencyname ILIKE :currencyname', {
-        currencyname: `%${filters.currencyname}%`,
+    if (filters?.currencyName) {
+      queryBuilder.andWhere('currency.currencyName ILIKE :currencyName', {
+        currencyName: `%${filters.currencyName}%`,
       });
     }
 
-    if (filters?.currencycode) {
-      queryBuilder.andWhere('currency.currencycode ILIKE :currencycode', {
-        currencycode: `%${filters.currencycode}%`,
+    if (filters?.currencyCode) {
+      queryBuilder.andWhere('currency.currencyCode ILIKE :currencyCode', {
+        currencyCode: `%${filters.currencyCode}%`,
       });
     }
 
@@ -56,15 +56,15 @@ export class CurrencyService {
       });
     }
 
-    if (filters?.is_default !== undefined) {
-      queryBuilder.andWhere('currency.is_default = :is_default', {
-        is_default: filters.is_default,
+    if (filters?.isDefault !== undefined) {
+      queryBuilder.andWhere('currency.isDefault = :isDefault', {
+        isDefault: filters.isDefault,
       });
     }
 
-    if (filters?.is_active !== undefined) {
-      queryBuilder.andWhere('currency.is_active = :is_active', {
-        is_active: filters.is_active,
+    if (filters?.isActive !== undefined) {
+      queryBuilder.andWhere('currency.isActive = :isActive', {
+        isActive: filters.isActive,
       });
     }
 
@@ -97,7 +97,7 @@ export class CurrencyService {
   }
 
   async update(id: number, dto: UpdateCurrencyDto) {
-    await this.ensureCurrencyCodeIsUnique(dto.currencycode, id);
+    await this.ensureCurrencyCodeIsUnique(dto.currencyCode, id);
     await this.currencyRepository.update(id, dto);
     return this.findOne(id);
   }
@@ -119,7 +119,7 @@ export class CurrencyService {
 
     const queryBuilder = this.currencyRepository
       .createQueryBuilder('currency')
-      .where('LOWER(TRIM(currency.currencycode)) = :currencyCode', {
+      .where('LOWER(TRIM(currency.currencyCode)) = :currencyCode', {
         currencyCode: normalizedCurrencyCode,
       })
       .andWhere('currency.deleted_at IS NULL');

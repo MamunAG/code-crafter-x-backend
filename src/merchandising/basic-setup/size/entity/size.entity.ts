@@ -9,10 +9,10 @@ export class Size extends BaseEntity {
   id: number;
 
   @ApiProperty({ description: 'Color name', example: 'Blue' })
-  @Column({ nullable: false })
-  size_name: string;
+  @Column({ name: 'size_name', nullable: false })
+  sizeName: string;
 
   @ApiProperty({ description: 'Active status', example: true })
-  @Column({ type: 'boolean', default: true, nullable: false })
-  is_active: boolean;
+  @Column({ name: 'is_active', type: 'boolean', default: true, nullable: false })
+  isActive: boolean;
 }

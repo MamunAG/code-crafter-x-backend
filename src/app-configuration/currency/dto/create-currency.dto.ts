@@ -6,12 +6,12 @@ export class CreateCurrencyDto extends PartialType(Currency) {
   @ApiProperty({ description: 'Currency name', example: 'Bangladeshi Taka' })
   @IsString()
   @IsNotEmpty()
-  currencyname: string;
+  currencyName: string;
 
   @ApiProperty({ description: 'Currency code', example: 'BDT' })
   @IsString()
   @IsNotEmpty()
-  currencycode: string;
+  currencyCode: string;
 
   @ApiProperty({ description: 'Exchange rate', example: 1.0 })
   @IsNumber()
@@ -24,9 +24,9 @@ export class CreateCurrencyDto extends PartialType(Currency) {
 
   @ApiProperty({ description: 'Default currency flag', example: false })
   @IsBoolean()
-  is_default: boolean;
+  isDefault: boolean;
 
   @ApiProperty({ description: 'Active status', example: true })
   @IsBoolean()
-  is_active: boolean;
+  isActive: boolean;
 }

@@ -13,5 +13,5 @@ export class CreateEmbellishmentDto extends PartialType(Embellishment) {
 
   @ApiProperty({ description: 'Active status', example: 'Y' })
   @IsOptional()
-  is_active: string;
+  isActive: string;
 }

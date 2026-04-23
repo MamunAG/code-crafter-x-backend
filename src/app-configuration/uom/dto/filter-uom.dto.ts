@@ -9,9 +9,9 @@ export class FilterUomDto extends PaginationDto {
 
   @ApiProperty({ description: 'UOM short name', example: 'KG', required: false })
   @IsOptional()
-  short_name: string;
+  shortName: string;
 
   @ApiProperty({ description: 'Active status', example: 'Y', required: false })
   @IsOptional()
-  is_active: string;
+  isActive: string;
 }

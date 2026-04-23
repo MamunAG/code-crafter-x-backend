@@ -44,15 +44,15 @@ export class UomService {
       });
     }
 
-    if (filters?.short_name) {
-      queryBuilder.andWhere('uom.short_name ILIKE :short_name', {
-        short_name: `%${filters.short_name}%`,
+    if (filters?.shortName) {
+      queryBuilder.andWhere('uom.shortName ILIKE :shortName', {
+        shortName: `%${filters.shortName}%`,
       });
     }
 
-    if (filters?.is_active) {
-      queryBuilder.andWhere('uom.is_active = :is_active', {
-        is_active: filters.is_active,
+    if (filters?.isActive) {
+      queryBuilder.andWhere('uom.isActive = :isActive', {
+        isActive: filters.isActive,
       });
     }
 
