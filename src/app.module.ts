@@ -4,12 +4,12 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { UsersModule } from './users/users.module';
+import { AuthModule } from './auth/auth.module';
 import { RolesGuard } from './common/guards/roles.guard';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { ScheduleModule } from '@nestjs/schedule';
-import { AuthModule } from './auth/auth.module';
-import { UsersModule } from './users/users.module';
 import { ContactModule } from './contact/contact.module';
 import { UserLocationModule } from './user-location/user-location.module';
 
@@ -24,8 +24,8 @@ import { UserLocationModule } from './user-location/user-location.module';
       useClass: AppService,
     }),
     ScheduleModule.forRoot(),
-    CommandModule,
     AuthModule,
+    CommandModule,
     UsersModule,
     ContactModule,
     UserLocationModule,
@@ -33,6 +33,7 @@ import { UserLocationModule } from './user-location/user-location.module';
   controllers: [AppController],
   providers: [
     AppService,
+    // AuditInterceptorProvider,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
