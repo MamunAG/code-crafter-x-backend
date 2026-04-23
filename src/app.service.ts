@@ -11,6 +11,7 @@ import { Contact } from './contact/entity/contact.entity';
 import { UserLocation } from './user-location/entities/user-location.entity';
 import { Color } from './merchandising/basic-setup/color/entity/color.entity';
 import { Size } from './merchandising/basic-setup/size/entity/size.entity';
+import { Embellishment } from './merchandising/basic-setup/embellishment/entity/embellishment.entity';
 
 @Injectable()
 
@@ -37,7 +38,8 @@ export class AppService implements TypeOrmOptionsFactory {
         Contact,
         UserLocation,
         Color,
-        Size
+        Size,
+        Embellishment
       ],
       synchronize: false, // Never use synchronize in production
       logging: isDevelopment,

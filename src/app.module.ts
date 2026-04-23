@@ -14,6 +14,7 @@ import { ContactModule } from './contact/contact.module';
 import { UserLocationModule } from './user-location/user-location.module';
 import { ColorModule } from './merchandising/basic-setup/color/color.module';
 import { SizeModule } from './merchandising/basic-setup/size/size.module';
+import { EmbellishmentModule } from './merchandising/basic-setup/embellishment/embellishment.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { SizeModule } from './merchandising/basic-setup/size/size.module';
     UserLocationModule,
     ColorModule,
     SizeModule,
+    EmbellishmentModule,
   ],
   controllers: [AppController],
   providers: [
