@@ -1,20 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
-import jwksClient from 'jwks-rsa';
 
 @Injectable()
 export class AppleAuthService {
-    private client = jwksClient({
-        jwksUri: 'https://appleid.apple.com/auth/keys',
-        cache: true,
-        rateLimit: true,
-    });
-
-    private async getAppleSigningKey(kid: string): Promise<string> {
-        const key = await this.client.getSigningKey(kid);
-        return key.getPublicKey();
-    }
+    private readonly appleJwksUrl = new URL('https://appleid.apple.com/auth/keys');
+    private readonly josePromise = import('jose');
 
     async verifyAppleIdToken(identityToken: string) {
         try {
@@ -27,13 +18,13 @@ export class AppleAuthService {
             const kid = decoded.header.kid;
             if (!kid) throw new UnauthorizedException('Apple token missing kid');
 
-            const publicKey = await this.getAppleSigningKey(kid);
-
-            const payload = jwt.verify(identityToken, publicKey, {
+            const { createRemoteJWKSet, jwtVerify } = await this.josePromise;
+            const appleKeySet = createRemoteJWKSet(this.appleJwksUrl);
+            const { payload } = await jwtVerify(identityToken, appleKeySet, {
                 algorithms: ['RS256'],
                 audience: process.env.APPLE_CLIENT_ID,
                 issuer: 'https://appleid.apple.com',
-            }) as jwt.JwtPayload;
+            });
 
             // ✅ Apple may not always send email after first login
             return {
