@@ -9,10 +9,10 @@ import {
 import { CreateUserDto } from './create-user.dto';
 
 export class UpdateProfileRollaDto extends PartialType(CreateUserDto) {
-  @ApiProperty({ description: 'User profile pic id', example: 1, required: false })
+  @ApiProperty({ description: 'User profile picture id', example: 1, required: false })
   @IsOptional()
   @IsNumber()
-  file_id?: number;
+  profile_pic_id?: number;
 
   @ApiProperty({ description: 'User name', example: 'johndoe' })
   @IsString()

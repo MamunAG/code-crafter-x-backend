@@ -57,10 +57,10 @@ export class CreateUserDto {
   password: string;
 
   // ✅ fourth-screen
-  @ApiProperty({ description: 'User profile pic id', example: null, required: false })
+  @ApiProperty({ description: 'User profile picture id', example: null, required: false })
   @IsOptional()
   @IsNumber()
-  file_id?: number;
+  profile_pic_id?: number;
 
   @ApiProperty({ description: 'User display name', example: 'My Name', required: true, })
   @IsString()

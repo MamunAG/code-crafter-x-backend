@@ -51,8 +51,8 @@ export class DeleteAccount {
   deleted_at: Date;
 
   /*Relations */
-  @ApiProperty({ description: 'File object', type: () => User, })
+  @ApiProperty({ description: 'User object', type: () => User, })
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'user_id' })
-  users: User;
+  user: User;
 }

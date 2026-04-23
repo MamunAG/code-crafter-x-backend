@@ -4,7 +4,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcryptjs';
-import { LessThan, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
@@ -69,7 +69,7 @@ export class UsersService {
 
     const queryBuilder = this.userRepository
       .createQueryBuilder('user')
-      .leftJoinAndSelect('user.file', 'file')
+      .leftJoinAndSelect('user.profile_pic', 'profile_pic')
       .skip(skip)
       .take(limit)
       .orderBy('user.name', 'DESC');
@@ -136,7 +136,7 @@ export class UsersService {
   async findOne(id: string) {
     const user = await this.userRepository.findOne({
       where: { id },
-      relations: ["file"],
+      relations: ['profile_pic'],
       withDeleted: false, // Only get non-deleted users
     });
     if (!user) {
@@ -253,15 +253,15 @@ export class UsersService {
   }
 
   async deleteAccount(user_id: string, dto: DeleteAccountDto) {
-    await this.userRepository.update(user_id, { is_delete_account: true, account_delete_at: new Date() });
-
     dto.user_id = user_id;
-    this.deleteAccountRepository.create(dto);
-    return this.deleteAccountRepository.save(dto);
+    await this.userRepository.softDelete(user_id);
+
+    const deleteAccount = this.deleteAccountRepository.create(dto);
+    return this.deleteAccountRepository.save(deleteAccount);
   }
 
   async retriveAccount(user_id: string) {
-    await this.userRepository.update(user_id, { is_delete_account: false, account_delete_at: null });
+    await this.userRepository.restore(user_id);
     return await this.deleteAccountRepository.delete({ user_id });
   }
 
@@ -274,17 +274,17 @@ export class UsersService {
 
   @Cron('*/5 * * * *')
   async deactivateUserAccountAfterSpecificTime() {
-    //14 days after the user delete account deactivate the user
+    // Permanently remove soft-deleted users after 14 days.
     console.log('Delete account checking start.')
-    await this.userRepository.update(
-      {
-        is_delete_account: true,
-        account_delete_at: LessThan(new Date(new Date().getTime() - 14 * 24 * 60 * 60 * 1000)),
-      },
-      {
-        status: Status.inactive,
-      },
-    );
+    await this.userRepository
+      .createQueryBuilder()
+      .delete()
+      .from(User)
+      .where('deleted_at IS NOT NULL')
+      .andWhere('deleted_at < :threshold', {
+        threshold: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
+      })
+      .execute();
     console.log('Delete account checking end.')
   }
 
