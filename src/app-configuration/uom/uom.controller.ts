@@ -1,0 +1,87 @@
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import type AuthUser from 'src/auth/dto/auth-user';
+import { CurrentUser } from 'src/common/decorators/current-user.decorator';
+import { Roles } from 'src/common/decorators/roles.decorator';
+import { BaseResponseDto } from 'src/common/dto/base-response.dto';
+import { RolesEnum } from 'src/common/enums/role.enum';
+import { UomService } from './uom.service';
+import { CreateUomDto } from './dto/create-uom.dto';
+import { FilterUomDto } from './dto/filter-uom.dto';
+import { UpdateUomDto } from './dto/update-uom.dto';
+
+@ApiTags('Uom')
+@ApiBearerAuth()
+@Roles(RolesEnum.admin, RolesEnum.user)
+@Controller('api/v1/uom')
+export class UomController {
+  constructor(
+    private readonly uomService: UomService,
+  ) { }
+
+  @Get()
+  @ApiOperation({ summary: 'Get all', description: 'Retrieve all UOMs' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
+  async findAll(@Query() filters: FilterUomDto) {
+    const { page, limit, ...uomFilters } = filters;
+    const pagination = { page, limit };
+    const items = await this.uomService.findAll(pagination, uomFilters);
+    return new BaseResponseDto(items, 'UOMs retrieved successfully');
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get by id', description: 'Retrieve specific UOM' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
+  async findOne(@Param('id', new ParseIntPipe()) id: number) {
+    const item = await this.uomService.findOne(id);
+    return new BaseResponseDto(item, 'UOM retrieved successfully');
+  }
+
+  @Post()
+  @ApiOperation({ summary: 'save UOM' })
+  @ApiResponse({ status: 201, description: 'UOM save successfully', type: BaseResponseDto })
+  @ApiResponse({ status: 400, description: 'UOM already exists' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
+  async create(@CurrentUser() user: AuthUser, @Body() dto: CreateUomDto) {
+    dto.created_by_id = user.userId;
+    const result = await this.uomService.create(dto);
+    return new BaseResponseDto(result, 'UOM saved successfully');
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'update UOM' })
+  @ApiResponse({ status: 201, description: 'UOM update successfully', type: BaseResponseDto })
+  @ApiResponse({ status: 400, description: 'UOM already exists' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
+  async update(
+    @CurrentUser() user: AuthUser,
+    @Param('id', new ParseIntPipe()) id: number,
+    @Body() dto: UpdateUomDto,
+  ) {
+    dto.updated_by_id = user.userId;
+    const result = await this.uomService.update(id, dto);
+    return new BaseResponseDto(result, 'UOM updated successfully');
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'delete UOM' })
+  @ApiResponse({ status: 200, description: 'UOM delete successfully', type: BaseResponseDto })
+  async remove(@Param('id', new ParseIntPipe()) id: number) {
+    const result = await this.uomService.remove(id);
+    return new BaseResponseDto(result, 'UOM deleted successfully');
+  }
+
+  @Delete(':id/permanent')
+  @ApiOperation({ summary: 'delete UOM permanently' })
+  async permanentRemove(@Param('id', new ParseIntPipe()) id: number) {
+    const result = await this.uomService.permanentRemove(id);
+    return new BaseResponseDto(result, 'UOM deleted permanently');
+  }
+
+  @Post(':id/restore')
+  @ApiOperation({ summary: 'restore UOM' })
+  async restore(@Param('id', new ParseIntPipe()) id: number) {
+    const result = await this.uomService.restore(id);
+    return new BaseResponseDto(result, 'UOM restored successfully');
+  }
+}

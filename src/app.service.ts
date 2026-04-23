@@ -12,6 +12,8 @@ import { UserLocation } from './user-location/entities/user-location.entity';
 import { Color } from './merchandising/basic-setup/color/entity/color.entity';
 import { Size } from './merchandising/basic-setup/size/entity/size.entity';
 import { Embellishment } from './merchandising/basic-setup/embellishment/entity/embellishment.entity';
+import { Currency } from './app-configuration/currency/entity/currency.entity';
+import { Uom } from './app-configuration/uom/entity/uom.entity';
 
 @Injectable()
 
@@ -39,7 +41,9 @@ export class AppService implements TypeOrmOptionsFactory {
         UserLocation,
         Color,
         Size,
-        Embellishment
+        Embellishment,
+        Currency,
+        Uom
       ],
       synchronize: false, // Never use synchronize in production
       logging: isDevelopment,

@@ -15,6 +15,8 @@ import { UserLocationModule } from './user-location/user-location.module';
 import { ColorModule } from './merchandising/basic-setup/color/color.module';
 import { SizeModule } from './merchandising/basic-setup/size/size.module';
 import { EmbellishmentModule } from './merchandising/basic-setup/embellishment/embellishment.module';
+import { CurrencyModule } from './app-configuration/currency/currency.module';
+import { UomModule } from './app-configuration/uom/uom.module';
 
 @Module({
   imports: [
@@ -35,6 +37,8 @@ import { EmbellishmentModule } from './merchandising/basic-setup/embellishment/e
     ColorModule,
     SizeModule,
     EmbellishmentModule,
+    CurrencyModule,
+    UomModule,
   ],
   controllers: [AppController],
   providers: [
