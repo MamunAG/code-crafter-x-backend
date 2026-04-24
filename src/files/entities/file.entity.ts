@@ -18,6 +18,7 @@ export enum FileType {
   VIDEO = 'video',
   AUDIO = 'audio',
   OTHER = 'other',
+  IMAGE = "image",
 }
 
 export enum FileCategory {

@@ -63,11 +63,6 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
   @IsNumber()
   profile_pic_id?: number;
 
-  @ApiProperty({ description: 'User display name', example: 'My Name', required: true, })
-  @IsString()
-  @IsNotEmpty()
-  display_name: string;
-
   @ApiProperty({ description: 'User bio', example: 'abc efg ijk', required: false, })
   @IsOptional()
   @IsString()
@@ -83,8 +78,17 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
   @IsEnum(Status)
   status?: Status = Status.active;
 
-  @ApiProperty({ description: 'Updated by user id', example: 'xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', })
-  @IsString()
+  @ApiProperty({ description: 'User last seen at', example: '2025-03-14T12:00:00.000Z', required: false })
   @IsOptional()
-  updated_by?: string;
+  @IsDateString()
+  last_seen_at?: Date;
+
+  @ApiProperty({ description: 'Enable notifications for the user', example: true, required: false })
+  @IsOptional()
+  is_enable_notifications?: boolean;
+
+  @ApiProperty({ description: 'Email verification state', example: false, required: false })
+  @IsOptional()
+  is_email_verified?: boolean;
+
 }

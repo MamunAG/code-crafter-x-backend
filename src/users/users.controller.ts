@@ -141,7 +141,6 @@ export class UsersController {
   @ApiResponse({ status: 404, description: 'User not found', })
   @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required', })
   async update(@CurrentUser() authUser: AuthUser, @Param('id') id: string, @Body() updateUserDto: UpdateUserDto,) {
-    updateUserDto.updated_by = authUser.userId;
     console.log(updateUserDto);
     const user = await this.usersService.update(id, updateUserDto);
     return new BaseResponseDto(user, 'User updated successfully');

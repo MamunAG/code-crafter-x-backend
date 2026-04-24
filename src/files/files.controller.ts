@@ -8,8 +8,20 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
+  UseInterceptors,
+  ParseFilePipeBuilder,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 
 import type AuthUser from '../auth/dto/auth-user';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -21,14 +33,19 @@ import { CreateFileDto } from './dto/create-file.dto';
 import { FilterFilesDto } from './dto/filter-files.dto';
 import { FileResponseDto } from './dto/file-response.dto';
 import { UpdateFileDto } from './dto/update-file.dto';
+import { FILE_UPLOAD_MAX_SIZE_BY_TYPE } from './file-upload.constants';
+import { FileType } from './entities/file.entity';
 import { FilesService } from './files.service';
+
+const PROFILE_PHOTO_MAX_SIZE_BYTES =
+  FILE_UPLOAD_MAX_SIZE_BY_TYPE[FileType.PHOTO];
 
 @ApiTags('Files')
 @ApiBearerAuth()
 @Roles(RolesEnum.admin, RolesEnum.user)
 @Controller('api/v1/files')
 export class FilesController {
-  constructor(private readonly filesService: FilesService) {}
+  constructor(private readonly filesService: FilesService) { }
 
   @Post()
   @ApiOperation({ summary: 'Create a file record' })
@@ -36,6 +53,48 @@ export class FilesController {
   async create(@CurrentUser() user: AuthUser, @Body() dto: CreateFileDto) {
     const result = await this.filesService.create(dto, user.userId);
     return new BaseResponseDto(result, 'File created successfully');
+  }
+
+  @Post('upload')
+  @ApiOperation({ summary: 'Upload a file, store it in Cloudinary, and save the file record' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+      required: ['file'],
+    },
+  })
+  @ApiResponse({ status: 201, description: 'File uploaded successfully', type: BaseResponseDto<FileResponseDto> })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: {
+        fileSize: PROFILE_PHOTO_MAX_SIZE_BYTES,
+      },
+    }),
+  )
+  async upload(
+    @CurrentUser() user: AuthUser,
+    @UploadedFile(
+      new ParseFilePipeBuilder()
+        .addMaxSizeValidator({
+          maxSize: PROFILE_PHOTO_MAX_SIZE_BYTES,
+        })
+        .addFileTypeValidator({
+          fileType: /^image\/.*/i,
+        })
+        .build({ fileIsRequired: true }),
+    )
+    file: Express.Multer.File,
+  ) {
+    const result = await this.filesService.upload(file, user.userId, FileType.PHOTO);
+    return new BaseResponseDto(result, 'File uploaded successfully');
   }
 
   @Get()
