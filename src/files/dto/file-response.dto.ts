@@ -5,13 +5,15 @@ import { FileCategory, FileType } from '../entities/file.entity';
 
 export class FileResponseDto {
   @ApiProperty({
-    description: 'Success status of the upload operation',
+    description: 'Success status of the request',
     example: true,
+    required: false,
   })
-  success: boolean;
+  @IsOptional()
+  success?: boolean;
 
   @ApiProperty({
-    description: 'Unique identifier of the uploaded file',
+    description: 'Unique identifier of the file',
     example: 456,
   })
   file_id: number;
@@ -70,13 +72,44 @@ export class FileResponseDto {
   @ApiProperty({
     description: 'Success message',
     example: 'File uploaded successfully',
+    required: false,
   })
-  message: string;
+  @IsOptional()
+  message?: string;
 
   @ApiProperty({
     description: 'public_url',
     example: 'public_url',
+    required: false,
   })
   @IsOptional()
-  public_url: string;
+  public_url?: string;
+
+  @ApiProperty({
+    description: 'Uploader user id',
+    required: false,
+  })
+  @IsOptional()
+  uploaded_by?: string;
+
+  @ApiProperty({
+    description: 'Uploaded at timestamp',
+    required: false,
+  })
+  @IsOptional()
+  uploaded_at?: Date;
+
+  @ApiProperty({
+    description: 'Updated at timestamp',
+    required: false,
+  })
+  @IsOptional()
+  updated_at?: Date;
+
+  @ApiProperty({
+    description: 'Deleted at timestamp',
+    required: false,
+  })
+  @IsOptional()
+  deleted_at?: Date;
 }

@@ -11,6 +11,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ContactModule } from './contact/contact.module';
+import { FilesModule } from './files/files.module';
 import { UserLocationModule } from './user-location/user-location.module';
 import { ColorModule } from './merchandising/basic-setup/color/color.module';
 import { SizeModule } from './merchandising/basic-setup/size/size.module';
@@ -36,6 +37,7 @@ import { CommonController } from './common/common.controller';
     AuthModule,
     CommandModule,
     UsersModule,
+    FilesModule,
     ContactModule,
     UserLocationModule,
     ColorModule,

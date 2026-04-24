@@ -43,7 +43,7 @@ export class UploadFileDto {
     description: 'ID of the entity this file belongs to',
     example: 123,
   })
-  @Transform(({ value }) => parseInt(value, 10))
+  @Transform(({ value }) => Number(value))
   @IsNumber()
   entity_id: number;
 
@@ -51,7 +51,7 @@ export class UploadFileDto {
     description: 'ID of the user',
     example: 123,
   })
-  @Transform(({ value }) => parseInt(value, 10))
+  @Transform(({ value }) => Number(value))
   @IsNumber()
   @IsOptional()
   uploadedBy: string;

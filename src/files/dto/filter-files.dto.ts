@@ -1,31 +1,23 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsEnum,
-  IsNumber,
-  IsOptional,
-  IsString,
-  MaxLength,
-  Min,
-} from 'class-validator';
+import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 
 import { PaginationDto } from '../../common/dto/pagination.dto';
-import { FileType } from '../entities/file.entity';
+import { FileCategory, FileType } from '../entities/file.entity';
 
 export class FilterFilesDto extends PaginationDto {
-  @ApiProperty({ description: 'Filter by assigned rider ID', required: false })
+  @ApiProperty({ description: 'Filter by uploader user id', required: false })
   @IsOptional()
-  @IsNumber()
-  @Min(1)
-  assignedRiderId?: number;
+  @IsString()
+  uploaded_by?: string;
 
-  @ApiProperty({ description: 'Filter by name (exact)', required: false })
+  @ApiProperty({ description: 'Filter by file name', required: false })
   @IsOptional()
   @IsString()
   @MaxLength(100)
   file_name?: string;
 
   @ApiProperty({
-    description: 'Search by name or passport number',
+    description: 'Search by file name, original name, or public url',
     required: false,
   })
   @IsOptional()
@@ -40,4 +32,19 @@ export class FilterFilesDto extends PaginationDto {
   @IsOptional()
   @IsEnum(FileType, { message: 'Invalid file type' })
   file_type?: FileType;
+
+  @ApiProperty({
+    description: 'Category of file',
+    enum: FileCategory,
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(FileCategory, { message: 'Invalid file category' })
+  file_category?: FileCategory;
+
+  @ApiProperty({ description: 'Filter by public url', required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  public_url?: string;
 }
