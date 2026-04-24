@@ -1,23 +1,53 @@
-{{!-- subject: New Contact Form Submission – Rillo --}}
 <!DOCTYPE html>
-<html>
-  <body style="font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px;">
-    <div style="max-width: 600px; margin: auto; background: #ffffff; padding: 20px; border-radius: 8px;">
-      <h2 style="color: #f37e2c; margin-bottom: 5px;">New Contact Request</h2>
-      <p style="margin-top: 0;">A user has submitted a contact form on the Rillo website.</p>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>New Contact Request</title>
+  </head>
+  <body style="margin:0; padding:0; background:#f3f6fb; color:#111827; font-family:Arial, Helvetica, sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f6fb; padding:32px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px; background:#ffffff; border:1px solid #e5e7eb; border-radius:18px; overflow:hidden;">
+            <tr>
+              <td style="padding:28px 32px; background:#08111f;">
+                <img src="{{logoUrl}}" alt="{{appName}}" height="42" style="display:block; max-width:220px; height:42px; object-fit:contain;" />
+              </td>
+            </tr>
 
-      <hr style="border: 0; border-top: 1px solid #ddd; margin: 20px 0;">
+            <tr>
+              <td style="padding:36px 32px 18px;">
+                <p style="margin:0 0 10px; color:#6b7280; font-size:13px; font-weight:700; letter-spacing:1.6px; text-transform:uppercase;">Support inbox</p>
+                <h1 style="margin:0; color:#111827; font-size:28px; line-height:1.25; font-weight:800;">New contact request</h1>
+                <p style="margin:16px 0 0; color:#4b5563; font-size:16px; line-height:1.7;">A user submitted a message from the {{appName}} contact form.</p>
+              </td>
+            </tr>
 
-      <p><strong>Name:</strong> {{name}}</p>
-      <p><strong>Email:</strong> {{email}}</p>
-      <p><strong>Account Number:</strong> {{number}}</p>
-      <p><strong>Message:</strong><br>{{message}}</p>
+            <tr>
+              <td style="padding:12px 32px 34px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f8fafc; border:1px solid #dbe4f0; border-radius:16px;">
+                  <tr>
+                    <td style="padding:22px;">
+                      <p style="margin:0 0 10px; color:#111827; font-size:15px;"><strong>Name:</strong> {{name}}</p>
+                      <p style="margin:0 0 10px; color:#111827; font-size:15px;"><strong>Email:</strong> {{email}}</p>
+                      <p style="margin:0 0 18px; color:#111827; font-size:15px;"><strong>Account number:</strong> {{number}}</p>
+                      <p style="margin:0 0 8px; color:#64748b; font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:1px;">Message</p>
+                      <div style="padding:16px; background:#ffffff; border:1px solid #e5e7eb; border-radius:12px; color:#334155; font-size:15px; line-height:1.7;">{{message}}</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
 
-      <hr style="border: 0; border-top: 1px solid #ddd; margin: 20px 0;">
-
-      <p style="font-size: 14px; color: #555;">
-        This email was generated automatically by the Rillo website.
-      </p>
-    </div>
+            <tr>
+              <td style="padding:22px 32px; background:#f8fafc; border-top:1px solid #e5e7eb;">
+                <p style="margin:0; color:#94a3b8; font-size:12px; line-height:1.6;">This email was generated automatically by {{appName}}.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
   </body>
 </html>

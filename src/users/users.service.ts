@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcryptjs';
 import { Repository } from 'typeorm';
@@ -21,6 +21,7 @@ import { UpdatProfileUserNameDto } from './dto/update-profile-userName.dto';
 import { UpdatProfileLanguageDto } from './dto/update-profile-language.dto';
 import { UpdatProfileSettingsStatusChangeDto } from './dto/update-profile-settings-status-change.dto';
 import { UserLocation } from 'src/user-location/entities/user-location.entity';
+import { UpdateRecoveryEmailDto } from './dto/update-recovery-email.dto';
 
 @Injectable()
 export class UsersService {
@@ -194,15 +195,31 @@ export class UsersService {
   }
 
   findByEmailOrUserName(email: string) {
+    const normalized = email.trim().toLowerCase();
+
     return this.userRepository
       .createQueryBuilder('user')
       .addSelect('user.password')
-      .where('user.email = :email', { email })
-      .orWhere('user.user_name = :user_name', { user_name: email })
+      .leftJoinAndSelect('user.profile_pic', 'profile_pic')
+      .where('LOWER(user.email) = :email', { email: normalized })
+      .orWhere('LOWER(user.user_name) = :user_name', { user_name: normalized })
       .getOne();
   }
 
-  update(id: string, updateUserDto: UpdateUserDto) {
+  findByEmailOrRecoveryEmail(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    return this.userRepository
+      .createQueryBuilder('user')
+      .addSelect('user.password')
+      .where('LOWER(user.email) = :email', { email: normalizedEmail })
+      .orWhere('LOWER(user.recovery_email) = :email', {
+        email: normalizedEmail,
+      })
+      .getOne();
+  }
+
+  update(id: string, updateUserDto: Partial<UpdateUserDto>) {
     return this.userRepository.update(id, updateUserDto);
   }
   updateBirthDateGander(id: string, updateUserDto: UpdateProfileBirthDateGenderDto) {
@@ -247,6 +264,35 @@ export class UsersService {
   async updatePassword(id: string, newPassword: string): Promise<void> {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await this.userRepository.update(id, { password: hashedPassword });
+  }
+
+  async updateRecoveryEmail(
+    authUserId: string,
+    id: string,
+    dto: UpdateRecoveryEmailDto,
+  ) {
+    if (authUserId !== id) {
+      throw new ForbiddenException('You can only update your own recovery email');
+    }
+
+    const recoveryEmail = dto.recovery_email?.trim().toLowerCase() || null;
+
+    if (recoveryEmail) {
+      const existingUser = await this.userRepository
+        .createQueryBuilder('user')
+        .where('LOWER(user.email) = :email', { email: recoveryEmail })
+        .orWhere('LOWER(user.recovery_email) = :email', {
+          email: recoveryEmail,
+        })
+        .getOne();
+
+      if (existingUser && existingUser.id !== id) {
+        throw new BadRequestException('Recovery email is already in use');
+      }
+    }
+
+    await this.userRepository.update(id, { recovery_email: recoveryEmail });
+    return this.findOne(id);
   }
 
   async deleteAccount(user_id: string, dto: DeleteAccountDto) {

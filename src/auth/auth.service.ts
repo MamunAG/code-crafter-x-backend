@@ -21,6 +21,9 @@ import { VerifyCodeDto } from './dto/verify-code.dto';
 import { PasswordResetService } from './password-reset.service';
 import { RefreshTokenService } from './refresh-token.service';
 import { EmailService } from './email.service';
+import { EmailVerificationService } from './email-verification.service';
+import { ConfirmEmailDto } from './dto/confirm-email.dto';
+import { ResendConfirmEmailDto } from './dto/resend-confirm-email.dto';
 // Import UserStatus enum (adjust the path as needed)
 
 @Injectable()
@@ -33,6 +36,7 @@ export class AuthService {
     private refreshTokenService: RefreshTokenService,
     private passwordResetService: PasswordResetService,
     private emailService: EmailService,
+    private emailVerificationService: EmailVerificationService,
   ) { }
 
   private signAccessToken(user: { id: string; email: string; role: string }) {
@@ -65,6 +69,13 @@ export class AuthService {
       this.logger.error(`Welcome email failed for user ${user.id}`, error);
     });
 
+    void this.emailVerificationService.sendInitialVerification(
+      user.email,
+      user.name,
+    ).catch((error) => {
+      this.logger.error(`Email verification failed for user ${user.id}`, error);
+    });
+
     return new BaseResponseDto(result, 'User registered successfully');
   }
 
@@ -75,7 +86,7 @@ export class AuthService {
     }
     // Import UserStatus enum from the appropriate location
     if (!user.is_email_verified) {
-      throw new UnauthorizedException('Please varify your email address');
+      throw new UnauthorizedException('Please verify your email address');
     }
     if (user.status !== StatusEnum.active) {
       throw new UnauthorizedException('User account is inactive');
@@ -177,6 +188,21 @@ export class AuthService {
 
     await this.passwordResetService.resetPassword(email, code, newPassword);
     return new BaseResponseDto(null, 'Password has been reset successfully');
+  }
+
+  async resendConfirmEmail(resendConfirmEmailDto: ResendConfirmEmailDto) {
+    await this.emailVerificationService.resendVerificationCode(
+      resendConfirmEmailDto,
+    );
+    return new BaseResponseDto(
+      { expires_in_seconds: 15 * 60 },
+      'If the email exists, a verification code has been sent',
+    );
+  }
+
+  async confirmEmail(confirmEmailDto: ConfirmEmailDto) {
+    await this.emailVerificationService.confirmEmail(confirmEmailDto);
+    return new BaseResponseDto(null, 'Email verified successfully');
   }
 
 

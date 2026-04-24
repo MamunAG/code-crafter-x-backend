@@ -32,6 +32,7 @@ import { UpdatProfileUserNameDto } from './dto/update-profile-userName.dto';
 import { UpdatProfileLanguageDto } from './dto/update-profile-language.dto';
 import { UpdatProfileSettingsStatusChangeDto } from './dto/update-profile-settings-status-change.dto';
 import type AuthUser from '../auth/dto/auth-user';
+import { UpdateRecoveryEmailDto } from './dto/update-recovery-email.dto';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -144,6 +145,25 @@ export class UsersController {
     console.log(updateUserDto);
     const user = await this.usersService.update(id, updateUserDto);
     return new BaseResponseDto(user, 'User updated successfully');
+  }
+
+  @Patch(':id/recovery-email')
+  @ApiOperation({
+    summary: 'Update account recovery email',
+    description: 'Updates the signed-in user recovery email used for password reset.',
+  })
+  @ApiParam({ name: 'id', description: 'User ID (uuid)', type: 'string' })
+  @ApiResponse({ status: 200, description: 'Recovery email updated successfully', type: BaseResponseDto<User>, })
+  @ApiResponse({ status: 400, description: 'Bad request - validation error', })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required', })
+  @ApiResponse({ status: 403, description: 'Forbidden - cannot update another user', })
+  async updateRecoveryEmail(
+    @CurrentUser() authUser: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateRecoveryEmailDto,
+  ) {
+    const user = await this.usersService.updateRecoveryEmail(authUser.userId, id, dto);
+    return new BaseResponseDto(user, 'Recovery email updated successfully');
   }
 
   @Patch(':id/birth-date-gander')

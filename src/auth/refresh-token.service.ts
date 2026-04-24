@@ -32,7 +32,7 @@ export class RefreshTokenService {
   async validateRefreshToken(token: string): Promise<RefreshToken | null> {
     const refreshToken = await this.refreshTokenRepository.findOne({
       where: { token },
-      relations: ['user'],
+      relations: ['user', 'user.profile_pic'],
     });
 
     if (!refreshToken) {

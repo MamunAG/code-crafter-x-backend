@@ -14,6 +14,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { EmailService } from './email.service';
 import { PasswordResetToken } from './entities/password-reset-token.entity';
+import { EmailVerificationToken } from './entities/email-verification-token.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { JwtStrategy } from './jwt.strategy';
 import { PasswordResetService } from './password-reset.service';
@@ -22,6 +23,7 @@ import { GoogleAuthService } from './google-auth.service';
 import { AppleAuthService } from './apple-auth.service';
 import { UserLocationService } from 'src/user-location/user-location.service';
 import { UserLocation } from 'src/user-location/entities/user-location.entity';
+import { EmailVerificationService } from './email-verification.service';
 
 const resolveTemplatesDir = (): string => {
   const candidates = [
@@ -41,7 +43,12 @@ const resolveTemplatesDir = (): string => {
 @Module({
   imports: [
     UsersModule,
-    TypeOrmModule.forFeature([RefreshToken, PasswordResetToken, UserLocation]),
+    TypeOrmModule.forFeature([
+      RefreshToken,
+      PasswordResetToken,
+      EmailVerificationToken,
+      UserLocation,
+    ]),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -86,6 +93,7 @@ const resolveTemplatesDir = (): string => {
     AuthService,
     RefreshTokenService,
     PasswordResetService,
+    EmailVerificationService,
     EmailService,
     JwtStrategy,
     GoogleAuthService,

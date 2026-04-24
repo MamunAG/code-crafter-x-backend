@@ -9,6 +9,8 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { VerifyCodeDto } from './dto/verify-code.dto';
+import { ConfirmEmailDto } from './dto/confirm-email.dto';
+import { ResendConfirmEmailDto } from './dto/resend-confirm-email.dto';
 import { GoogleAuthService } from './google-auth.service';
 import { UsersService } from 'src/users/users.service';
 import { RolesEnum } from 'src/common/enums/role.enum';
@@ -151,6 +153,32 @@ export class AuthController {
     @Body() resetPasswordDto: ResetPasswordDto,
   ): Promise<BaseResponseDto<any>> {
     return this.authService.resetPassword(resetPasswordDto);
+  }
+
+  @Post('resend-confirm-email')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resend email verification code' })
+  @ApiResponse({
+    status: 200,
+    description: 'Verification code sent if the account exists and is not verified',
+  })
+  async resendConfirmEmail(
+    @Body() resendConfirmEmailDto: ResendConfirmEmailDto,
+  ): Promise<BaseResponseDto<any>> {
+    return this.authService.resendConfirmEmail(resendConfirmEmailDto);
+  }
+
+  @Post('confirm-email')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Confirm email with verification code' })
+  @ApiResponse({
+    status: 200,
+    description: 'Email verified successfully',
+  })
+  async confirmEmail(
+    @Body() confirmEmailDto: ConfirmEmailDto,
+  ): Promise<BaseResponseDto<any>> {
+    return this.authService.confirmEmail(confirmEmailDto);
   }
 
   @Post('google/mobile')

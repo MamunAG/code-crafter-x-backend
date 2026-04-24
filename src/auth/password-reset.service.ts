@@ -28,15 +28,13 @@ export class PasswordResetService {
   async requestPasswordReset(
     forgotPasswordDto: ForgotPasswordDto,
   ): Promise<void> {
-    const { email } = forgotPasswordDto;
+    const email = forgotPasswordDto.email.trim().toLowerCase();
 
     // Check if user exists
-    const user = await this.usersService.findByEmailOrUserName(email);
+    const user = await this.usersService.findByEmailOrRecoveryEmail(email);
     if (!user) {
-      // For security, don't reveal if email exists or not
-      // Just return success to prevent email enumeration
-
-      throw new NotFoundException('Email address not found in our system');
+      // Keep the public response generic and avoid account enumeration.
+      return;
     }
 
     // Generate 6-digit verification code
@@ -72,11 +70,13 @@ export class PasswordResetService {
    * Step 2: Verify the submitted code
    */
   async verifyCode(verifyCodeDto: VerifyCodeDto): Promise<void> {
-    const { email, code } = verifyCodeDto;
+    const email = verifyCodeDto.email.trim().toLowerCase();
+    const { code } = verifyCodeDto;
 
+    const normalizedEmail = email.trim().toLowerCase();
     const resetToken = await this.passwordResetRepository.findOne({
       where: {
-        email,
+        email: normalizedEmail,
         code,
         isUsed: false,
         expiresAt: MoreThan(new Date()),
@@ -99,9 +99,10 @@ export class PasswordResetService {
     code: string,
     newPassword: string,
   ): Promise<void> {
+    const normalizedEmail = email.trim().toLowerCase();
     const resetToken = await this.passwordResetRepository.findOne({
       where: {
-        email,
+        email: normalizedEmail,
         code,
         isUsed: false,
         expiresAt: MoreThan(new Date()),

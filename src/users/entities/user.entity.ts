@@ -3,6 +3,7 @@ import { RolesEnum } from '../../common/enums/role.enum';
 import {
   Column,
   Entity,
+  Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Files } from './../../files/entities/file.entity';
@@ -24,6 +25,11 @@ export class User extends BaseEntity {
   @ApiProperty({ description: 'User email', example: 'user@example.com' })
   @Column({ unique: true, nullable: false })
   email: string;
+
+  @Index('IDX_users_recovery_email_unique', { unique: true, where: '"recovery_email" IS NOT NULL' })
+  @ApiProperty({ description: 'Recovery email', example: 'recovery@example.com', required: false })
+  @Column({ type: 'varchar', nullable: true })
+  recovery_email?: string | null;
 
   @ApiProperty({ description: 'User phone number', example: '+880', required: false, })
   @Column({ nullable: false })

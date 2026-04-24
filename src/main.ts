@@ -45,6 +45,16 @@ async function bootstrap() {
     },
   });
 
+  // Serve app-owned static assets such as logos and icons.
+  const publicAssetsDir =
+    process.env.PUBLIC_ASSETS_DIR || join(__dirname, '..', 'public');
+  app.useStaticAssets(publicAssetsDir, {
+    prefix: '/assets/',
+    setHeaders: (res: import('express').Response, path: string) => {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    },
+  });
+
   // //==Redis Socket Config===================================================
   // const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
   // const redisIoAdapter = new SocketIoRedisAdapter(app);
