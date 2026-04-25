@@ -23,7 +23,7 @@ export class ColorService {
       colorHexCode: this.normalizeHexColorCode(colorDto.colorHexCode),
     });
     const saved = await this.colorRepository.save(color);
-    return this.findOne(saved.id);
+    return this.normalizeUpdatedAt(await this.findOne(saved.id));
   }
 
   async findAll(
@@ -75,7 +75,7 @@ export class ColorService {
     const hasPreviousPage = page > 1;
 
     return {
-      items,
+      items: this.normalizeUpdatedAtList(items),
       meta: {
         total,
         page,
@@ -95,7 +95,8 @@ export class ColorService {
       .leftJoinAndSelect('color.deleted_by_user', 'deleted_by_user')
       .where('color.id = :id', { id })
       .andWhere('color.deleted_at IS NULL')
-      .getOne();
+      .getOne()
+      .then((color) => this.normalizeUpdatedAt(color));
   }
 
   async update(id: number, dto: UpdateColorDto) {
@@ -104,7 +105,7 @@ export class ColorService {
       ...dto,
       colorHexCode: this.normalizeHexColorCode(dto.colorHexCode),
     });
-    return this.findOne(id);
+    return this.normalizeUpdatedAt(await this.findOne(id));
   }
 
   private async ensureColorNameIsUnique(colorName: string, ignoreId?: number) {
@@ -149,5 +150,25 @@ export class ColorService {
 
   restore(id: number) {
     return this.colorRepository.restore(id);
+  }
+
+  private normalizeUpdatedAt<T extends { updated_at?: Date | null; updated_by_id?: string | null; updated_by_user?: unknown } | null>(
+    value: T,
+  ): T {
+    if (!value) {
+      return value;
+    }
+
+    if (!value.updated_by_id && !value.updated_by_user) {
+      value.updated_at = null;
+    }
+
+    return value;
+  }
+
+  private normalizeUpdatedAtList<T extends { updated_at?: Date | null; updated_by_id?: string | null; updated_by_user?: unknown }>(
+    values: T[],
+  ): T[] {
+    return values.map((value) => this.normalizeUpdatedAt(value));
   }
 }

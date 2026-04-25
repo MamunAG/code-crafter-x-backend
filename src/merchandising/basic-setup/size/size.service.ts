@@ -20,7 +20,7 @@ export class SizeService {
     await this.ensureSizeNameIsUnique(sizeDto.sizeName);
     const size = this.sizeRepository.create(sizeDto);
     const saved = await this.sizeRepository.save(size);
-    return this.findOne(saved.id);
+    return this.normalizeUpdatedAt(await this.findOne(saved.id));
   }
 
   async findAll(
@@ -34,14 +34,25 @@ export class SizeService {
       .createQueryBuilder('size')
       .leftJoinAndSelect('size.created_by_user', 'created_by_user')
       .leftJoinAndSelect('size.updated_by_user', 'updated_by_user')
+      .leftJoinAndSelect('size.deleted_by_user', 'deleted_by_user')
       .skip(skip)
       .take(limit)
-      .orderBy('size.created_at', 'DESC');
+      .orderBy(deletedOnly ? 'size.deleted_at' : 'size.created_at', 'DESC');
+
+    if (deletedOnly) {
+      queryBuilder.withDeleted();
+    }
 
     if (filters?.sizeName) {
       queryBuilder.andWhere('LOWER(TRIM(size.sizeName)) LIKE :sizeName', {
         sizeName: `%${filters.sizeName.trim().toLowerCase()}%`,
       });
+    }
+
+    if (deletedOnly) {
+      queryBuilder.andWhere('size.deleted_at IS NOT NULL');
+    } else {
+      queryBuilder.andWhere('size.deleted_at IS NULL');
     }
 
     const [items, total] = await queryBuilder.getManyAndCount();
@@ -50,7 +61,7 @@ export class SizeService {
     const hasPreviousPage = page > 1;
 
     return {
-      items,
+      items: this.normalizeUpdatedAtList(items),
       meta: {
         total,
         page,
@@ -67,18 +78,21 @@ export class SizeService {
       .createQueryBuilder('size')
       .leftJoinAndSelect('size.created_by_user', 'created_by_user')
       .leftJoinAndSelect('size.updated_by_user', 'updated_by_user')
+      .leftJoinAndSelect('size.deleted_by_user', 'deleted_by_user')
       .where('size.id = :id', { id })
       .andWhere('size.deleted_at IS NULL')
-      .getOne();
+      .getOne()
+      .then((size) => this.normalizeUpdatedAt(size));
   }
 
   async update(id: number, dto: UpdateSizeDto) {
     await this.ensureSizeNameIsUnique(dto.sizeName, id);
     await this.sizeRepository.update(id, dto);
-    return this.findOne(id);
+    return this.normalizeUpdatedAt(await this.findOne(id));
   }
 
-  remove(id: number) {
+  async remove(id: number, deletedById: string) {
+    await this.sizeRepository.update(id, { deleted_by_id: deletedById });
     return this.sizeRepository.softDelete(id);
   }
 
@@ -109,5 +123,25 @@ export class SizeService {
     if (existingSize) {
       throw new BadRequestException('Size already exists');
     }
+  }
+
+  private normalizeUpdatedAt<T extends { updated_at?: Date | null; updated_by_id?: string | null; updated_by_user?: unknown } | null>(
+    value: T,
+  ): T {
+    if (!value) {
+      return value;
+    }
+
+    if (!value.updated_by_id && !value.updated_by_user) {
+      value.updated_at = null;
+    }
+
+    return value;
+  }
+
+  private normalizeUpdatedAtList<T extends { updated_at?: Date | null; updated_by_id?: string | null; updated_by_user?: unknown }>(
+    values: T[],
+  ): T[] {
+    return values.map((value) => this.normalizeUpdatedAt(value));
   }
 }

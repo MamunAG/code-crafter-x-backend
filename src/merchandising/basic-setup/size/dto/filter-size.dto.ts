@@ -6,4 +6,8 @@ export class FilterSizeDto extends PaginationDto {
   @ApiProperty({ description: 'Size name', example: 'M', required: false })
   @IsOptional()
   sizeName: string;
+
+  @ApiProperty({ description: 'Deleted only', required: false, default: false })
+  @IsOptional()
+  deletedOnly?: boolean;
 }

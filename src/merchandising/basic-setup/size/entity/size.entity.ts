@@ -8,7 +8,7 @@ export class Size extends BaseEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ApiProperty({ description: 'Color name', example: 'Blue' })
+  @ApiProperty({ description: 'Size name', example: 'M' })
   @Column({ name: 'size_name', nullable: false })
   sizeName: string;
 
