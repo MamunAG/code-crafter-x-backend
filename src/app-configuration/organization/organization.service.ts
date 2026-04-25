@@ -24,7 +24,7 @@ export class OrganizationService {
       contact: this.normalizeOptionalText(organizationDto.contact),
     });
     const saved = await this.organizationRepository.save(organization);
-    return this.findOne(saved.id);
+    return this.normalizeUpdatedAt(await this.findOne(saved.id));
   }
 
   async findAll(
@@ -78,7 +78,7 @@ export class OrganizationService {
     const hasPreviousPage = page > 1;
 
     return {
-      items,
+      items: this.normalizeUpdatedAtList(items),
       meta: {
         total,
         page,
@@ -98,7 +98,8 @@ export class OrganizationService {
       .leftJoinAndSelect('organization.deleted_by_user', 'deleted_by_user')
       .where('organization.id = :id', { id })
       .andWhere('organization.deleted_at IS NULL')
-      .getOne();
+      .getOne()
+      .then((organization) => this.normalizeUpdatedAt(organization));
   }
 
   async update(id: string, dto: UpdateOrganizationDto, updatedById: string) {
@@ -108,7 +109,7 @@ export class OrganizationService {
       address: this.normalizeOptionalText(dto.address),
       contact: this.normalizeOptionalText(dto.contact),
     });
-    return this.findOne(id);
+    return this.normalizeUpdatedAt(await this.findOne(id));
   }
 
   async remove(id: string, deletedById: string) {
@@ -142,5 +143,25 @@ export class OrganizationService {
     const normalized = value.trim();
 
     return normalized.length > 0 ? normalized : null;
+  }
+
+  private normalizeUpdatedAt<T extends { updated_at?: Date | null; updated_by_id?: string | null; updated_by_user?: unknown } | null>(
+    value: T,
+  ): T {
+    if (!value) {
+      return value;
+    }
+
+    if (!value.updated_by_id && !value.updated_by_user) {
+      value.updated_at = null;
+    }
+
+    return value;
+  }
+
+  private normalizeUpdatedAtList<T extends { updated_at?: Date | null; updated_by_id?: string | null; updated_by_user?: unknown }>(
+    values: T[],
+  ): T[] {
+    return values.map((value) => this.normalizeUpdatedAt(value));
   }
 }
