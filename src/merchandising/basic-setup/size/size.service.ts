@@ -28,6 +28,7 @@ export class SizeService {
     filters?: Partial<FilterSizeDto>,
   ): Promise<PaginatedResponseDto<Size>> {
     const { page = 1, limit = 1000000000000 } = paginationDto;
+    const deletedOnly = filters?.deletedOnly ?? false;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.sizeRepository
