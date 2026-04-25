@@ -18,7 +18,10 @@ export class ColorService {
 
   async create(colorDto: CreateColorDto) {
     await this.ensureColorNameIsUnique(colorDto.colorName);
-    const color = this.colorRepository.create(colorDto);
+    const color = this.colorRepository.create({
+      ...colorDto,
+      colorHexCode: this.normalizeHexColorCode(colorDto.colorHexCode),
+    });
     const saved = await this.colorRepository.save(color);
     return this.findOne(saved.id);
   }
@@ -97,7 +100,10 @@ export class ColorService {
 
   async update(id: number, dto: UpdateColorDto) {
     await this.ensureColorNameIsUnique(dto.colorName, id);
-    await this.colorRepository.update(id, dto);
+    await this.colorRepository.update(id, {
+      ...dto,
+      colorHexCode: this.normalizeHexColorCode(dto.colorHexCode),
+    });
     return this.findOne(id);
   }
 
@@ -125,6 +131,16 @@ export class ColorService {
   async remove(id: number, deletedById: string) {
     await this.colorRepository.update(id, { deleted_by_id: deletedById });
     return this.colorRepository.softDelete(id);
+  }
+
+  private normalizeHexColorCode(value?: string | null) {
+    const trimmed = value?.trim();
+
+    if (!trimmed) {
+      return null;
+    }
+
+    return trimmed.startsWith('#') ? trimmed.toUpperCase() : `#${trimmed.toUpperCase()}`;
   }
 
   permanentRemove(id: number) {

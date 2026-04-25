@@ -24,6 +24,10 @@ export class Color extends BaseEntity {
   @Column({ name: 'color_description', type: 'text', nullable: true })
   colorDescription: string;
 
+  @ApiProperty({ description: 'Hex color code', example: '#1E88E5', required: false, nullable: true })
+  @Column({ name: 'color_hex_code', type: 'varchar', nullable: true })
+  colorHexCode?: string | null;
+
   @ApiProperty({ description: 'Active status', example: true })
   @Column({ name: 'is_active', type: 'boolean', default: true, nullable: false })
   isActive: boolean;
