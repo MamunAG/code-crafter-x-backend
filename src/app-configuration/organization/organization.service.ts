@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 
 import { PaginatedResponseDto } from 'src/common/dto/paginated-response.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
@@ -8,22 +8,48 @@ import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { FilterOrganizationDto } from './dto/filter-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { Organization } from './entity/organization.entity';
+import { User } from 'src/users/entities/user.entity';
+import { UserToOranizationMap } from '../user-to-oranization-map/entity/user-to-oranization-map.entity';
+import { RolesEnum } from 'src/common/enums/role.enum';
 
 @Injectable()
 export class OrganizationService {
   constructor(
+    @InjectDataSource()
+    private dataSource: DataSource,
+
     @InjectRepository(Organization)
     private organizationRepository: Repository<Organization>,
   ) {}
 
   async create(organizationDto: CreateOrganizationDto, createdById: string) {
-    const organization = this.organizationRepository.create({
-      created_by_id: createdById,
-      name: this.normalizeRequiredText(organizationDto.name),
-      address: this.normalizeOptionalText(organizationDto.address),
-      contact: this.normalizeOptionalText(organizationDto.contact),
+    const saved = await this.dataSource.transaction(async (manager) => {
+      const userRepository = manager.getRepository(User);
+      const organizationRepository = manager.getRepository(Organization);
+      const mappingRepository = manager.getRepository(UserToOranizationMap);
+
+      await this.findUserOrFail(userRepository, createdById);
+
+      const organization = organizationRepository.create({
+        created_by_id: createdById,
+        name: this.normalizeRequiredText(organizationDto.name),
+        address: this.normalizeOptionalText(organizationDto.address),
+        contact: this.normalizeOptionalText(organizationDto.contact),
+      });
+      const savedOrganization = await organizationRepository.save(organization);
+
+      const mapping = mappingRepository.create({
+        created_by_id: createdById,
+        userId: createdById,
+        organizationId: savedOrganization.id,
+        role: RolesEnum.admin,
+      });
+
+      await mappingRepository.save(mapping);
+
+      return savedOrganization;
     });
-    const saved = await this.organizationRepository.save(organization);
+
     return this.normalizeUpdatedAt(await this.findOne(saved.id));
   }
 
@@ -123,6 +149,18 @@ export class OrganizationService {
 
   restore(id: string) {
     return this.organizationRepository.restore(id);
+  }
+
+  private async findUserOrFail(userRepository: Repository<User>, userId: string) {
+    const user = await userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    return user;
   }
 
   private normalizeRequiredText(value: string) {

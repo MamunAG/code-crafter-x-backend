@@ -1,0 +1,122 @@
+import { MigrationInterface, QueryRunner } from "typeorm";
+
+export class Migration1777142720942 implements MigrationInterface {
+    name = 'Migration1777142720942'
+
+    public async up(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`ALTER TABLE "organization" DROP CONSTRAINT "FK_organization_created_by_id_users"`);
+        await queryRunner.query(`ALTER TABLE "organization" DROP CONSTRAINT "FK_organization_deleted_by_id_users"`);
+        await queryRunner.query(`ALTER TABLE "organization" DROP CONSTRAINT "FK_organization_updated_by_id_users"`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" DROP CONSTRAINT "FK_user_to_oranization_map_created_by_id_users"`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" DROP CONSTRAINT "FK_user_to_oranization_map_deleted_by_id_users"`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" DROP CONSTRAINT "FK_user_to_oranization_map_organization_id_organization"`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" DROP CONSTRAINT "FK_user_to_oranization_map_updated_by_id_users"`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" DROP CONSTRAINT "FK_user_to_oranization_map_user_id_users"`);
+        await queryRunner.query(`ALTER TABLE "users" DROP CONSTRAINT "FK_users_deleted_by_id_users"`);
+        await queryRunner.query(`ALTER TABLE "contact" DROP CONSTRAINT "FK_contact_deleted_by_id_users"`);
+        await queryRunner.query(`ALTER TABLE "email_verification_tokens" DROP CONSTRAINT "FK_4f97f0daef48a53ebd04ab8d5a4"`);
+        await queryRunner.query(`ALTER TABLE "size" DROP CONSTRAINT "FK_size_deleted_by_id_users"`);
+        await queryRunner.query(`ALTER TABLE "currency" DROP CONSTRAINT "FK_currency_deleted_by_id_users"`);
+        await queryRunner.query(`ALTER TABLE "country" DROP CONSTRAINT "FK_country_deleted_by_id_users"`);
+        await queryRunner.query(`ALTER TABLE "buyer" DROP CONSTRAINT "FK_buyer_deleted_by_id_users"`);
+        await queryRunner.query(`ALTER TABLE "embellishment" DROP CONSTRAINT "FK_embellishment_deleted_by_id_users"`);
+        await queryRunner.query(`ALTER TABLE "style_to_embellishment_map" DROP CONSTRAINT "FK_style_to_embellishment_map_deleted_by_id_users"`);
+        await queryRunner.query(`ALTER TABLE "color" DROP CONSTRAINT "FK_color_deleted_by_id_users"`);
+        await queryRunner.query(`ALTER TABLE "style_to_color_map" DROP CONSTRAINT "FK_style_to_color_map_deleted_by_id_users"`);
+        await queryRunner.query(`ALTER TABLE "styles" DROP CONSTRAINT "FK_styles_deleted_by_id_users"`);
+        await queryRunner.query(`ALTER TABLE "style_to_size_map" DROP CONSTRAINT "FK_style_to_size_map_deleted_by_id_users"`);
+        await queryRunner.query(`ALTER TABLE "uom" DROP CONSTRAINT "FK_uom_deleted_by_id_users"`);
+        await queryRunner.query(`DROP INDEX "code_crafter_x"."IDX_email_verification_tokens_email_used"`);
+        await queryRunner.query(`CREATE TYPE "code_crafter_x"."user_to_oranization_map_role_enum" AS ENUM('admin', 'user')`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" ADD "role" "code_crafter_x"."user_to_oranization_map_role_enum" NOT NULL DEFAULT 'user'`);
+        await queryRunner.query(`ALTER TYPE "code_crafter_x"."files_file_type_enum" RENAME TO "files_file_type_enum_old"`);
+        await queryRunner.query(`CREATE TYPE "code_crafter_x"."files_file_type_enum" AS ENUM('document', 'receipt', 'photo', 'video', 'audio', 'other', 'image')`);
+        await queryRunner.query(`ALTER TABLE "files" ALTER COLUMN "file_type" DROP DEFAULT`);
+        await queryRunner.query(`ALTER TABLE "files" ALTER COLUMN "file_type" TYPE "code_crafter_x"."files_file_type_enum" USING "file_type"::"text"::"code_crafter_x"."files_file_type_enum"`);
+        await queryRunner.query(`ALTER TABLE "files" ALTER COLUMN "file_type" SET DEFAULT 'other'`);
+        await queryRunner.query(`DROP TYPE "code_crafter_x"."files_file_type_enum_old"`);
+        await queryRunner.query(`ALTER TABLE "organization" ALTER COLUMN "updated_at" DROP NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" ALTER COLUMN "updated_at" DROP NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "organization" ADD CONSTRAINT "FK_d3c5f450939bf4fd56f844823cf" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "organization" ADD CONSTRAINT "FK_7ef7dd65e5789c70cdd8326a223" FOREIGN KEY ("updated_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "organization" ADD CONSTRAINT "FK_4b7c0f48c60c0a170061d104adf" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" ADD CONSTRAINT "FK_10e5719a2c91527136f2c8d2499" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" ADD CONSTRAINT "FK_0ed71dd73aaef0f96f791c01ab4" FOREIGN KEY ("updated_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" ADD CONSTRAINT "FK_7da10ed64bba953c65a08a3f2f4" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" ADD CONSTRAINT "FK_fd390d8b946e5120c94b4676ef3" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" ADD CONSTRAINT "FK_681f2029a29e50a8a443eeefaa2" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "users" ADD CONSTRAINT "FK_4241f21b9bb35e82a6217af1aad" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "contact" ADD CONSTRAINT "FK_29f54cc620e77004046ca191a51" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "email_verification_tokens" ADD CONSTRAINT "FK_10f285d038feb767bf7c2da14b3" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "size" ADD CONSTRAINT "FK_48a82f81b8454a2a5cc12830f0a" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "currency" ADD CONSTRAINT "FK_07605c662cf60d74c5b7ec3c98c" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "country" ADD CONSTRAINT "FK_6ba6c46e5dfce6b33d409187d9e" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "buyer" ADD CONSTRAINT "FK_6a6e4e2e4ae66965c42137dfcd6" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "embellishment" ADD CONSTRAINT "FK_1bf8c4e5050913c2fe8ba3791b6" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "style_to_embellishment_map" ADD CONSTRAINT "FK_f4a4fae58dcc1a5d7e8e7927b44" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "color" ADD CONSTRAINT "FK_3e6532da4a8dba57d7e92318224" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "style_to_color_map" ADD CONSTRAINT "FK_98778cbcbc53295c83bbd22e8c5" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "styles" ADD CONSTRAINT "FK_a8e0f0d9ab356379d8b6cb1d037" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "style_to_size_map" ADD CONSTRAINT "FK_6637a2ae5ff12e0b3c03ef882a0" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "uom" ADD CONSTRAINT "FK_183b4e3a3c1e1c7278d2126809a" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+    }
+
+    public async down(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`ALTER TABLE "uom" DROP CONSTRAINT "FK_183b4e3a3c1e1c7278d2126809a"`);
+        await queryRunner.query(`ALTER TABLE "style_to_size_map" DROP CONSTRAINT "FK_6637a2ae5ff12e0b3c03ef882a0"`);
+        await queryRunner.query(`ALTER TABLE "styles" DROP CONSTRAINT "FK_a8e0f0d9ab356379d8b6cb1d037"`);
+        await queryRunner.query(`ALTER TABLE "style_to_color_map" DROP CONSTRAINT "FK_98778cbcbc53295c83bbd22e8c5"`);
+        await queryRunner.query(`ALTER TABLE "color" DROP CONSTRAINT "FK_3e6532da4a8dba57d7e92318224"`);
+        await queryRunner.query(`ALTER TABLE "style_to_embellishment_map" DROP CONSTRAINT "FK_f4a4fae58dcc1a5d7e8e7927b44"`);
+        await queryRunner.query(`ALTER TABLE "embellishment" DROP CONSTRAINT "FK_1bf8c4e5050913c2fe8ba3791b6"`);
+        await queryRunner.query(`ALTER TABLE "buyer" DROP CONSTRAINT "FK_6a6e4e2e4ae66965c42137dfcd6"`);
+        await queryRunner.query(`ALTER TABLE "country" DROP CONSTRAINT "FK_6ba6c46e5dfce6b33d409187d9e"`);
+        await queryRunner.query(`ALTER TABLE "currency" DROP CONSTRAINT "FK_07605c662cf60d74c5b7ec3c98c"`);
+        await queryRunner.query(`ALTER TABLE "size" DROP CONSTRAINT "FK_48a82f81b8454a2a5cc12830f0a"`);
+        await queryRunner.query(`ALTER TABLE "email_verification_tokens" DROP CONSTRAINT "FK_10f285d038feb767bf7c2da14b3"`);
+        await queryRunner.query(`ALTER TABLE "contact" DROP CONSTRAINT "FK_29f54cc620e77004046ca191a51"`);
+        await queryRunner.query(`ALTER TABLE "users" DROP CONSTRAINT "FK_4241f21b9bb35e82a6217af1aad"`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" DROP CONSTRAINT "FK_681f2029a29e50a8a443eeefaa2"`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" DROP CONSTRAINT "FK_fd390d8b946e5120c94b4676ef3"`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" DROP CONSTRAINT "FK_7da10ed64bba953c65a08a3f2f4"`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" DROP CONSTRAINT "FK_0ed71dd73aaef0f96f791c01ab4"`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" DROP CONSTRAINT "FK_10e5719a2c91527136f2c8d2499"`);
+        await queryRunner.query(`ALTER TABLE "organization" DROP CONSTRAINT "FK_4b7c0f48c60c0a170061d104adf"`);
+        await queryRunner.query(`ALTER TABLE "organization" DROP CONSTRAINT "FK_7ef7dd65e5789c70cdd8326a223"`);
+        await queryRunner.query(`ALTER TABLE "organization" DROP CONSTRAINT "FK_d3c5f450939bf4fd56f844823cf"`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" ALTER COLUMN "updated_at" SET NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "organization" ALTER COLUMN "updated_at" SET NOT NULL`);
+        await queryRunner.query(`CREATE TYPE "code_crafter_x"."files_file_type_enum_old" AS ENUM('audio', 'document', 'other', 'photo', 'receipt', 'video')`);
+        await queryRunner.query(`ALTER TABLE "files" ALTER COLUMN "file_type" DROP DEFAULT`);
+        await queryRunner.query(`ALTER TABLE "files" ALTER COLUMN "file_type" TYPE "code_crafter_x"."files_file_type_enum_old" USING "file_type"::"text"::"code_crafter_x"."files_file_type_enum_old"`);
+        await queryRunner.query(`ALTER TABLE "files" ALTER COLUMN "file_type" SET DEFAULT 'other'`);
+        await queryRunner.query(`DROP TYPE "code_crafter_x"."files_file_type_enum"`);
+        await queryRunner.query(`ALTER TYPE "code_crafter_x"."files_file_type_enum_old" RENAME TO "files_file_type_enum"`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" DROP COLUMN "role"`);
+        await queryRunner.query(`DROP TYPE "code_crafter_x"."user_to_oranization_map_role_enum"`);
+        await queryRunner.query(`CREATE INDEX "IDX_email_verification_tokens_email_used" ON "email_verification_tokens" ("email", "isUsed") `);
+        await queryRunner.query(`ALTER TABLE "uom" ADD CONSTRAINT "FK_uom_deleted_by_id_users" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "style_to_size_map" ADD CONSTRAINT "FK_style_to_size_map_deleted_by_id_users" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "styles" ADD CONSTRAINT "FK_styles_deleted_by_id_users" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "style_to_color_map" ADD CONSTRAINT "FK_style_to_color_map_deleted_by_id_users" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "color" ADD CONSTRAINT "FK_color_deleted_by_id_users" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "style_to_embellishment_map" ADD CONSTRAINT "FK_style_to_embellishment_map_deleted_by_id_users" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "embellishment" ADD CONSTRAINT "FK_embellishment_deleted_by_id_users" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "buyer" ADD CONSTRAINT "FK_buyer_deleted_by_id_users" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "country" ADD CONSTRAINT "FK_country_deleted_by_id_users" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "currency" ADD CONSTRAINT "FK_currency_deleted_by_id_users" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "size" ADD CONSTRAINT "FK_size_deleted_by_id_users" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "email_verification_tokens" ADD CONSTRAINT "FK_4f97f0daef48a53ebd04ab8d5a4" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "contact" ADD CONSTRAINT "FK_contact_deleted_by_id_users" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "users" ADD CONSTRAINT "FK_users_deleted_by_id_users" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" ADD CONSTRAINT "FK_user_to_oranization_map_user_id_users" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" ADD CONSTRAINT "FK_user_to_oranization_map_updated_by_id_users" FOREIGN KEY ("updated_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" ADD CONSTRAINT "FK_user_to_oranization_map_organization_id_organization" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" ADD CONSTRAINT "FK_user_to_oranization_map_deleted_by_id_users" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "user_to_oranization_map" ADD CONSTRAINT "FK_user_to_oranization_map_created_by_id_users" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "organization" ADD CONSTRAINT "FK_organization_updated_by_id_users" FOREIGN KEY ("updated_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "organization" ADD CONSTRAINT "FK_organization_deleted_by_id_users" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "organization" ADD CONSTRAINT "FK_organization_created_by_id_users" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+    }
+
+}

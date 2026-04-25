@@ -6,6 +6,7 @@ import { Organization } from '../organization/entity/organization.entity';
 import { CreateUserToOranizationMapDto } from './dto/create-user-to-oranization-map.dto';
 import { UserToOranizationMap } from './entity/user-to-oranization-map.entity';
 import { User } from 'src/users/entities/user.entity';
+import { RolesEnum } from 'src/common/enums/role.enum';
 
 @Injectable()
 export class UserToOranizationMapService {
@@ -28,6 +29,7 @@ export class UserToOranizationMapService {
     const mapping = this.userToOranizationMapRepository.create({
       userId: dto.userId,
       organizationId: dto.organizationId,
+      role: dto.role ?? RolesEnum.user,
     });
 
     await this.userToOranizationMapRepository.save(mapping);
