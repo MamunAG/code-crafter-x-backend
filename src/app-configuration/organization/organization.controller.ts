@@ -43,8 +43,7 @@ export class OrganizationController {
   @ApiResponse({ status: 400, description: 'Organization already exists' })
   @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
   async create(@CurrentUser() user: AuthUser, @Body() dto: CreateOrganizationDto) {
-    dto.created_by_id = user.userId;
-    const result = await this.organizationService.create(dto);
+    const result = await this.organizationService.create(dto, user.userId);
     return new BaseResponseDto(result, 'Organization saved successfully');
   }
 
@@ -58,8 +57,7 @@ export class OrganizationController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateOrganizationDto,
   ) {
-    dto.updated_by_id = user.userId;
-    const result = await this.organizationService.update(id, dto);
+    const result = await this.organizationService.update(id, dto, user.userId);
     return new BaseResponseDto(result, 'Organization updated successfully');
   }
 

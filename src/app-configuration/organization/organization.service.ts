@@ -16,8 +16,9 @@ export class OrganizationService {
     private organizationRepository: Repository<Organization>,
   ) {}
 
-  async create(organizationDto: CreateOrganizationDto) {
+  async create(organizationDto: CreateOrganizationDto, createdById: string) {
     const organization = this.organizationRepository.create({
+      created_by_id: createdById,
       name: this.normalizeRequiredText(organizationDto.name),
       address: this.normalizeOptionalText(organizationDto.address),
       contact: this.normalizeOptionalText(organizationDto.contact),
@@ -100,8 +101,9 @@ export class OrganizationService {
       .getOne();
   }
 
-  async update(id: string, dto: UpdateOrganizationDto) {
+  async update(id: string, dto: UpdateOrganizationDto, updatedById: string) {
     await this.organizationRepository.update(id, {
+      updated_by_id: updatedById,
       name: this.normalizeRequiredText(dto.name),
       address: this.normalizeOptionalText(dto.address),
       contact: this.normalizeOptionalText(dto.contact),
