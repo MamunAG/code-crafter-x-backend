@@ -66,8 +66,8 @@ export class ColorController {
   @Delete(':id')
   @ApiOperation({ summary: 'delete item' })
   @ApiResponse({ status: 200, description: 'Item delete successfully', type: BaseResponseDto })
-  async remove(@Param('id', new ParseIntPipe()) id: number) {
-    const result = await this.colorService.remove(id);
+  async remove(@CurrentUser() user: AuthUser, @Param('id', new ParseIntPipe()) id: number) {
+    const result = await this.colorService.remove(id, user.userId);
     return new BaseResponseDto(result, 'Color deleted successfully');
   }
 

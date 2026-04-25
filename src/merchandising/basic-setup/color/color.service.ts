@@ -28,15 +28,21 @@ export class ColorService {
     filters?: Partial<FilterColorDto>,
   ): Promise<PaginatedResponseDto<Color>> {
     const { page = 1, limit = 1000000000000 } = paginationDto;
+    const deletedOnly = filters?.deletedOnly ?? false;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.colorRepository
       .createQueryBuilder('color')
       .leftJoinAndSelect('color.created_by_user', 'created_by_user')
       .leftJoinAndSelect('color.updated_by_user', 'updated_by_user')
+      .leftJoinAndSelect('color.deleted_by_user', 'deleted_by_user')
       .skip(skip)
       .take(limit)
-      .orderBy('color.created_at', 'DESC');
+      .orderBy(deletedOnly ? 'color.deleted_at' : 'color.created_at', 'DESC');
+
+    if (deletedOnly) {
+      queryBuilder.withDeleted();
+    }
 
     if (filters?.colorName) {
       queryBuilder.andWhere('color.colorName ILIKE :colorName', {
@@ -52,6 +58,12 @@ export class ColorService {
       queryBuilder.andWhere('color.colorDescription ILIKE :colorDescription', {
         colorDescription: `%${filters.colorDescription}%`,
       });
+    }
+
+    if (deletedOnly) {
+      queryBuilder.andWhere('color.deleted_at IS NOT NULL');
+    } else {
+      queryBuilder.andWhere('color.deleted_at IS NULL');
     }
 
     const [items, total] = await queryBuilder.getManyAndCount();
@@ -77,6 +89,7 @@ export class ColorService {
       .createQueryBuilder('color')
       .leftJoinAndSelect('color.created_by_user', 'created_by_user')
       .leftJoinAndSelect('color.updated_by_user', 'updated_by_user')
+      .leftJoinAndSelect('color.deleted_by_user', 'deleted_by_user')
       .where('color.id = :id', { id })
       .andWhere('color.deleted_at IS NULL')
       .getOne();
@@ -109,7 +122,8 @@ export class ColorService {
     }
   }
 
-  remove(id: number) {
+  async remove(id: number, deletedById: string) {
+    await this.colorRepository.update(id, { deleted_by_id: deletedById });
     return this.colorRepository.softDelete(id);
   }
 
