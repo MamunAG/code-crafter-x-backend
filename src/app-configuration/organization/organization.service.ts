@@ -17,8 +17,11 @@ export class OrganizationService {
   ) {}
 
   async create(organizationDto: CreateOrganizationDto) {
-    await this.ensureNameIsUnique(organizationDto.name);
-    const organization = this.organizationRepository.create(organizationDto);
+    const organization = this.organizationRepository.create({
+      name: this.normalizeRequiredText(organizationDto.name),
+      address: this.normalizeOptionalText(organizationDto.address),
+      contact: this.normalizeOptionalText(organizationDto.contact),
+    });
     const saved = await this.organizationRepository.save(organization);
     return this.findOne(saved.id);
   }
@@ -98,8 +101,11 @@ export class OrganizationService {
   }
 
   async update(id: string, dto: UpdateOrganizationDto) {
-    await this.ensureNameIsUnique(dto.name, id);
-    await this.organizationRepository.update(id, dto);
+    await this.organizationRepository.update(id, {
+      name: this.normalizeRequiredText(dto.name),
+      address: this.normalizeOptionalText(dto.address),
+      contact: this.normalizeOptionalText(dto.contact),
+    });
     return this.findOne(id);
   }
 
@@ -116,22 +122,23 @@ export class OrganizationService {
     return this.organizationRepository.restore(id);
   }
 
-  private async ensureNameIsUnique(name: string, ignoreId?: string) {
-    const normalizedName = name.trim().toLowerCase();
+  private normalizeRequiredText(value: string) {
+    const normalized = value.trim();
 
-    const queryBuilder = this.organizationRepository
-      .createQueryBuilder('organization')
-      .where('LOWER(TRIM(organization.name)) = :name', { name: normalizedName })
-      .andWhere('organization.deleted_at IS NULL');
-
-    if (ignoreId !== undefined) {
-      queryBuilder.andWhere('organization.id != :ignoreId', { ignoreId });
+    if (!normalized) {
+      throw new BadRequestException('Organization name is required');
     }
 
-    const existing = await queryBuilder.getOne();
+    return normalized;
+  }
 
-    if (existing) {
-      throw new BadRequestException('Organization already exists');
+  private normalizeOptionalText(value?: string | null) {
+    if (value === undefined || value === null) {
+      return undefined;
     }
+
+    const normalized = value.trim();
+
+    return normalized.length > 0 ? normalized : null;
   }
 }

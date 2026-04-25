@@ -1,5 +1,5 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { IsNotEmpty } from 'class-validator';
+import { IsNotEmpty, IsOptional } from 'class-validator';
 import { Organization } from '../entity/organization.entity';
 
 export class CreateOrganizationDto extends PartialType(Organization) {
@@ -7,11 +7,11 @@ export class CreateOrganizationDto extends PartialType(Organization) {
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({ description: 'Organization address', example: '123 Main Street, Dhaka' })
-  @IsNotEmpty()
-  address: string;
+  @ApiProperty({ description: 'Organization address', example: '123 Main Street, Dhaka', required: false, nullable: true })
+  @IsOptional()
+  address?: string | null;
 
-  @ApiProperty({ description: 'Organization contact', example: '+8801712345678' })
-  @IsNotEmpty()
-  contact: string;
+  @ApiProperty({ description: 'Organization contact', example: '+8801712345678', required: false, nullable: true })
+  @IsOptional()
+  contact?: string | null;
 }

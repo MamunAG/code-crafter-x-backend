@@ -19,12 +19,12 @@ export class Organization extends BaseEntity {
   name: string;
 
   @ApiProperty({ description: 'Organization address', example: '123 Main Street, Dhaka' })
-  @Column({ name: 'address', nullable: false })
-  address: string;
+  @Column({ name: 'address', type: 'varchar', nullable: true })
+  address?: string | null;
 
   @ApiProperty({ description: 'Organization contact', example: '+8801712345678' })
-  @Column({ name: 'contact', nullable: false })
-  contact: string;
+  @Column({ name: 'contact', type: 'varchar', nullable: true })
+  contact?: string | null;
 
   @ApiProperty({ description: 'User mappings', type: () => [UserToOranizationMap], required: false })
   @OneToMany(() => UserToOranizationMap, (mapping) => mapping.organization)
