@@ -19,6 +19,8 @@ import { EmbellishmentModule } from './merchandising/basic-setup/embellishment/e
 import { CurrencyModule } from './app-configuration/currency/currency.module';
 import { UomModule } from './app-configuration/uom/uom.module';
 import { CountryModule } from './app-configuration/country/country.module';
+import { OrganizationModule } from './app-configuration/organization/organization.module';
+import { UserToOranizationMapModule } from './app-configuration/user-to-oranization-map/user-to-oranization-map.module';
 import { BuyerModule } from './merchandising/buyer/buyer.module';
 import { StyleModule } from './merchandising/style/style.module';
 import { CommonController } from './common/common.controller';
@@ -46,6 +48,8 @@ import { CommonController } from './common/common.controller';
     CurrencyModule,
     UomModule,
     CountryModule,
+    OrganizationModule,
+    UserToOranizationMapModule,
     BuyerModule,
     StyleModule,
   ],

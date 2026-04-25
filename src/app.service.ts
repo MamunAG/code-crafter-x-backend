@@ -16,6 +16,8 @@ import { Embellishment } from './merchandising/basic-setup/embellishment/entity/
 import { Currency } from './app-configuration/currency/entity/currency.entity';
 import { Uom } from './app-configuration/uom/entity/uom.entity';
 import { Country } from './app-configuration/country/entity/country.entity';
+import { Organization } from './app-configuration/organization/entity/organization.entity';
+import { UserToOranizationMap } from './app-configuration/user-to-oranization-map/entity/user-to-oranization-map.entity';
 import { Buyer } from './merchandising/buyer/entity/buyer.entity';
 import { Style } from './merchandising/style/entity/style.entity';
 import { StyleToColorMap } from './merchandising/style/entity/style-to-color-map.entity';
@@ -53,6 +55,8 @@ export class AppService implements TypeOrmOptionsFactory {
         Currency,
         Uom,
         Country,
+        Organization,
+        UserToOranizationMap,
         Buyer,
         Style,
         StyleToColorMap,

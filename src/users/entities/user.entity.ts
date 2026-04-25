@@ -4,6 +4,7 @@ import {
   Column,
   Entity,
   Index,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Files } from './../../files/entities/file.entity';
@@ -11,6 +12,7 @@ import { JoinColumn, ManyToOne } from 'typeorm';
 import { Gender } from '../enum/gender.enum';
 import { Status } from '../../common/enums';
 import { BaseEntity } from '../../common/entities/base.entity';
+import { UserToOranizationMap } from 'src/app-configuration/user-to-oranization-map/entity/user-to-oranization-map.entity';
 
 @Entity('users')
 export class User extends BaseEntity {
@@ -84,5 +86,9 @@ export class User extends BaseEntity {
   @ManyToOne(() => Files, { nullable: true })
   @JoinColumn({ name: 'profile_pic_id' })
   profile_pic: Files;
+
+  @ApiProperty({ description: 'Organization mappings', type: () => [UserToOranizationMap], required: false })
+  @OneToMany(() => UserToOranizationMap, (mapping) => mapping.user)
+  userToOranizationMaps: UserToOranizationMap[];
 
 }
