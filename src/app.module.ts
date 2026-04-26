@@ -25,6 +25,7 @@ import { OrganizationAccessRequestModule } from './app-configuration/organizatio
 import { BuyerModule } from './merchandising/buyer/buyer.module';
 import { StyleModule } from './merchandising/style/style.module';
 import { CommonController } from './common/common.controller';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { CommonController } from './common/common.controller';
     UomModule,
     CountryModule,
     OrganizationModule,
+    NotificationsModule,
     UserToOranizationMapModule,
     OrganizationAccessRequestModule,
     BuyerModule,

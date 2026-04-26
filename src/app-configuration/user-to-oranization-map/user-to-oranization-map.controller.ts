@@ -1,10 +1,13 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import type AuthUser from 'src/auth/dto/auth-user';
+import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { BaseResponseDto } from 'src/common/dto/base-response.dto';
 import { RolesEnum } from 'src/common/enums/role.enum';
 import { CreateUserToOranizationMapDto } from './dto/create-user-to-oranization-map.dto';
 import { UpdateUserToOranizationMapDefaultDto } from './dto/update-user-to-oranization-map-default.dto';
+import { UpdateUserToOranizationMapRoleDto } from './dto/update-user-to-oranization-map-role.dto';
 import { UserToOranizationMapService } from './user-to-oranization-map.service';
 
 @ApiTags('User To Oranization Map')
@@ -36,6 +39,23 @@ export class UserToOranizationMapController {
     return new BaseResponseDto(result, 'Default organization updated successfully');
   }
 
+  @Patch('mapping/:userId/:organizationId/role')
+  @ApiOperation({ summary: 'Update a user role in an organization' })
+  async updateRole(
+    @CurrentUser() user: AuthUser,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Body() dto: UpdateUserToOranizationMapRoleDto,
+  ) {
+    const result = await this.userToOranizationMapService.updateRole(
+      userId,
+      organizationId,
+      dto,
+      user.userId,
+    );
+    return new BaseResponseDto(result, 'Organization role updated successfully');
+  }
+
   @Get('mapping/:userId/:organizationId')
   @ApiOperation({ summary: 'Get mapping by user and organization' })
   async findOne(
@@ -51,6 +71,19 @@ export class UserToOranizationMapController {
   async findUsersByOrganization(@Param('organizationId', new ParseUUIDPipe()) organizationId: string) {
     const result = await this.userToOranizationMapService.findUsersByOrganization(organizationId);
     return new BaseResponseDto(result, 'Organization users retrieved successfully');
+  }
+
+  @Get('organization/:organizationId/mappings')
+  @ApiOperation({ summary: 'Get organization memberships for an organization admin' })
+  async findMappingsByOrganization(
+    @CurrentUser() user: AuthUser,
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+  ) {
+    const result = await this.userToOranizationMapService.findMappingsByOrganizationForAdmin(
+      organizationId,
+      user.userId,
+    );
+    return new BaseResponseDto(result, 'Organization memberships retrieved successfully');
   }
 
   @Get('user/:userId/organizations')
@@ -70,10 +103,11 @@ export class UserToOranizationMapController {
   @Delete('mapping/:userId/:organizationId')
   @ApiOperation({ summary: 'Delete mapping' })
   async remove(
+    @CurrentUser() user: AuthUser,
     @Param('userId', new ParseUUIDPipe()) userId: string,
     @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
   ) {
-    const result = await this.userToOranizationMapService.remove(userId, organizationId);
-    return new BaseResponseDto(result, 'Mapping deleted successfully');
+    const result = await this.userToOranizationMapService.remove(userId, organizationId, user.userId);
+    return new BaseResponseDto(result, 'Organization access revoked successfully');
   }
 }

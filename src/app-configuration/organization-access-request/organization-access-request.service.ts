@@ -20,6 +20,7 @@ import { CreateOrganizationAccessRequestDto } from './dto/create-organization-ac
 import { RejectOrganizationAccessRequestDto } from './dto/reject-organization-access-request.dto';
 import { OrganizationAccessRequest } from './entity/organization-access-request.entity';
 import { Notification } from 'src/notifications/entity/notification.entity';
+import { NotificationsService } from 'src/notifications/notifications.service';
 
 type OrganizationApprovalDetail = {
   organizationId: string;
@@ -53,6 +54,7 @@ export class OrganizationAccessRequestService {
     private readonly mappingRepository: Repository<UserToOranizationMap>,
 
     private readonly emailService: EmailService,
+    private readonly notificationsService: NotificationsService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -85,6 +87,20 @@ export class OrganizationAccessRequestService {
     }
 
     const reviewLink = this.getAdminReviewLink();
+    const adminNotificationPayload = {
+      created_by_id: requestedByUserId,
+      userId: targetAdmin.id,
+      title: 'Organization access request',
+      body: `${requester.name} requested access and sent the request to your email.`,
+      link: reviewLink,
+      type: NotificationTypeEnum.organization_access_request,
+      metadata: {
+        requesterId: requestedByUserId,
+        requesterName: requester.name,
+        targetAdminId: targetAdmin.id,
+        targetAdminEmail: targetAdmin.email,
+      },
+    };
     const savedRequest = await this.dataSource.transaction(async (manager) => {
       const requestRepository = manager.getRepository(OrganizationAccessRequest);
       const notificationRepository = manager.getRepository(Notification);
@@ -102,18 +118,10 @@ export class OrganizationAccessRequestService {
 
       await notificationRepository.save(
         notificationRepository.create({
-          created_by_id: requestedByUserId,
-          userId: targetAdmin.id,
-          title: 'Organization access request',
-          body: `${requester.name} requested access and sent the request to your email.`,
-          link: reviewLink,
-          type: NotificationTypeEnum.organization_access_request,
+          ...adminNotificationPayload,
           metadata: {
+            ...adminNotificationPayload.metadata,
             requestId: saved.id,
-            requesterId: requestedByUserId,
-            requesterName: requester.name,
-            targetAdminId: targetAdmin.id,
-            targetAdminEmail: targetAdmin.email,
           },
         }),
       );
@@ -130,6 +138,14 @@ export class OrganizationAccessRequestService {
         }),
       ],
     );
+
+    await this.notificationsService.sendPushToUser(targetAdmin.id, {
+      ...adminNotificationPayload,
+      metadata: {
+        ...adminNotificationPayload.metadata,
+        requestId: savedRequest.id,
+      },
+    });
 
     return this.findOne(savedRequest.id);
   }
@@ -375,6 +391,35 @@ export class OrganizationAccessRequestService {
           reviewLink,
         }),
       ),
+      this.notificationsService.sendPushToUser(requester.id, {
+        title: 'Organization access request approved',
+        body: this.formatRequesterApprovalBody(requesterOrganizationDetails),
+        link: this.getAppLink(),
+        type: NotificationTypeEnum.organization_access_request_decision,
+        metadata: {
+          requestId: approvalResult.request?.id,
+          status: OrganizationAccessRequestStatusEnum.approved,
+          assignments: requesterOrganizationDetails,
+        },
+      }),
+      ...organizationAdminRecipients.flatMap((recipient) =>
+        recipient.organizationDetails.map((detail) =>
+          this.notificationsService.sendPushToUser(recipient.userId, {
+            title: 'New organization member approved',
+            body: `${requester.name} has been added to ${detail.organizationName} as ${this.formatRoleLabel(detail.role)}.`,
+            link: reviewLink,
+            type: NotificationTypeEnum.organization_access_request_decision,
+            metadata: {
+              requestId: approvalResult.request?.id,
+              requesterId: requester.id,
+              requesterName: requester.name,
+              organizationId: detail.organizationId,
+              organizationName: detail.organizationName,
+              role: detail.role,
+            },
+          }),
+        ),
+      ),
     ]);
 
     return approvalResult.request;
@@ -422,6 +467,18 @@ export class OrganizationAccessRequestService {
         },
       }),
     );
+
+    await this.notificationsService.sendPushToUser(request.requestedByUserId, {
+      title: 'Organization access request rejected',
+      body: 'Your access request was rejected.',
+      link: this.getAdminReviewLink(),
+      type: NotificationTypeEnum.organization_access_request_decision,
+      metadata: {
+        requestId: savedRequest.id,
+        status: savedRequest.status,
+        targetAdminId: request.requestedAdminUserId,
+      },
+    });
 
     return this.findOne(savedRequest.id);
   }

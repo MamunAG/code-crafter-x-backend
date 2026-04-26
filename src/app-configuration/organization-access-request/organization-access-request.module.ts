@@ -9,10 +9,12 @@ import { OrganizationAccessRequestController } from './organization-access-reque
 import { OrganizationAccessRequest } from './entity/organization-access-request.entity';
 import { OrganizationAccessRequestService } from './organization-access-request.service';
 import { UserToOranizationMap } from '../user-to-oranization-map/entity/user-to-oranization-map.entity';
+import { NotificationsModule } from 'src/notifications/notifications.module';
 
 @Module({
   imports: [
     AuthModule,
+    NotificationsModule,
     UserToOranizationMapModule,
     TypeOrmModule.forFeature([
       OrganizationAccessRequest,

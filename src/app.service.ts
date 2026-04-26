@@ -25,6 +25,7 @@ import { StyleToColorMap } from './merchandising/style/entity/style-to-color-map
 import { StyleToEmbellishmentMap } from './merchandising/style/entity/style-to-embellishment-map.entity';
 import { StyleToSizeMap } from './merchandising/style/entity/style-to-size-map.entity';
 import { Notification } from './notifications/entity/notification.entity';
+import { UserFirebaseToken } from './notifications/entity/user-firebase-token.entity';
 
 @Injectable()
 
@@ -61,6 +62,7 @@ export class AppService implements TypeOrmOptionsFactory {
         UserToOranizationMap,
         OrganizationAccessRequest,
         Notification,
+        UserFirebaseToken,
         Buyer,
         Style,
         StyleToColorMap,
