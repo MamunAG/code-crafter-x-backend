@@ -118,6 +118,22 @@ export class UserToOranizationMapService {
     }));
   }
 
+  async findMappingsByUser(userId: string) {
+    await this.findUserOrFail(this.userRepository, userId);
+
+    return this.userToOranizationMapRepository
+      .createQueryBuilder('user_to_oranization_map')
+      .innerJoinAndSelect('user_to_oranization_map.organization', 'organization')
+      .leftJoinAndSelect('organization.created_by_user', 'created_by_user')
+      .leftJoinAndSelect('organization.updated_by_user', 'updated_by_user')
+      .leftJoinAndSelect('user_to_oranization_map.user', 'user')
+      .where('user_to_oranization_map.user_id = :userId', { userId })
+      .andWhere('user_to_oranization_map.deleted_at IS NULL')
+      .orderBy('user_to_oranization_map.is_default', 'DESC')
+      .addOrderBy('organization.created_at', 'DESC')
+      .getMany();
+  }
+
   async updateDefault(
     userId: string,
     organizationId: string,

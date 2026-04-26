@@ -60,6 +60,13 @@ export class UserToOranizationMapController {
     return new BaseResponseDto(result, 'User organizations retrieved successfully');
   }
 
+  @Get('user/:userId/mappings')
+  @ApiOperation({ summary: 'Get mappings by user' })
+  async findMappingsByUser(@Param('userId', new ParseUUIDPipe()) userId: string) {
+    const result = await this.userToOranizationMapService.findMappingsByUser(userId);
+    return new BaseResponseDto(result, 'User organization mappings retrieved successfully');
+  }
+
   @Delete('mapping/:userId/:organizationId')
   @ApiOperation({ summary: 'Delete mapping' })
   async remove(

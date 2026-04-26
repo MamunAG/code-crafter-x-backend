@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>New member joined</title>
+  </head>
+  <body style="margin:0; padding:0; background:#f3f6fb; font-family:Arial,Helvetica,sans-serif; color:#0f172a;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f6fb; padding:32px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px; background:#ffffff; border:1px solid #e5e7eb; border-radius:18px; overflow:hidden;">
+            <tr>
+              <td style="padding:28px 28px 8px;">
+                <p style="margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:0.18em; color:#64748b;">{{appName}}</p>
+                <h1 style="margin:0; font-size:24px; line-height:1.3;">A new member joined your organization</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:8px 28px 24px;">
+                <p style="margin:0 0 16px; font-size:15px; line-height:1.7; color:#334155;">
+                  Hi <strong>{{adminName}}</strong>, <strong>{{requesterName}}</strong> has been approved and added to the following organization memberships:
+                </p>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #e5e7eb; border-radius:14px; overflow:hidden;">
+                  {{#each organizationDetails}}
+                  <tr>
+                    <td style="padding:14px 16px; border-bottom:1px solid #e5e7eb;">
+                      <p style="margin:0; font-size:15px; font-weight:700; color:#0f172a;">{{name}}</p>
+                      <p style="margin:4px 0 0; font-size:13px; color:#64748b;">Assigned role: {{role}}</p>
+                    </td>
+                  </tr>
+                  {{/each}}
+                </table>
+                <p style="margin:18px 0 24px; font-size:15px; line-height:1.7; color:#334155;">
+                  You can review this membership in the IAM area at any time.
+                </p>
+                <table role="presentation" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td style="border-radius:999px; background:#0f172a;">
+                      <a href="{{reviewLink}}" style="display:inline-block; padding:12px 22px; color:#ffffff; text-decoration:none; font-size:14px; font-weight:600;">Open IAM</a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

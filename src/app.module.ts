@@ -21,6 +21,7 @@ import { UomModule } from './app-configuration/uom/uom.module';
 import { CountryModule } from './app-configuration/country/country.module';
 import { OrganizationModule } from './app-configuration/organization/organization.module';
 import { UserToOranizationMapModule } from './app-configuration/user-to-oranization-map/user-to-oranization-map.module';
+import { OrganizationAccessRequestModule } from './app-configuration/organization-access-request/organization-access-request.module';
 import { BuyerModule } from './merchandising/buyer/buyer.module';
 import { StyleModule } from './merchandising/style/style.module';
 import { CommonController } from './common/common.controller';
@@ -50,6 +51,7 @@ import { CommonController } from './common/common.controller';
     CountryModule,
     OrganizationModule,
     UserToOranizationMapModule,
+    OrganizationAccessRequestModule,
     BuyerModule,
     StyleModule,
   ],

@@ -34,10 +34,22 @@ const resolveTemplatesDir = (): string => {
     join(process.cwd(), 'src', 'auth', 'templates'),
   ];
 
-  return (
-    candidates.find((candidate) => existsSync(candidate)) ??
-    join(process.cwd(), 'src', 'auth', 'templates')
-  );
+  const requiredTemplates = [
+    'welcome.hbs',
+    'password-reset.hbs',
+    'confirm-email.hbs',
+    'contact_admin.hbs',
+    'contact_user.hbs',
+    'organization-access-request.hbs',
+    'organization-access-request-approved.hbs',
+    'organization-new-member.hbs',
+  ];
+
+  const hasRequiredTemplates = (candidate: string) =>
+    existsSync(candidate) &&
+    requiredTemplates.every((template) => existsSync(join(candidate, template)));
+
+  return candidates.find((candidate) => hasRequiredTemplates(candidate)) ?? join(process.cwd(), 'src', 'auth', 'templates');
 };
 
 @Module({

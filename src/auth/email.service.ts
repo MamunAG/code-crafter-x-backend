@@ -84,8 +84,6 @@ export class EmailService {
     fallbackMessage: string;
   }): Promise<void> {
     try {
-      const brand = this.getBrandContext();
-
       await this.mailerService.sendMail({
         to: email,
         subject,
@@ -272,6 +270,115 @@ export class EmailService {
       if (this.configService.get<string>('NODE_ENV') === 'development') {
         this.logger.log(
           `Fallback - Contact confirmation email should have been sent to ${email} for ${fullName}`,
+        );
+      }
+    }
+  }
+
+  async sendOrganizationAccessRequestEmail(
+    email: string,
+    context: {
+      adminName: string;
+      requesterName: string;
+      reviewLink: string;
+    },
+  ): Promise<void> {
+    try {
+      const brand = this.getBrandContext();
+
+      await this.mailerService.sendMail({
+        to: email,
+        subject: `Organization access request - ${brand.appName}`,
+        template: 'organization-access-request',
+        attachments: this.getBrandAttachments(),
+        context: {
+          ...this.getInlineBrandContext(),
+          ...context,
+        },
+      });
+
+      this.logger.log(`Organization access request email sent successfully to ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send organization access request email to ${email}`, error);
+
+      if (this.configService.get<string>('NODE_ENV') === 'development') {
+        this.logger.log(
+          `Fallback - organization access request email should have been sent to ${email}`,
+        );
+      }
+    }
+  }
+
+  async sendOrganizationAccessApprovedEmail(
+    email: string,
+    context: {
+      requesterName: string;
+      organizationDetails: Array<{
+        name: string;
+        role: string;
+      }>;
+      appLink: string;
+    },
+  ): Promise<void> {
+    try {
+      const brand = this.getBrandContext();
+
+      await this.mailerService.sendMail({
+        to: email,
+        subject: `Your membership request was approved - ${brand.appName}`,
+        template: 'organization-access-request-approved',
+        attachments: this.getBrandAttachments(),
+        context: {
+          ...this.getInlineBrandContext(),
+          ...context,
+        },
+      });
+
+      this.logger.log(`Organization access approval email sent successfully to ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send organization access approval email to ${email}`, error);
+
+      if (this.configService.get<string>('NODE_ENV') === 'development') {
+        this.logger.log(
+          `Fallback - organization access approval email should have been sent to ${email}`,
+        );
+      }
+    }
+  }
+
+  async sendOrganizationNewMemberEmail(
+    email: string,
+    context: {
+      adminName: string;
+      requesterName: string;
+      organizationDetails: Array<{
+        name: string;
+        role: string;
+      }>;
+      reviewLink: string;
+    },
+  ): Promise<void> {
+    try {
+      const brand = this.getBrandContext();
+
+      await this.mailerService.sendMail({
+        to: email,
+        subject: `New organization member - ${brand.appName}`,
+        template: 'organization-new-member',
+        attachments: this.getBrandAttachments(),
+        context: {
+          ...this.getInlineBrandContext(),
+          ...context,
+        },
+      });
+
+      this.logger.log(`Organization new member email sent successfully to ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send organization new member email to ${email}`, error);
+
+      if (this.configService.get<string>('NODE_ENV') === 'development') {
+        this.logger.log(
+          `Fallback - organization new member email should have been sent to ${email}`,
         );
       }
     }

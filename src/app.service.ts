@@ -18,11 +18,13 @@ import { Uom } from './app-configuration/uom/entity/uom.entity';
 import { Country } from './app-configuration/country/entity/country.entity';
 import { Organization } from './app-configuration/organization/entity/organization.entity';
 import { UserToOranizationMap } from './app-configuration/user-to-oranization-map/entity/user-to-oranization-map.entity';
+import { OrganizationAccessRequest } from './app-configuration/organization-access-request/entity/organization-access-request.entity';
 import { Buyer } from './merchandising/buyer/entity/buyer.entity';
 import { Style } from './merchandising/style/entity/style.entity';
 import { StyleToColorMap } from './merchandising/style/entity/style-to-color-map.entity';
 import { StyleToEmbellishmentMap } from './merchandising/style/entity/style-to-embellishment-map.entity';
 import { StyleToSizeMap } from './merchandising/style/entity/style-to-size-map.entity';
+import { Notification } from './notifications/entity/notification.entity';
 
 @Injectable()
 
@@ -57,6 +59,8 @@ export class AppService implements TypeOrmOptionsFactory {
         Country,
         Organization,
         UserToOranizationMap,
+        OrganizationAccessRequest,
+        Notification,
         Buyer,
         Style,
         StyleToColorMap,
