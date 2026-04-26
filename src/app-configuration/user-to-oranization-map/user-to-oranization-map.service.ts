@@ -1,16 +1,24 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 
+import { RolesEnum } from 'src/common/enums/role.enum';
 import { Organization } from '../organization/entity/organization.entity';
 import { CreateUserToOranizationMapDto } from './dto/create-user-to-oranization-map.dto';
+import { UpdateUserToOranizationMapDefaultDto } from './dto/update-user-to-oranization-map-default.dto';
 import { UserToOranizationMap } from './entity/user-to-oranization-map.entity';
 import { User } from 'src/users/entities/user.entity';
-import { RolesEnum } from 'src/common/enums/role.enum';
+
+type OrganizationWithDefault = Organization & {
+  isDefault: boolean;
+};
 
 @Injectable()
 export class UserToOranizationMapService {
   constructor(
+    @InjectDataSource()
+    private dataSource: DataSource,
+
     @InjectRepository(UserToOranizationMap)
     private userToOranizationMapRepository: Repository<UserToOranizationMap>,
 
@@ -22,18 +30,43 @@ export class UserToOranizationMapService {
   ) {}
 
   async create(dto: CreateUserToOranizationMapDto) {
-    await this.findUserOrFail(dto.userId);
-    await this.findOrganizationOrFail(dto.organizationId);
-    await this.ensureMappingDoesNotExist(dto.userId, dto.organizationId);
+    return this.dataSource.transaction(async (manager) => {
+      const userRepository = manager.getRepository(User);
+      const organizationRepository = manager.getRepository(Organization);
+      const mappingRepository = manager.getRepository(UserToOranizationMap);
 
-    const mapping = this.userToOranizationMapRepository.create({
-      userId: dto.userId,
-      organizationId: dto.organizationId,
-      role: dto.role ?? RolesEnum.user,
+      await this.findUserOrFail(userRepository, dto.userId);
+      await this.findOrganizationOrFail(organizationRepository, dto.organizationId);
+      await this.ensureMappingDoesNotExist(mappingRepository, dto.userId, dto.organizationId);
+
+      const existingMappingsCount = await mappingRepository.count({
+        where: {
+          userId: dto.userId,
+        },
+      });
+      const shouldBeDefault = dto.isDefault ?? existingMappingsCount === 0;
+
+      if (shouldBeDefault) {
+        await mappingRepository.update(
+          {
+            userId: dto.userId,
+          },
+          {
+            isDefault: false,
+          },
+        );
+      }
+
+      const mapping = mappingRepository.create({
+        userId: dto.userId,
+        organizationId: dto.organizationId,
+        role: dto.role ?? RolesEnum.user,
+        isDefault: shouldBeDefault,
+      });
+
+      await mappingRepository.save(mapping);
+      return this.findOne(dto.userId, dto.organizationId);
     });
-
-    await this.userToOranizationMapRepository.save(mapping);
-    return this.findOne(dto.userId, dto.organizationId);
   }
 
   findOne(userId: string, organizationId: string) {
@@ -50,7 +83,7 @@ export class UserToOranizationMapService {
   }
 
   async findUsersByOrganization(organizationId: string) {
-    await this.findOrganizationOrFail(organizationId);
+    await this.findOrganizationOrFail(this.organizationRepository, organizationId);
 
     const mappings = await this.userToOranizationMapRepository
       .createQueryBuilder('user_to_oranization_map')
@@ -65,8 +98,8 @@ export class UserToOranizationMapService {
     return mappings.map((mapping) => mapping.user);
   }
 
-  async findOrganizationsByUser(userId: string) {
-    await this.findUserOrFail(userId);
+  async findOrganizationsByUser(userId: string): Promise<OrganizationWithDefault[]> {
+    await this.findUserOrFail(this.userRepository, userId);
 
     const mappings = await this.userToOranizationMapRepository
       .createQueryBuilder('user_to_oranization_map')
@@ -75,10 +108,57 @@ export class UserToOranizationMapService {
       .leftJoinAndSelect('organization.updated_by_user', 'updated_by_user')
       .where('user_to_oranization_map.user_id = :userId', { userId })
       .andWhere('user_to_oranization_map.deleted_at IS NULL')
-      .orderBy('organization.created_at', 'DESC')
+      .orderBy('user_to_oranization_map.is_default', 'DESC')
+      .addOrderBy('organization.created_at', 'DESC')
       .getMany();
 
-    return mappings.map((mapping) => mapping.organization);
+    return mappings.map((mapping) => ({
+      ...mapping.organization,
+      isDefault: mapping.isDefault,
+    }));
+  }
+
+  async updateDefault(
+    userId: string,
+    organizationId: string,
+    dto: UpdateUserToOranizationMapDefaultDto,
+  ) {
+    await this.findUserOrFail(this.userRepository, userId);
+    await this.findOrganizationOrFail(this.organizationRepository, organizationId);
+
+    const mapping = await this.userToOranizationMapRepository.findOne({
+      where: {
+        userId,
+        organizationId,
+      },
+    });
+
+    if (!mapping) {
+      throw new BadRequestException('Mapping not found');
+    }
+
+    if (dto.isDefault) {
+      await this.userToOranizationMapRepository.update(
+        {
+          userId,
+        },
+        {
+          isDefault: false,
+        },
+      );
+    }
+
+    await this.userToOranizationMapRepository.update(
+      {
+        userId,
+        organizationId,
+      },
+      {
+        isDefault: dto.isDefault,
+      },
+    );
+
+    return this.findOne(userId, organizationId);
   }
 
   async remove(userId: string, organizationId: string) {
@@ -88,8 +168,12 @@ export class UserToOranizationMapService {
     });
   }
 
-  private async ensureMappingDoesNotExist(userId: string, organizationId: string) {
-    const existing = await this.userToOranizationMapRepository.findOne({
+  private async ensureMappingDoesNotExist(
+    mappingRepository: Repository<UserToOranizationMap>,
+    userId: string,
+    organizationId: string,
+  ) {
+    const existing = await mappingRepository.findOne({
       where: {
         userId,
         organizationId,
@@ -101,8 +185,8 @@ export class UserToOranizationMapService {
     }
   }
 
-  private async findUserOrFail(userId: string) {
-    const user = await this.userRepository.findOne({
+  private async findUserOrFail(userRepository: Repository<User>, userId: string) {
+    const user = await userRepository.findOne({
       where: { id: userId },
     });
 
@@ -113,8 +197,11 @@ export class UserToOranizationMapService {
     return user;
   }
 
-  private async findOrganizationOrFail(organizationId: string) {
-    const organization = await this.organizationRepository.findOne({
+  private async findOrganizationOrFail(
+    organizationRepository: Repository<Organization>,
+    organizationId: string,
+  ) {
+    const organization = await organizationRepository.findOne({
       where: { id: organizationId },
     });
 

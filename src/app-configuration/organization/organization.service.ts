@@ -23,7 +23,7 @@ export class OrganizationService {
   ) {}
 
   async create(organizationDto: CreateOrganizationDto, createdById: string) {
-    const saved = await this.dataSource.transaction(async (manager) => {
+    const { savedOrganization, shouldBeDefault } = await this.dataSource.transaction(async (manager) => {
       const userRepository = manager.getRepository(User);
       const organizationRepository = manager.getRepository(Organization);
       const mappingRepository = manager.getRepository(UserToOranizationMap);
@@ -38,19 +38,44 @@ export class OrganizationService {
       });
       const savedOrganization = await organizationRepository.save(organization);
 
+      const existingMappingsCount = await mappingRepository.count({
+        where: {
+          userId: createdById,
+        },
+      });
+      const shouldBeDefault = organizationDto.isDefault ?? existingMappingsCount === 0;
+
+      if (shouldBeDefault) {
+        await mappingRepository.update(
+          {
+            userId: createdById,
+          },
+          {
+            isDefault: false,
+          },
+        );
+      }
+
       const mapping = mappingRepository.create({
         created_by_id: createdById,
         userId: createdById,
         organizationId: savedOrganization.id,
         role: RolesEnum.admin,
+        isDefault: shouldBeDefault,
       });
 
       await mappingRepository.save(mapping);
 
-      return savedOrganization;
+      return {
+        savedOrganization,
+        shouldBeDefault,
+      };
     });
 
-    return this.normalizeUpdatedAt(await this.findOne(saved.id));
+    return {
+      ...this.normalizeUpdatedAt(await this.findOne(savedOrganization.id)),
+      isDefault: shouldBeDefault,
+    };
   }
 
   async findAll(

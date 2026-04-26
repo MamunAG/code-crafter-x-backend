@@ -1,5 +1,5 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional } from 'class-validator';
+import { IsBoolean, IsNotEmpty, IsOptional } from 'class-validator';
 import { Organization } from '../entity/organization.entity';
 
 export class CreateOrganizationDto extends PartialType(Organization) {
@@ -14,4 +14,9 @@ export class CreateOrganizationDto extends PartialType(Organization) {
   @ApiProperty({ description: 'Organization contact', example: '+8801712345678', required: false, nullable: true })
   @IsOptional()
   contact?: string | null;
+
+  @ApiProperty({ description: 'Whether this organization should be default for the creator', required: false, default: false })
+  @IsOptional()
+  @IsBoolean()
+  isDefault?: boolean;
 }

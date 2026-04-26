@@ -25,6 +25,10 @@ export class UserToOranizationMap extends BaseEntity {
   @Column({ type: 'enum', enum: RolesEnum, default: RolesEnum.user })
   role: RolesEnum;
 
+  @ApiProperty({ description: 'Whether this is the default organization for the user', example: true })
+  @Column({ name: 'is_default', type: 'boolean', default: false })
+  isDefault: boolean;
+
   @ApiProperty({ description: 'User object', type: () => User })
   @ManyToOne(() => User, (user) => user.userToOranizationMaps, { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })

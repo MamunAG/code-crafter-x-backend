@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsUUID } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsUUID } from 'class-validator';
 import { RolesEnum } from 'src/common/enums/role.enum';
 
 export class CreateUserToOranizationMapDto {
@@ -15,4 +15,9 @@ export class CreateUserToOranizationMapDto {
   @IsOptional()
   @IsEnum(RolesEnum)
   role?: RolesEnum;
+
+  @ApiProperty({ description: 'Whether this mapping should be the default organization', required: false, default: false })
+  @IsOptional()
+  @IsBoolean()
+  isDefault?: boolean;
 }

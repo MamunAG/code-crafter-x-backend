@@ -1,9 +1,10 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { BaseResponseDto } from 'src/common/dto/base-response.dto';
 import { RolesEnum } from 'src/common/enums/role.enum';
 import { CreateUserToOranizationMapDto } from './dto/create-user-to-oranization-map.dto';
+import { UpdateUserToOranizationMapDefaultDto } from './dto/update-user-to-oranization-map-default.dto';
 import { UserToOranizationMapService } from './user-to-oranization-map.service';
 
 @ApiTags('User To Oranization Map')
@@ -22,6 +23,17 @@ export class UserToOranizationMapController {
   async create(@Body() dto: CreateUserToOranizationMapDto) {
     const result = await this.userToOranizationMapService.create(dto);
     return new BaseResponseDto(result, 'User mapped to organization successfully');
+  }
+
+  @Patch('mapping/:userId/:organizationId/default')
+  @ApiOperation({ summary: 'Update default organization mapping' })
+  async updateDefault(
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Body() dto: UpdateUserToOranizationMapDefaultDto,
+  ) {
+    const result = await this.userToOranizationMapService.updateDefault(userId, organizationId, dto);
+    return new BaseResponseDto(result, 'Default organization updated successfully');
   }
 
   @Get('mapping/:userId/:organizationId')
