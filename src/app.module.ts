@@ -19,6 +19,8 @@ import { EmbellishmentModule } from './merchandising/basic-setup/embellishment/e
 import { CurrencyModule } from './app-configuration/currency/currency.module';
 import { UomModule } from './app-configuration/uom/uom.module';
 import { CountryModule } from './app-configuration/country/country.module';
+import { MenuModule } from './app-configuration/menu/menu.module';
+import { MenuPermissionModule } from './app-configuration/menu-permission/menu-permission.module';
 import { OrganizationModule } from './app-configuration/organization/organization.module';
 import { UserToOranizationMapModule } from './app-configuration/user-to-oranization-map/user-to-oranization-map.module';
 import { OrganizationAccessRequestModule } from './app-configuration/organization-access-request/organization-access-request.module';
@@ -50,6 +52,8 @@ import { NotificationsModule } from './notifications/notifications.module';
     CurrencyModule,
     UomModule,
     CountryModule,
+    MenuModule,
+    MenuPermissionModule,
     OrganizationModule,
     NotificationsModule,
     UserToOranizationMapModule,
