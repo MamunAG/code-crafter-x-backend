@@ -3,6 +3,13 @@ import { Type } from 'class-transformer';
 import { IsInt, IsOptional, Max, Min } from 'class-validator';
 
 export class NotificationQueryDto {
+  @ApiPropertyOptional({ description: 'Notification page number', default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
   @ApiPropertyOptional({ description: 'Maximum notifications to return', default: 20 })
   @IsOptional()
   @Type(() => Number)

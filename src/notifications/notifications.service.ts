@@ -37,10 +37,12 @@ export class NotificationsService {
     private readonly firebaseAdmin: typeof admin,
   ) {}
 
-  async findForUser(userId: string, limit = 20) {
+  async findForUser(userId: string, page = 1, limit = 20) {
+    const safePage = Math.max(page || 1, 1);
     const safeLimit = Math.min(Math.max(limit || 20, 1), 100);
+    const skip = (safePage - 1) * safeLimit;
 
-    const [items, unreadCount] = await Promise.all([
+    const [items, total, unreadCount] = await Promise.all([
       this.notificationRepository.find({
         where: {
           userId,
@@ -48,7 +50,13 @@ export class NotificationsService {
         order: {
           created_at: 'DESC',
         },
+        skip,
         take: safeLimit,
+      }),
+      this.notificationRepository.count({
+        where: {
+          userId,
+        },
       }),
       this.notificationRepository.count({
         where: {
@@ -61,6 +69,13 @@ export class NotificationsService {
     return {
       items,
       unreadCount,
+      meta: {
+        page: safePage,
+        limit: safeLimit,
+        total,
+        totalPages: Math.max(Math.ceil(total / safeLimit), 1),
+        hasNextPage: safePage * safeLimit < total,
+      },
     };
   }
 

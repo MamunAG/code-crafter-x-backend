@@ -21,7 +21,7 @@ export class NotificationsController {
   @Get()
   @ApiOperation({ summary: 'Get current user notifications' })
   async findMine(@CurrentUser() user: AuthUser, @Query() query: NotificationQueryDto) {
-    const result = await this.notificationsService.findForUser(user.userId, query.limit);
+    const result = await this.notificationsService.findForUser(user.userId, query.page, query.limit);
     return new BaseResponseDto(result, 'Notifications retrieved successfully');
   }
 
