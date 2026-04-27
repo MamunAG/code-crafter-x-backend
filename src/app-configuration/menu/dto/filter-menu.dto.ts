@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsBoolean, IsOptional, IsString } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 
@@ -10,11 +10,6 @@ function toBoolean(value: unknown) {
 }
 
 export class FilterMenuDto extends PaginationDto {
-  @ApiPropertyOptional({ description: 'Organization ID to scope menu entries' })
-  @IsOptional()
-  @IsUUID()
-  organizationId?: string;
-
   @ApiPropertyOptional({ description: 'Menu name search' })
   @IsOptional()
   @IsString()

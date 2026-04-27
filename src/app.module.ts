@@ -21,6 +21,7 @@ import { UomModule } from './app-configuration/uom/uom.module';
 import { CountryModule } from './app-configuration/country/country.module';
 import { MenuModule } from './app-configuration/menu/menu.module';
 import { MenuPermissionModule } from './app-configuration/menu-permission/menu-permission.module';
+import { MenuToOrganizationMapModule } from './app-configuration/menu-to-organization-map/menu-to-organization-map.module';
 import { OrganizationModule } from './app-configuration/organization/organization.module';
 import { UserToOranizationMapModule } from './app-configuration/user-to-oranization-map/user-to-oranization-map.module';
 import { OrganizationAccessRequestModule } from './app-configuration/organization-access-request/organization-access-request.module';
@@ -54,6 +55,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     CountryModule,
     MenuModule,
     MenuPermissionModule,
+    MenuToOrganizationMapModule,
     OrganizationModule,
     NotificationsModule,
     UserToOranizationMapModule,

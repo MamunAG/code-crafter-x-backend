@@ -17,16 +17,16 @@ export class MenuPermissionController {
   constructor(private readonly menuPermissionService: MenuPermissionService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get menu permissions for an organization admin' })
+  @ApiOperation({ summary: 'Get menu permissions' })
   async findAll(@CurrentUser() user: AuthUser, @Query() filters: FilterMenuPermissionDto) {
-    const result = await this.menuPermissionService.findAll(user.userId, filters);
+    const result = await this.menuPermissionService.findAll(user, filters);
     return new BaseResponseDto(result, 'Menu permissions retrieved successfully');
   }
 
   @Put()
   @ApiOperation({ summary: 'Create or update user menu permissions' })
   async upsert(@CurrentUser() user: AuthUser, @Body() dto: UpsertMenuPermissionDto) {
-    const result = await this.menuPermissionService.upsert(user.userId, dto);
+    const result = await this.menuPermissionService.upsert(user, dto);
     return new BaseResponseDto(result, 'Menu permissions saved successfully');
   }
 }

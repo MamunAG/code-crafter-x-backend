@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { PaginatedResponseDto } from 'src/common/dto/paginated-response.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { Repository } from 'typeorm';
-import { Organization } from '../organization/entity/organization.entity';
 import { CreateMenuDto } from './dto/create-menu.dto';
 import { FilterMenuDto } from './dto/filter-menu.dto';
 import { UpdateMenuDto } from './dto/update-menu.dto';
@@ -14,14 +13,10 @@ export class MenuService {
   constructor(
     @InjectRepository(Menu)
     private readonly menuRepository: Repository<Menu>,
-
-    @InjectRepository(Organization)
-    private readonly organizationRepository: Repository<Organization>,
   ) {}
 
   async create(dto: CreateMenuDto) {
-    await this.findOrganizationOrFail(dto.organizationId);
-    await this.ensureMenuPathIsUnique(dto.organizationId, dto.menuPath);
+    await this.ensureMenuPathIsUnique(dto.menuPath);
 
     const menu = this.menuRepository.create({
       ...dto,
@@ -44,20 +39,11 @@ export class MenuService {
 
     const queryBuilder = this.menuRepository
       .createQueryBuilder('menu')
-      .leftJoinAndSelect('menu.organization', 'organization')
-      .leftJoinAndSelect('menu.created_by_user', 'created_by_user')
-      .leftJoinAndSelect('menu.updated_by_user', 'updated_by_user')
       .where('menu.deleted_at IS NULL')
       .skip(skip)
       .take(limit)
       .orderBy('menu.displayOrder', 'ASC')
       .addOrderBy('menu.created_at', 'DESC');
-
-    if (filters?.organizationId) {
-      queryBuilder.andWhere('menu.organizationId = :organizationId', {
-        organizationId: filters.organizationId,
-      });
-    }
 
     if (filters?.menuName) {
       queryBuilder.andWhere('menu.menuName ILIKE :menuName', {
@@ -96,9 +82,6 @@ export class MenuService {
   async findOne(id: string) {
     const menu = await this.menuRepository
       .createQueryBuilder('menu')
-      .leftJoinAndSelect('menu.organization', 'organization')
-      .leftJoinAndSelect('menu.created_by_user', 'created_by_user')
-      .leftJoinAndSelect('menu.updated_by_user', 'updated_by_user')
       .where('menu.id = :id', { id })
       .andWhere('menu.deleted_at IS NULL')
       .getOne();
@@ -112,14 +95,11 @@ export class MenuService {
 
   async update(id: string, dto: UpdateMenuDto) {
     const existing = await this.findOne(id);
-    const nextOrganizationId = dto.organizationId ?? existing.organizationId;
     const nextMenuPath = dto.menuPath ? this.normalizePath(dto.menuPath) : existing.menuPath;
 
-    await this.findOrganizationOrFail(nextOrganizationId);
-    await this.ensureMenuPathIsUnique(nextOrganizationId, nextMenuPath, id);
+    await this.ensureMenuPathIsUnique(nextMenuPath, id);
 
     await this.menuRepository.update(id, {
-      organizationId: nextOrganizationId,
       menuName: dto.menuName?.trim() ?? existing.menuName,
       menuPath: nextMenuPath,
       description:
@@ -139,24 +119,11 @@ export class MenuService {
     });
   }
 
-  private async findOrganizationOrFail(organizationId: string) {
-    const organization = await this.organizationRepository.findOne({
-      where: { id: organizationId },
-    });
-
-    if (!organization) {
-      throw new BadRequestException('Organization not found');
-    }
-
-    return organization;
-  }
-
-  private async ensureMenuPathIsUnique(organizationId: string, menuPath: string, ignoreId?: string) {
+  private async ensureMenuPathIsUnique(menuPath: string, ignoreId?: string) {
     const normalizedPath = this.normalizePath(menuPath).toLowerCase();
     const queryBuilder = this.menuRepository
       .createQueryBuilder('menu')
-      .where('menu.organizationId = :organizationId', { organizationId })
-      .andWhere('LOWER(TRIM(menu.menuPath)) = :menuPath', { menuPath: normalizedPath })
+      .where('LOWER(TRIM(menu.menuPath)) = :menuPath', { menuPath: normalizedPath })
       .andWhere('menu.deleted_at IS NULL');
 
     if (ignoreId) {
@@ -166,7 +133,7 @@ export class MenuService {
     const existingMenu = await queryBuilder.getOne();
 
     if (existingMenu) {
-      throw new BadRequestException('Menu path already exists for this organization');
+      throw new BadRequestException('Menu path already exists');
     }
   }
 

@@ -86,6 +86,13 @@ export class UserToOranizationMapController {
     return new BaseResponseDto(result, 'Organization memberships retrieved successfully');
   }
 
+  @Get('admin/users')
+  @ApiOperation({ summary: 'Get users from organizations where the current user is an admin' })
+  async findManageableUsersForAdmin(@CurrentUser() user: AuthUser) {
+    const result = await this.userToOranizationMapService.findManageableMappingsForAdmin(user.userId);
+    return new BaseResponseDto(result, 'Manageable organization users retrieved successfully');
+  }
+
   @Get('user/:userId/organizations')
   @ApiOperation({ summary: 'Get organizations by user' })
   async findOrganizationsByUser(@Param('userId', new ParseUUIDPipe()) userId: string) {

@@ -3,15 +3,19 @@ import { Menu } from 'src/app-configuration/menu/entity/menu.entity';
 import { Organization } from 'src/app-configuration/organization/entity/organization.entity';
 import { BaseEntity } from 'src/common/entities/base.entity';
 import { User } from 'src/users/entities/user.entity';
-import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('menu_permission')
+@Index('UQ_menu_permission_org_user_menu_active', ['organizationId', 'userId', 'menuId'], {
+  unique: true,
+  where: '"deleted_at" IS NULL',
+})
 export class MenuPermission extends BaseEntity {
   @ApiProperty({ description: 'Primary ID' })
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ApiProperty({ description: 'Organization ID' })
+  @ApiProperty({ description: 'Organization ID this permission belongs to' })
   @Column({ name: 'organization_id', type: 'uuid' })
   organizationId: string;
 

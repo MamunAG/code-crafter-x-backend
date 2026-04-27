@@ -25,13 +25,13 @@ export class UpsertMenuPermissionItemDto {
 }
 
 export class UpsertMenuPermissionDto {
-  @ApiProperty({ description: 'Organization ID' })
-  @IsUUID()
-  organizationId: string;
-
   @ApiProperty({ description: 'User ID receiving permissions' })
   @IsUUID()
   userId: string;
+
+  @ApiProperty({ description: 'Organization ID permissions belong to' })
+  @IsUUID()
+  organizationId: string;
 
   @ApiProperty({ description: 'Menu permissions', type: [UpsertMenuPermissionItemDto] })
   @IsArray()

@@ -127,6 +127,34 @@ export class UserToOranizationMapService {
       .getMany();
   }
 
+  async findManageableMappingsForAdmin(adminUserId: string) {
+    const adminOrganizationMappings = await this.userToOranizationMapRepository.find({
+      where: {
+        userId: adminUserId,
+        role: RolesEnum.admin,
+      },
+      select: {
+        organizationId: true,
+      },
+    });
+    const organizationIds = adminOrganizationMappings.map((mapping) => mapping.organizationId);
+
+    if (!organizationIds.length) {
+      return [];
+    }
+
+    return this.userToOranizationMapRepository
+      .createQueryBuilder('user_to_oranization_map')
+      .innerJoinAndSelect('user_to_oranization_map.user', 'user')
+      .innerJoinAndSelect('user_to_oranization_map.organization', 'organization')
+      .leftJoinAndSelect('user.profile_pic', 'profile_pic')
+      .where('user_to_oranization_map.organization_id IN (:...organizationIds)', { organizationIds })
+      .andWhere('user_to_oranization_map.deleted_at IS NULL')
+      .orderBy('user.name', 'ASC')
+      .addOrderBy('organization.name', 'ASC')
+      .getMany();
+  }
+
   async findOrganizationsByUser(userId: string): Promise<OrganizationWithDefault[]> {
     await this.findUserOrFail(this.userRepository, userId);
 

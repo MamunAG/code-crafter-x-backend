@@ -1,11 +1,11 @@
-import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, Min } from 'class-validator';
-import { Menu } from '../entity/menu.entity';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
-export class CreateMenuDto extends PartialType(Menu) {
-  @ApiProperty({ description: 'Organization ID that owns this menu entry' })
-  @IsUUID()
-  organizationId: string;
+export class CreateMenuDto {
+  @ApiPropertyOptional({ description: 'Created by user ID' })
+  @IsOptional()
+  @IsString()
+  created_by_id?: string;
 
   @ApiProperty({ description: 'Menu display name', example: 'Dashboard' })
   @IsString()
@@ -35,4 +35,9 @@ export class CreateMenuDto extends PartialType(Menu) {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ description: 'Updated by user ID' })
+  @IsOptional()
+  @IsString()
+  updated_by_id?: string;
 }

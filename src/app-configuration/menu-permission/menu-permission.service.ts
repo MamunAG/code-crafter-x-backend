@@ -2,10 +2,12 @@ import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/com
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 
+import type AuthUser from 'src/auth/dto/auth-user';
+import { RolesEnum } from 'src/common/enums/role.enum';
 import { Menu } from 'src/app-configuration/menu/entity/menu.entity';
+import { MenuToOrganizationMap } from 'src/app-configuration/menu-to-organization-map/entity/menu-to-organization-map.entity';
 import { Organization } from 'src/app-configuration/organization/entity/organization.entity';
 import { UserToOranizationMap } from 'src/app-configuration/user-to-oranization-map/entity/user-to-oranization-map.entity';
-import { RolesEnum } from 'src/common/enums/role.enum';
 import { User } from 'src/users/entities/user.entity';
 import { FilterMenuPermissionDto } from './dto/filter-menu-permission.dto';
 import { UpsertMenuPermissionDto } from './dto/upsert-menu-permission.dto';
@@ -23,28 +25,29 @@ export class MenuPermissionService {
     @InjectRepository(Menu)
     private readonly menuRepository: Repository<Menu>,
 
-    @InjectRepository(Organization)
-    private readonly organizationRepository: Repository<Organization>,
-
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
 
+    @InjectRepository(Organization)
+    private readonly organizationRepository: Repository<Organization>,
+
     @InjectRepository(UserToOranizationMap)
-    private readonly mappingRepository: Repository<UserToOranizationMap>,
+    private readonly userToOrganizationMapRepository: Repository<UserToOranizationMap>,
+
+    @InjectRepository(MenuToOrganizationMap)
+    private readonly menuToOrganizationMapRepository: Repository<MenuToOrganizationMap>,
   ) {}
 
-  async findAll(currentUserId: string, filters: FilterMenuPermissionDto) {
-    await this.ensureOrganizationExists(filters.organizationId);
-    await this.ensureOrganizationAdmin(currentUserId, filters.organizationId);
+  async findAll(currentUser: AuthUser, filters: FilterMenuPermissionDto) {
+    this.ensureCurrentUserIsAdmin(currentUser);
 
     const queryBuilder = this.menuPermissionRepository
       .createQueryBuilder('menu_permission')
+      .leftJoinAndSelect('menu_permission.organization', 'organization')
       .leftJoinAndSelect('menu_permission.menu', 'menu')
       .leftJoinAndSelect('menu_permission.user', 'user')
-      .where('menu_permission.organization_id = :organizationId', {
-        organizationId: filters.organizationId,
-      })
-      .andWhere('menu_permission.deleted_at IS NULL')
+      .where('menu_permission.deleted_at IS NULL')
+      .andWhere('menu.deleted_at IS NULL')
       .orderBy('menu.displayOrder', 'ASC')
       .addOrderBy('menu.menuName', 'ASC');
 
@@ -52,21 +55,29 @@ export class MenuPermissionService {
       queryBuilder.andWhere('menu_permission.user_id = :userId', { userId: filters.userId });
     }
 
+    if (filters.organizationId) {
+      queryBuilder.andWhere('menu_permission.organization_id = :organizationId', {
+        organizationId: filters.organizationId,
+      });
+    }
+
     return queryBuilder.getMany();
   }
 
-  async upsert(currentUserId: string, dto: UpsertMenuPermissionDto) {
-    if (currentUserId === dto.userId) {
+  async upsert(currentUser: AuthUser, dto: UpsertMenuPermissionDto) {
+    this.ensureCurrentUserIsAdmin(currentUser);
+
+    if (currentUser.userId === dto.userId) {
       throw new BadRequestException('You cannot change your own menu permissions.');
     }
 
     await this.ensureOrganizationExists(dto.organizationId);
-    await this.ensureOrganizationAdmin(currentUserId, dto.organizationId);
-    await this.ensureOrganizationMember(dto.userId, dto.organizationId);
     await this.ensureUserExists(dto.userId);
-    await this.ensureMenusBelongToOrganization(
-      dto.permissions.map((permission) => permission.menuId),
+    await this.ensureUserBelongsToOrganization(dto.userId, dto.organizationId);
+    await this.ensureMenusExist(dto.permissions.map((permission) => permission.menuId));
+    await this.ensureMenusMappedToOrganization(
       dto.organizationId,
+      dto.permissions.map((permission) => permission.menuId),
     );
 
     return this.dataSource.transaction(async (manager) => {
@@ -86,39 +97,35 @@ export class MenuPermissionService {
           existingPermission.canCreate = permission.canCreate;
           existingPermission.canUpdate = permission.canUpdate;
           existingPermission.canDelete = permission.canDelete;
-          existingPermission.updated_by_id = currentUserId;
+          existingPermission.updated_by_id = currentUser.userId;
           await permissionRepository.save(existingPermission);
           continue;
         }
 
         await permissionRepository.save(
           permissionRepository.create({
-            organizationId: dto.organizationId,
             userId: dto.userId,
+            organizationId: dto.organizationId,
             menuId: permission.menuId,
             canView: permission.canView,
             canCreate: permission.canCreate,
             canUpdate: permission.canUpdate,
             canDelete: permission.canDelete,
-            created_by_id: currentUserId,
+            created_by_id: currentUser.userId,
           }),
         );
       }
 
-      return this.findAll(currentUserId, {
-        organizationId: dto.organizationId,
+      return this.findAll(currentUser, {
         userId: dto.userId,
+        organizationId: dto.organizationId,
       });
     });
   }
 
-  private async ensureOrganizationExists(organizationId: string) {
-    const organization = await this.organizationRepository.findOne({
-      where: { id: organizationId },
-    });
-
-    if (!organization) {
-      throw new BadRequestException('Organization not found');
+  private ensureCurrentUserIsAdmin(currentUser: AuthUser) {
+    if (currentUser.role !== RolesEnum.admin) {
+      throw new ForbiddenException('Only an admin can manage menu permissions.');
     }
   }
 
@@ -132,22 +139,18 @@ export class MenuPermissionService {
     }
   }
 
-  private async ensureOrganizationAdmin(userId: string, organizationId: string) {
-    const adminMapping = await this.mappingRepository.findOne({
-      where: {
-        userId,
-        organizationId,
-        role: RolesEnum.admin,
-      },
+  private async ensureOrganizationExists(organizationId: string) {
+    const organization = await this.organizationRepository.findOne({
+      where: { id: organizationId },
     });
 
-    if (!adminMapping) {
-      throw new ForbiddenException('Only an organization admin can manage menu permissions.');
+    if (!organization) {
+      throw new BadRequestException('Organization not found');
     }
   }
 
-  private async ensureOrganizationMember(userId: string, organizationId: string) {
-    const mapping = await this.mappingRepository.findOne({
+  private async ensureUserBelongsToOrganization(userId: string, organizationId: string) {
+    const mapping = await this.userToOrganizationMapRepository.findOne({
       where: {
         userId,
         organizationId,
@@ -155,11 +158,11 @@ export class MenuPermissionService {
     });
 
     if (!mapping) {
-      throw new BadRequestException('The selected user does not have access to this organization.');
+      throw new BadRequestException('User does not belong to the selected organization.');
     }
   }
 
-  private async ensureMenusBelongToOrganization(menuIds: string[], organizationId: string) {
+  private async ensureMenusExist(menuIds: string[]) {
     const uniqueMenuIds = [...new Set(menuIds)];
 
     if (!uniqueMenuIds.length) {
@@ -169,12 +172,36 @@ export class MenuPermissionService {
     const menus = await this.menuRepository.find({
       where: {
         id: In(uniqueMenuIds),
-        organizationId,
       },
     });
 
     if (menus.length !== uniqueMenuIds.length) {
-      throw new BadRequestException('One or more menu entries do not belong to this organization.');
+      throw new BadRequestException('One or more menu entries do not exist.');
+    }
+  }
+
+  private async ensureMenusMappedToOrganization(organizationId: string, menuIds: string[]) {
+    const uniqueMenuIds = [...new Set(menuIds)];
+
+    if (!uniqueMenuIds.length) {
+      return;
+    }
+
+    const mappedMenus = await this.menuToOrganizationMapRepository.find({
+      where: {
+        organizationId,
+        menuId: In(uniqueMenuIds),
+      },
+      select: {
+        menuId: true,
+        organizationId: true,
+      },
+    });
+    const mappedMenuIds = new Set(mappedMenus.map((mapping) => mapping.menuId));
+    const unmappedMenuIds = uniqueMenuIds.filter((menuId) => !mappedMenuIds.has(menuId));
+
+    if (unmappedMenuIds.length) {
+      throw new BadRequestException('One or more menu entries are not mapped to this organization.');
     }
   }
 }

@@ -18,6 +18,7 @@ import { Uom } from './app-configuration/uom/entity/uom.entity';
 import { Country } from './app-configuration/country/entity/country.entity';
 import { Menu } from './app-configuration/menu/entity/menu.entity';
 import { MenuPermission } from './app-configuration/menu-permission/entity/menu-permission.entity';
+import { MenuToOrganizationMap } from './app-configuration/menu-to-organization-map/entity/menu-to-organization-map.entity';
 import { Organization } from './app-configuration/organization/entity/organization.entity';
 import { UserToOranizationMap } from './app-configuration/user-to-oranization-map/entity/user-to-oranization-map.entity';
 import { OrganizationAccessRequest } from './app-configuration/organization-access-request/entity/organization-access-request.entity';
@@ -62,6 +63,7 @@ export class AppService implements TypeOrmOptionsFactory {
         Country,
         Menu,
         MenuPermission,
+        MenuToOrganizationMap,
         Organization,
         UserToOranizationMap,
         OrganizationAccessRequest,
