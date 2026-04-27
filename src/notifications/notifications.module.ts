@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { FirebaseProvider } from 'src/lib/firebase.provider';
+import { FirebaseProvider } from '../lib/firebase.provider';
 import { Notification } from './entity/notification.entity';
 import { UserFirebaseToken } from './entity/user-firebase-token.entity';
 import { NotificationsController } from './notifications.controller';
