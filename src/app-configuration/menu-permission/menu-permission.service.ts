@@ -39,7 +39,7 @@ export class MenuPermissionService {
   ) {}
 
   async findAll(currentUser: AuthUser, filters: FilterMenuPermissionDto) {
-    this.ensureCurrentUserIsAdmin(currentUser);
+    await this.ensureCurrentUserCanManageOrganization(currentUser, filters.organizationId);
 
     const queryBuilder = this.menuPermissionRepository
       .createQueryBuilder('menu_permission')
@@ -65,7 +65,7 @@ export class MenuPermissionService {
   }
 
   async upsert(currentUser: AuthUser, dto: UpsertMenuPermissionDto) {
-    this.ensureCurrentUserIsAdmin(currentUser);
+    await this.ensureCurrentUserCanManageOrganization(currentUser, dto.organizationId);
 
     if (currentUser.userId === dto.userId) {
       throw new BadRequestException('You cannot change your own menu permissions.');
@@ -123,9 +123,25 @@ export class MenuPermissionService {
     });
   }
 
-  private ensureCurrentUserIsAdmin(currentUser: AuthUser) {
-    if (currentUser.role !== RolesEnum.admin) {
-      throw new ForbiddenException('Only an admin can manage menu permissions.');
+  private async ensureCurrentUserCanManageOrganization(currentUser: AuthUser, organizationId?: string) {
+    if (currentUser.role === RolesEnum.admin) {
+      return;
+    }
+
+    if (!organizationId) {
+      throw new ForbiddenException('Select an organization to manage menu permissions.');
+    }
+
+    const adminMapping = await this.userToOrganizationMapRepository.findOne({
+      where: {
+        userId: currentUser.userId,
+        organizationId,
+        role: RolesEnum.admin,
+      },
+    });
+
+    if (!adminMapping) {
+      throw new ForbiddenException('Only an organization admin can manage menu permissions.');
     }
   }
 

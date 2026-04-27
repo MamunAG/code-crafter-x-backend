@@ -6,6 +6,7 @@ import type AuthUser from 'src/auth/dto/auth-user';
 import { Menu } from 'src/app-configuration/menu/entity/menu.entity';
 import { MenuPermission } from 'src/app-configuration/menu-permission/entity/menu-permission.entity';
 import { Organization } from 'src/app-configuration/organization/entity/organization.entity';
+import { UserToOranizationMap } from 'src/app-configuration/user-to-oranization-map/entity/user-to-oranization-map.entity';
 import { RolesEnum } from 'src/common/enums/role.enum';
 import { UpsertMenuToOrganizationMapDto } from './dto/upsert-menu-to-organization-map.dto';
 import { MenuToOrganizationMap } from './entity/menu-to-organization-map.entity';
@@ -24,10 +25,13 @@ export class MenuToOrganizationMapService {
 
     @InjectRepository(Organization)
     private readonly organizationRepository: Repository<Organization>,
+
+    @InjectRepository(UserToOranizationMap)
+    private readonly userToOrganizationMapRepository: Repository<UserToOranizationMap>,
   ) {}
 
   async findByOrganization(currentUser: AuthUser, organizationId: string) {
-    this.ensureCurrentUserIsAdmin(currentUser);
+    await this.ensureCurrentUserCanManageOrganization(currentUser, organizationId);
     await this.ensureOrganizationExists(organizationId);
 
     return this.menuToOrganizationMapRepository.find({
@@ -43,7 +47,7 @@ export class MenuToOrganizationMapService {
   }
 
   async replaceForOrganization(currentUser: AuthUser, dto: UpsertMenuToOrganizationMapDto) {
-    this.ensureCurrentUserIsAdmin(currentUser);
+    await this.ensureCurrentUserCanManageOrganization(currentUser, dto.organizationId);
     await this.ensureOrganizationExists(dto.organizationId);
     await this.ensureMenusExist(dto.menuIds);
 
@@ -93,7 +97,7 @@ export class MenuToOrganizationMapService {
   }
 
   async remove(currentUser: AuthUser, organizationId: string, menuId: string) {
-    this.ensureCurrentUserIsAdmin(currentUser);
+    await this.ensureCurrentUserCanManageOrganization(currentUser, organizationId);
     await this.ensureOrganizationExists(organizationId);
     await this.ensureMenusExist([menuId]);
 
@@ -111,9 +115,21 @@ export class MenuToOrganizationMapService {
     return this.findByOrganization(currentUser, organizationId);
   }
 
-  private ensureCurrentUserIsAdmin(currentUser: AuthUser) {
-    if (currentUser.role !== RolesEnum.admin) {
-      throw new ForbiddenException('Only an admin can manage organization menu mappings.');
+  private async ensureCurrentUserCanManageOrganization(currentUser: AuthUser, organizationId: string) {
+    if (currentUser.role === RolesEnum.admin) {
+      return;
+    }
+
+    const adminMapping = await this.userToOrganizationMapRepository.findOne({
+      where: {
+        userId: currentUser.userId,
+        organizationId,
+        role: RolesEnum.admin,
+      },
+    });
+
+    if (!adminMapping) {
+      throw new ForbiddenException('Only an organization admin can manage organization menu mappings.');
     }
   }
 
