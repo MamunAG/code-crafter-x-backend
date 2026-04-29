@@ -59,4 +59,18 @@ export class ModuleEntryController {
     const result = await this.moduleEntryService.remove(id, user.userId);
     return new BaseResponseDto(result, 'Module entry deleted successfully');
   }
+
+  @Delete(':id/permanent')
+  @ApiOperation({ summary: 'Delete module entry permanently' })
+  async permanentRemove(@Param('id', new ParseUUIDPipe()) id: string) {
+    const result = await this.moduleEntryService.permanentRemove(id);
+    return new BaseResponseDto(result, 'Module entry deleted permanently');
+  }
+
+  @Post(':id/restore')
+  @ApiOperation({ summary: 'Restore module entry' })
+  async restore(@Param('id', new ParseUUIDPipe()) id: string) {
+    const result = await this.moduleEntryService.restore(id);
+    return new BaseResponseDto(result, 'Module entry restored successfully');
+  }
 }

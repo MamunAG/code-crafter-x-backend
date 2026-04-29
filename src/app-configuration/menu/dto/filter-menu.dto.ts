@@ -26,4 +26,11 @@ export class FilterMenuDto extends PaginationDto {
   @Type(() => Boolean)
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ description: 'Whether to fetch deleted items only', default: false })
+  @Transform(({ value }) => toBoolean(value))
+  @Type(() => Boolean)
+  @IsBoolean()
+  @IsOptional()
+  deletedOnly?: boolean;
 }

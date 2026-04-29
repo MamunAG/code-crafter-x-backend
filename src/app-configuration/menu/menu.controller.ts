@@ -59,4 +59,18 @@ export class MenuController {
     const result = await this.menuService.remove(id, user.userId);
     return new BaseResponseDto(result, 'Menu entry deleted successfully');
   }
+
+  @Delete(':id/permanent')
+  @ApiOperation({ summary: 'Delete menu entry permanently' })
+  async permanentRemove(@Param('id', new ParseUUIDPipe()) id: string) {
+    const result = await this.menuService.permanentRemove(id);
+    return new BaseResponseDto(result, 'Menu entry deleted permanently');
+  }
+
+  @Post(':id/restore')
+  @ApiOperation({ summary: 'Restore menu entry' })
+  async restore(@Param('id', new ParseUUIDPipe()) id: string) {
+    const result = await this.menuService.restore(id);
+    return new BaseResponseDto(result, 'Menu entry restored successfully');
+  }
 }

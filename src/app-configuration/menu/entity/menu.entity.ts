@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { BaseEntity } from 'src/common/entities/base.entity';
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { ModuleEntry } from 'src/app-configuration/module-entry/entity/module-entry.entity';
 
 @Entity('menu')
 export class Menu extends BaseEntity {
@@ -12,9 +13,17 @@ export class Menu extends BaseEntity {
   @Column({ name: 'menu_name', type: 'varchar', nullable: false })
   menuName: string;
 
-  @ApiProperty({ description: 'Menu navigation path', example: '/dashboard' })
-  @Column({ name: 'menu_path', type: 'varchar', nullable: false })
-  menuPath: string;
+  @ApiProperty({ description: 'Menu navigation path', example: '/dashboard', required: false, nullable: true })
+  @Column({ name: 'menu_path', type: 'varchar', nullable: true })
+  menuPath?: string | null;
+
+  @ApiProperty({ description: 'Module ID', example: '550e8400-e29b-41d4-a716-446655440000' })
+  @Column({ name: 'module_id', type: 'uuid', nullable: false })
+  moduleId: string;
+
+  @ManyToOne(() => ModuleEntry, { nullable: false })
+  @JoinColumn({ name: 'module_id' })
+  moduleEntry: ModuleEntry;
 
   @ApiProperty({ description: 'Menu description', required: false, nullable: true })
   @Column({ name: 'description', type: 'text', nullable: true })

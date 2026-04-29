@@ -35,15 +35,19 @@ export class ModuleEntryService {
     filters?: Partial<FilterModuleEntryDto>,
   ): Promise<PaginatedResponseDto<ModuleEntry>> {
     const { page = 1, limit = 20 } = paginationDto;
+    const deletedOnly = filters?.deletedOnly ?? false;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.moduleEntryRepository
       .createQueryBuilder('module_entry')
-      .where('module_entry.deleted_at IS NULL')
       .skip(skip)
       .take(limit)
-      .orderBy('module_entry.displayOrder', 'ASC')
+      .orderBy(deletedOnly ? 'module_entry.deleted_at' : 'module_entry.displayOrder', deletedOnly ? 'DESC' : 'ASC')
       .addOrderBy('module_entry.created_at', 'DESC');
+
+    if (deletedOnly) {
+      queryBuilder.withDeleted();
+    }
 
     if (filters?.moduleName) {
       queryBuilder.andWhere('module_entry.moduleName ILIKE :moduleName', {
@@ -63,8 +67,14 @@ export class ModuleEntryService {
       });
     }
 
+    if (deletedOnly) {
+      queryBuilder.andWhere('module_entry.deleted_at IS NOT NULL');
+    } else {
+      queryBuilder.andWhere('module_entry.deleted_at IS NULL');
+    }
+
     const [items, total] = await queryBuilder.getManyAndCount();
-    const totalPages = Math.max(Math.ceil(total / limit), 1);
+    const totalPages = Math.ceil(total / limit);
 
     return {
       items,
@@ -117,6 +127,14 @@ export class ModuleEntryService {
       deleted_at: new Date(),
       deleted_by_id: deletedById,
     });
+  }
+
+  permanentRemove(id: string) {
+    return this.moduleEntryRepository.delete(id);
+  }
+
+  restore(id: string) {
+    return this.moduleEntryRepository.restore(id);
   }
 
   private async ensureModuleKeyIsUnique(moduleKey: string, ignoreId?: string) {

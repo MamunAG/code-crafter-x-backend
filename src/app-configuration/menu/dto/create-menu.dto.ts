@@ -13,11 +13,16 @@ export class CreateMenuDto {
   @MaxLength(120)
   menuName: string;
 
-  @ApiProperty({ description: 'Menu navigation path', example: '/dashboard' })
+  @ApiPropertyOptional({ description: 'Menu navigation path', example: '/dashboard', nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  menuPath?: string;
+
+  @ApiProperty({ description: 'Module ID', example: '550e8400-e29b-41d4-a716-446655440000' })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(255)
-  menuPath: string;
+  moduleId: string;
 
   @ApiProperty({ description: 'Menu description', required: false })
   @IsOptional()
