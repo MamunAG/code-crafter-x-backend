@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { Brackets, DataSource, In, Repository } from 'typeorm';
 
 import type AuthUser from 'src/auth/dto/auth-user';
 import { RolesEnum } from 'src/common/enums/role.enum';
@@ -9,6 +9,7 @@ import { MenuToOrganizationMap } from 'src/app-configuration/menu-to-organizatio
 import { Organization } from 'src/app-configuration/organization/entity/organization.entity';
 import { UserToOranizationMap } from 'src/app-configuration/user-to-oranization-map/entity/user-to-oranization-map.entity';
 import { User } from 'src/users/entities/user.entity';
+import { CurrentMenuPermissionDto } from './dto/current-menu-permission.dto';
 import { FilterMenuPermissionDto } from './dto/filter-menu-permission.dto';
 import { UpsertMenuPermissionDto } from './dto/upsert-menu-permission.dto';
 import { MenuPermission } from './entity/menu-permission.entity';
@@ -37,6 +38,56 @@ export class MenuPermissionService {
     @InjectRepository(MenuToOrganizationMap)
     private readonly menuToOrganizationMapRepository: Repository<MenuToOrganizationMap>,
   ) {}
+
+  async findCurrent(currentUser: AuthUser, filters: CurrentMenuPermissionDto) {
+    const isGlobalAdmin = await this.isGlobalAdminUser(currentUser);
+
+    if (!filters.organizationId && !isGlobalAdmin) {
+      throw new BadRequestException('Select an organization before checking menu permissions.');
+    }
+
+    const menu = await this.findMenuForPermissionCheck(filters, isGlobalAdmin);
+    const organizationId = filters.organizationId ?? '';
+
+    if (!menu) {
+      return this.buildEmptyPermission(organizationId, currentUser.userId);
+    }
+
+    const isPrivilegedUser = isGlobalAdmin || await this.isPrivilegedForOrganization(
+      currentUser,
+      filters.organizationId,
+    );
+
+    if (isPrivilegedUser) {
+      return {
+        organizationId,
+        userId: currentUser.userId,
+        menuId: menu.id,
+        canView: true,
+        canCreate: true,
+        canUpdate: true,
+        canDelete: true,
+        menu,
+      };
+    }
+
+    const permission = await this.menuPermissionRepository.findOne({
+      where: {
+        organizationId,
+        userId: currentUser.userId,
+        menuId: menu.id,
+      },
+      relations: {
+        menu: true,
+      },
+    });
+
+    if (!permission) {
+      return this.buildEmptyPermission(organizationId, currentUser.userId, menu);
+    }
+
+    return permission;
+  }
 
   async findAll(currentUser: AuthUser, filters: FilterMenuPermissionDto) {
     await this.ensureCurrentUserCanManageOrganization(currentUser, filters.organizationId);
@@ -124,12 +175,24 @@ export class MenuPermissionService {
   }
 
   private async ensureCurrentUserCanManageOrganization(currentUser: AuthUser, organizationId?: string) {
-    if (currentUser.role === RolesEnum.admin) {
+    if (await this.isPrivilegedForOrganization(currentUser, organizationId)) {
       return;
     }
 
     if (!organizationId) {
       throw new ForbiddenException('Select an organization to manage menu permissions.');
+    }
+
+    throw new ForbiddenException('Only an organization admin can manage menu permissions.');
+  }
+
+  private async isPrivilegedForOrganization(currentUser: AuthUser, organizationId?: string) {
+    if (await this.isGlobalAdminUser(currentUser)) {
+      return true;
+    }
+
+    if (!organizationId) {
+      return false;
     }
 
     const adminMapping = await this.userToOrganizationMapRepository.findOne({
@@ -138,13 +201,94 @@ export class MenuPermissionService {
         organizationId,
         role: RolesEnum.admin,
       },
+      select: {
+        userId: true,
+        organizationId: true,
+      },
     });
 
-    if (!adminMapping) {
-      throw new ForbiddenException('Only an organization admin can manage menu permissions.');
-    }
+    return Boolean(adminMapping);
   }
 
+  private async isGlobalAdminUser(currentUser: AuthUser) {
+    if (currentUser.role === RolesEnum.admin) {
+      return true;
+    }
+
+    const user = await this.userRepository.findOne({
+      where: { id: currentUser.userId },
+      select: {
+        id: true,
+        role: true,
+      },
+    });
+
+    return user?.role === RolesEnum.admin;
+  }
+
+  private async findMenuForPermissionCheck(filters: CurrentMenuPermissionDto, bypassOrganizationMap = false) {
+    const queryBuilder = this.menuRepository
+      .createQueryBuilder('menu')
+      .where('menu.deleted_at IS NULL')
+      .andWhere('menu.isActive = true');
+
+    if (filters.menuId) {
+      queryBuilder.andWhere('menu.id = :menuId', { menuId: filters.menuId });
+    } else if (filters.menuPath?.trim() || filters.menuName?.trim()) {
+      queryBuilder.andWhere(new Brackets((menuMatch) => {
+        if (filters.menuPath?.trim()) {
+          menuMatch.where('LOWER(TRIM(menu.menuPath)) = :menuPath', {
+            menuPath: this.normalizeMenuPath(filters.menuPath),
+          });
+        }
+
+        if (filters.menuName?.trim()) {
+          const method = filters.menuPath?.trim() ? 'orWhere' : 'where';
+          menuMatch[method]('LOWER(TRIM(menu.menuName)) = :menuName', {
+            menuName: filters.menuName.trim().toLowerCase(),
+          });
+        }
+      }));
+    } else {
+      throw new BadRequestException('Select a menu before checking permissions.');
+    }
+
+    if (!bypassOrganizationMap) {
+      queryBuilder.andWhere((subQuery) => {
+        const mappedMenuQuery = subQuery
+          .subQuery()
+          .select('1')
+          .from(MenuToOrganizationMap, 'menu_map')
+          .where('menu_map.menu_id = menu.id')
+          .andWhere('menu_map.organization_id = :organizationId')
+          .getQuery();
+
+        return `EXISTS ${mappedMenuQuery}`;
+      }, {
+        organizationId: filters.organizationId,
+      });
+    }
+
+    return queryBuilder.orderBy('menu.displayOrder', 'ASC').getOne();
+  }
+
+  private buildEmptyPermission(organizationId: string, userId: string, menu?: Menu) {
+    return {
+      organizationId,
+      userId,
+      menuId: menu?.id ?? '',
+      canView: false,
+      canCreate: false,
+      canUpdate: false,
+      canDelete: false,
+      menu,
+    };
+  }
+
+  private normalizeMenuPath(menuPath: string) {
+    const trimmed = menuPath.trim();
+    return (trimmed.startsWith('/') ? trimmed : `/${trimmed}`).toLowerCase();
+  }
   private async ensureUserExists(userId: string) {
     const user = await this.userRepository.findOne({
       where: { id: userId },

@@ -5,6 +5,7 @@ import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { BaseResponseDto } from 'src/common/dto/base-response.dto';
 import { RolesEnum } from 'src/common/enums/role.enum';
+import { CurrentMenuPermissionDto } from './dto/current-menu-permission.dto';
 import { FilterMenuPermissionDto } from './dto/filter-menu-permission.dto';
 import { UpsertMenuPermissionDto } from './dto/upsert-menu-permission.dto';
 import { MenuPermissionService } from './menu-permission.service';
@@ -15,6 +16,13 @@ import { MenuPermissionService } from './menu-permission.service';
 @Controller('api/v1/menu-permission')
 export class MenuPermissionController {
   constructor(private readonly menuPermissionService: MenuPermissionService) {}
+
+  @Get('current')
+  @ApiOperation({ summary: 'Get current user permission for one menu' })
+  async findCurrent(@CurrentUser() user: AuthUser, @Query() filters: CurrentMenuPermissionDto) {
+    const result = await this.menuPermissionService.findCurrent(user, filters);
+    return new BaseResponseDto(result, 'Current menu permission retrieved successfully');
+  }
 
   @Get()
   @ApiOperation({ summary: 'Get menu permissions' })
