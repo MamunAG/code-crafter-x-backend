@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query 
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type AuthUser from 'src/auth/dto/auth-user';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
+import { MenuAccess } from 'src/common/decorators/menu-access.decorator';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { BaseResponseDto } from 'src/common/dto/base-response.dto';
 import { RolesEnum } from 'src/common/enums/role.enum';
@@ -20,6 +21,7 @@ export class ColorController {
   ) { }
 
   @Get()
+  @MenuAccess('Color Setup', 'canView')
   @ApiOperation({ summary: 'Get all', description: 'Retrieve all items' })
   @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
   async findAll(@Query() filters: FilterColorDto) {
@@ -30,6 +32,7 @@ export class ColorController {
   }
 
   @Get(':id')
+  @MenuAccess('Color Setup', 'canView')
   @ApiOperation({ summary: 'Get by id', description: 'Retrieve specific item' })
   @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
   async findOne(@Param('id', new ParseIntPipe()) id: number) {
@@ -38,6 +41,7 @@ export class ColorController {
   }
 
   @Post()
+  @MenuAccess('Color Setup', 'canCreate')
   @ApiOperation({ summary: 'save item' })
   @ApiResponse({ status: 201, description: 'Item save successfully', type: BaseResponseDto })
   @ApiResponse({ status: 400, description: 'Item already exists' })
@@ -49,6 +53,7 @@ export class ColorController {
   }
 
   @Patch(':id')
+  @MenuAccess('Color Setup', 'canUpdate')
   @ApiOperation({ summary: 'update item' })
   @ApiResponse({ status: 201, description: 'Item update successfully', type: BaseResponseDto })
   @ApiResponse({ status: 400, description: 'Item already exists' })
@@ -64,6 +69,7 @@ export class ColorController {
   }
 
   @Delete(':id')
+  @MenuAccess('Color Setup', 'canDelete')
   @ApiOperation({ summary: 'delete item' })
   @ApiResponse({ status: 200, description: 'Item delete successfully', type: BaseResponseDto })
   async remove(@CurrentUser() user: AuthUser, @Param('id', new ParseIntPipe()) id: number) {
@@ -72,6 +78,7 @@ export class ColorController {
   }
 
   @Delete(':id/permanent')
+  @MenuAccess('Color Setup', 'canDelete')
   @ApiOperation({ summary: 'delete item permanently' })
   async permanentRemove(@Param('id', new ParseIntPipe()) id: number) {
     const result = await this.colorService.permanentRemove(id);
@@ -79,6 +86,7 @@ export class ColorController {
   }
 
   @Post(':id/restore')
+  @MenuAccess('Color Setup', 'canUpdate')
   @ApiOperation({ summary: 'restore item' })
   async restore(@Param('id', new ParseIntPipe()) id: number) {
     const result = await this.colorService.restore(id);

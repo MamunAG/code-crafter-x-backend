@@ -4,6 +4,7 @@ import { Brackets, DataSource, In, Repository } from 'typeorm';
 
 import type AuthUser from 'src/auth/dto/auth-user';
 import { RolesEnum } from 'src/common/enums/role.enum';
+import type { MenuAccessAction } from 'src/common/decorators/menu-access.decorator';
 import { Menu } from 'src/app-configuration/menu/entity/menu.entity';
 import { MenuToOrganizationMap } from 'src/app-configuration/menu-to-organization-map/entity/menu-to-organization-map.entity';
 import { Organization } from 'src/app-configuration/organization/entity/organization.entity';
@@ -38,6 +39,14 @@ export class MenuPermissionService {
     @InjectRepository(MenuToOrganizationMap)
     private readonly menuToOrganizationMapRepository: Repository<MenuToOrganizationMap>,
   ) {}
+
+  async hasCurrentMenuAccess(
+    currentUser: AuthUser,
+    filters: CurrentMenuPermissionDto & { action: MenuAccessAction },
+  ) {
+    const permission = await this.findCurrent(currentUser, filters);
+    return Boolean(permission[filters.action]);
+  }
 
   async findCurrent(currentUser: AuthUser, filters: CurrentMenuPermissionDto) {
     const isGlobalAdmin = await this.isGlobalAdminUser(currentUser);
