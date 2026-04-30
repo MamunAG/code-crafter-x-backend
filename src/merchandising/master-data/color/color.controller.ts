@@ -11,6 +11,8 @@ import { CreateColorDto } from './dto/create-color.dto';
 import { FilterColorDto } from './dto/filter-color.dto';
 import { UpdateColorDto } from './dto/update-color.dto';
 
+const MENU_NAME = 'Color Setup';
+
 @ApiTags('Color')
 @ApiBearerAuth()
 @Roles(RolesEnum.admin, RolesEnum.user)
@@ -21,7 +23,6 @@ export class ColorController {
   ) { }
 
   @Get()
-  @MenuAccess('Color Setup', 'canView')
   @ApiOperation({ summary: 'Get all', description: 'Retrieve all items' })
   @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
   async findAll(@Query() filters: FilterColorDto) {
@@ -32,7 +33,7 @@ export class ColorController {
   }
 
   @Get(':id')
-  @MenuAccess('Color Setup', 'canView')
+  @MenuAccess(MENU_NAME, 'canView')
   @ApiOperation({ summary: 'Get by id', description: 'Retrieve specific item' })
   @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
   async findOne(@Param('id', new ParseIntPipe()) id: number) {
@@ -41,7 +42,7 @@ export class ColorController {
   }
 
   @Post()
-  @MenuAccess('Color Setup', 'canCreate')
+  @MenuAccess(MENU_NAME, 'canCreate')
   @ApiOperation({ summary: 'save item' })
   @ApiResponse({ status: 201, description: 'Item save successfully', type: BaseResponseDto })
   @ApiResponse({ status: 400, description: 'Item already exists' })
@@ -53,7 +54,7 @@ export class ColorController {
   }
 
   @Patch(':id')
-  @MenuAccess('Color Setup', 'canUpdate')
+  @MenuAccess(MENU_NAME, 'canUpdate')
   @ApiOperation({ summary: 'update item' })
   @ApiResponse({ status: 201, description: 'Item update successfully', type: BaseResponseDto })
   @ApiResponse({ status: 400, description: 'Item already exists' })
@@ -69,7 +70,7 @@ export class ColorController {
   }
 
   @Delete(':id')
-  @MenuAccess('Color Setup', 'canDelete')
+  @MenuAccess(MENU_NAME, 'canDelete')
   @ApiOperation({ summary: 'delete item' })
   @ApiResponse({ status: 200, description: 'Item delete successfully', type: BaseResponseDto })
   async remove(@CurrentUser() user: AuthUser, @Param('id', new ParseIntPipe()) id: number) {
@@ -78,7 +79,7 @@ export class ColorController {
   }
 
   @Delete(':id/permanent')
-  @MenuAccess('Color Setup', 'canDelete')
+  @MenuAccess(MENU_NAME, 'canDelete')
   @ApiOperation({ summary: 'delete item permanently' })
   async permanentRemove(@Param('id', new ParseIntPipe()) id: number) {
     const result = await this.colorService.permanentRemove(id);
@@ -86,7 +87,7 @@ export class ColorController {
   }
 
   @Post(':id/restore')
-  @MenuAccess('Color Setup', 'canUpdate')
+  @MenuAccess(MENU_NAME, 'canUpdate')
   @ApiOperation({ summary: 'restore item' })
   async restore(@Param('id', new ParseIntPipe()) id: number) {
     const result = await this.colorService.restore(id);

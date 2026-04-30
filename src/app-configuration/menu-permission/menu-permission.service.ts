@@ -99,12 +99,13 @@ export class MenuPermissionService {
   }
 
   async findAll(currentUser: AuthUser, filters: FilterMenuPermissionDto) {
-    await this.ensureCurrentUserCanManageOrganization(currentUser, filters.organizationId);
+    await this.ensureCurrentUserCanReadPermissions(currentUser, filters);
 
     const queryBuilder = this.menuPermissionRepository
       .createQueryBuilder('menu_permission')
       .leftJoinAndSelect('menu_permission.organization', 'organization')
       .leftJoinAndSelect('menu_permission.menu', 'menu')
+      .leftJoinAndSelect('menu.moduleEntry', 'moduleEntry')
       .leftJoinAndSelect('menu_permission.user', 'user')
       .where('menu_permission.deleted_at IS NULL')
       .andWhere('menu.deleted_at IS NULL')
@@ -122,6 +123,19 @@ export class MenuPermissionService {
     }
 
     return queryBuilder.getMany();
+  }
+
+  private async ensureCurrentUserCanReadPermissions(currentUser: AuthUser, filters: FilterMenuPermissionDto) {
+    if (await this.isPrivilegedForOrganization(currentUser, filters.organizationId)) {
+      return;
+    }
+
+    if (filters.userId && filters.userId === currentUser.userId && filters.organizationId) {
+      await this.ensureUserBelongsToOrganization(currentUser.userId, filters.organizationId);
+      return;
+    }
+
+    await this.ensureCurrentUserCanManageOrganization(currentUser, filters.organizationId);
   }
 
   async upsert(currentUser: AuthUser, dto: UpsertMenuPermissionDto) {
@@ -238,6 +252,7 @@ export class MenuPermissionService {
   private async findMenuForPermissionCheck(filters: CurrentMenuPermissionDto, bypassOrganizationMap = false) {
     const queryBuilder = this.menuRepository
       .createQueryBuilder('menu')
+      .leftJoinAndSelect('menu.moduleEntry', 'moduleEntry')
       .where('menu.deleted_at IS NULL')
       .andWhere('menu.isActive = true');
 

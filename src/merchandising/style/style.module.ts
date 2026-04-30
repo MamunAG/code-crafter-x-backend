@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Color } from 'src/merchandising/basic-setup/color/entity/color.entity';
-import { Embellishment } from 'src/merchandising/basic-setup/embellishment/entity/embellishment.entity';
-import { Size } from 'src/merchandising/basic-setup/size/entity/size.entity';
+import { Color } from 'src/merchandising/master-data/color/entity/color.entity';
+import { Embellishment } from 'src/merchandising/master-data/embellishment/entity/embellishment.entity';
+import { Size } from 'src/merchandising/master-data/size/entity/size.entity';
 import { Country } from 'src/app-configuration/country/entity/country.entity';
 import { Currency } from 'src/app-configuration/currency/entity/currency.entity';
 import { Files } from 'src/files/entities/file.entity';
@@ -20,3 +20,4 @@ import { StyleService } from './style.service';
   providers: [StyleService],
 })
 export class StyleModule {}
+

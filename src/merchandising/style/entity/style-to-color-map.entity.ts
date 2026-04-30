@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { BaseEntity } from 'src/common/entities/base.entity';
-import { Color } from 'src/merchandising/basic-setup/color/entity/color.entity';
+import { Color } from 'src/merchandising/master-data/color/entity/color.entity';
 import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { Style } from './style.entity';
 
@@ -28,3 +28,4 @@ export class StyleToColorMap extends BaseEntity {
   @JoinColumn({ name: 'color_id' })
   color: Color;
 }
+

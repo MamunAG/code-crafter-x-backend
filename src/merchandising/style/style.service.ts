@@ -2,9 +2,9 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { Color } from 'src/merchandising/basic-setup/color/entity/color.entity';
-import { Embellishment } from 'src/merchandising/basic-setup/embellishment/entity/embellishment.entity';
-import { Size } from 'src/merchandising/basic-setup/size/entity/size.entity';
+import { Color } from 'src/merchandising/master-data/color/entity/color.entity';
+import { Embellishment } from 'src/merchandising/master-data/embellishment/entity/embellishment.entity';
+import { Size } from 'src/merchandising/master-data/size/entity/size.entity';
 import { Buyer } from 'src/merchandising/buyer/entity/buyer.entity';
 import { Currency } from 'src/app-configuration/currency/entity/currency.entity';
 import { Files } from 'src/files/entities/file.entity';
@@ -386,3 +386,4 @@ export class StyleService {
     return embellishment;
   }
 }
+

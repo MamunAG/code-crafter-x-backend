@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { BaseEntity } from 'src/common/entities/base.entity';
-import { Embellishment } from 'src/merchandising/basic-setup/embellishment/entity/embellishment.entity';
+import { Embellishment } from 'src/merchandising/master-data/embellishment/entity/embellishment.entity';
 import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { Style } from './style.entity';
 
@@ -28,3 +28,4 @@ export class StyleToEmbellishmentMap extends BaseEntity {
   @JoinColumn({ name: 'embellishment_id' })
   embellishment: Embellishment;
 }
+

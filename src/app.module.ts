@@ -14,9 +14,9 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ContactModule } from './contact/contact.module';
 import { FilesModule } from './files/files.module';
 import { UserLocationModule } from './user-location/user-location.module';
-import { ColorModule } from './merchandising/basic-setup/color/color.module';
-import { SizeModule } from './merchandising/basic-setup/size/size.module';
-import { EmbellishmentModule } from './merchandising/basic-setup/embellishment/embellishment.module';
+import { ColorModule } from './merchandising/master-data/color/color.module';
+import { SizeModule } from './merchandising/master-data/size/size.module';
+import { EmbellishmentModule } from './merchandising/master-data/embellishment/embellishment.module';
 import { CurrencyModule } from './app-configuration/currency/currency.module';
 import { UomModule } from './app-configuration/uom/uom.module';
 import { CountryModule } from './app-configuration/country/country.module';
@@ -85,3 +85,4 @@ import { NotificationsModule } from './notifications/notifications.module';
   ],
 })
 export class AppModule { }
+

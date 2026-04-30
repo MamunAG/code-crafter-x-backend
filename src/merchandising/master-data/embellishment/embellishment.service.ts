@@ -20,7 +20,16 @@ export class EmbellishmentService {
     await this.ensureNameIsUnique(embellishmentDto.name);
     const embellishment = this.embellishmentRepository.create(embellishmentDto);
     const saved = await this.embellishmentRepository.save(embellishment);
-    return this.findOne(saved.id);
+    await this.embellishmentRepository
+      .createQueryBuilder()
+      .update(Embellishment)
+      .set({
+        updated_by_id: null,
+        updated_at: () => 'NULL',
+      } as unknown as Partial<Embellishment>)
+      .where('id = :id', { id: saved.id })
+      .execute();
+    return this.normalizeUpdatedAt(await this.findOne(saved.id));
   }
 
   async findAll(
@@ -28,15 +37,21 @@ export class EmbellishmentService {
     filters?: Partial<FilterEmbellishmentDto>,
   ): Promise<PaginatedResponseDto<Embellishment>> {
     const { page = 1, limit = 1000000000000 } = paginationDto;
+    const deletedOnly = filters?.deletedOnly ?? false;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.embellishmentRepository
       .createQueryBuilder('embellishment')
       .leftJoinAndSelect('embellishment.created_by_user', 'created_by_user')
       .leftJoinAndSelect('embellishment.updated_by_user', 'updated_by_user')
+      .leftJoinAndSelect('embellishment.deleted_by_user', 'deleted_by_user')
       .skip(skip)
       .take(limit)
-      .orderBy('embellishment.created_at', 'DESC');
+      .orderBy(deletedOnly ? 'embellishment.deleted_at' : 'embellishment.created_at', 'DESC');
+
+    if (deletedOnly) {
+      queryBuilder.withDeleted();
+    }
 
     if (filters?.name) {
       queryBuilder.andWhere('LOWER(TRIM(embellishment.name)) LIKE :name', {
@@ -54,13 +69,19 @@ export class EmbellishmentService {
       });
     }
 
+    if (deletedOnly) {
+      queryBuilder.andWhere('embellishment.deleted_at IS NOT NULL');
+    } else {
+      queryBuilder.andWhere('embellishment.deleted_at IS NULL');
+    }
+
     const [items, total] = await queryBuilder.getManyAndCount();
     const totalPages = Math.ceil(total / limit);
     const hasNextPage = page < totalPages;
     const hasPreviousPage = page > 1;
 
     return {
-      items,
+      items: this.normalizeUpdatedAtList(items),
       meta: {
         total,
         page,
@@ -77,6 +98,7 @@ export class EmbellishmentService {
       .createQueryBuilder('embellishment')
       .leftJoinAndSelect('embellishment.created_by_user', 'created_by_user')
       .leftJoinAndSelect('embellishment.updated_by_user', 'updated_by_user')
+      .leftJoinAndSelect('embellishment.deleted_by_user', 'deleted_by_user')
       .where('embellishment.id = :id', { id })
       .andWhere('embellishment.deleted_at IS NULL')
       .getOne();
@@ -85,10 +107,11 @@ export class EmbellishmentService {
   async update(id: number, dto: UpdateEmbellishmentDto) {
     await this.ensureNameIsUnique(dto.name, id);
     await this.embellishmentRepository.update(id, dto);
-    return this.findOne(id);
+    return this.normalizeUpdatedAt(await this.findOne(id));
   }
 
-  remove(id: number) {
+  async remove(id: number, deletedById: string) {
+    await this.embellishmentRepository.update(id, { deleted_by_id: deletedById });
     return this.embellishmentRepository.softDelete(id);
   }
 
@@ -98,6 +121,26 @@ export class EmbellishmentService {
 
   restore(id: number) {
     return this.embellishmentRepository.restore(id);
+  }
+
+  private normalizeUpdatedAt<T extends { updated_at?: Date | null; updated_by_id?: string | null; updated_by_user?: unknown } | null>(
+    value: T,
+  ): T {
+    if (!value) {
+      return value;
+    }
+
+    if (!value.updated_by_id && !value.updated_by_user) {
+      value.updated_at = null;
+    }
+
+    return value;
+  }
+
+  private normalizeUpdatedAtList<T extends { updated_at?: Date | null; updated_by_id?: string | null; updated_by_user?: unknown }>(
+    values: T[],
+  ): T[] {
+    return values.map((value) => this.normalizeUpdatedAt(value));
   }
 
   private async ensureNameIsUnique(name: string, ignoreId?: number) {

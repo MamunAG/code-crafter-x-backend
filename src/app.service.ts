@@ -10,9 +10,9 @@ import { FileReference } from './files/entities/file-reference.entity';
 import { DeleteAccount } from './users/entities/delete-account.entity';
 import { Contact } from './contact/entity/contact.entity';
 import { UserLocation } from './user-location/entities/user-location.entity';
-import { Color } from './merchandising/basic-setup/color/entity/color.entity';
-import { Size } from './merchandising/basic-setup/size/entity/size.entity';
-import { Embellishment } from './merchandising/basic-setup/embellishment/entity/embellishment.entity';
+import { Color } from './merchandising/master-data/color/entity/color.entity';
+import { Size } from './merchandising/master-data/size/entity/size.entity';
+import { Embellishment } from './merchandising/master-data/embellishment/entity/embellishment.entity';
 import { Currency } from './app-configuration/currency/entity/currency.entity';
 import { Uom } from './app-configuration/uom/entity/uom.entity';
 import { Country } from './app-configuration/country/entity/country.entity';
@@ -102,4 +102,5 @@ export class AppService implements TypeOrmOptionsFactory {
     };
   }
 }
+
 

@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { BaseEntity } from 'src/common/entities/base.entity';
-import { Size } from 'src/merchandising/basic-setup/size/entity/size.entity';
+import { Size } from 'src/merchandising/master-data/size/entity/size.entity';
 import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { Style } from './style.entity';
 
@@ -28,3 +28,4 @@ export class StyleToSizeMap extends BaseEntity {
   @JoinColumn({ name: 'size_id' })
   size: Size;
 }
+
