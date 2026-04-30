@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsOptional } from 'class-validator';
+import { IsBoolean, IsOptional } from 'class-validator';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 
 const toBoolean = ({ value }: { value: unknown }) => {
@@ -37,4 +37,10 @@ export class FilterCurrencyDto extends PaginationDto {
   @Transform(toBoolean)
   @IsOptional()
   isActive?: boolean;
+
+  @ApiProperty({ description: 'Whether to fetch deleted items only', required: false, default: false })
+  @Transform(toBoolean)
+  @IsBoolean()
+  @IsOptional()
+  deletedOnly?: boolean;
 }

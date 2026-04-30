@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Header, Param, ParseIntPipe, Patch, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type AuthUser from 'src/auth/dto/auth-user';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { MenuAccess } from 'src/common/decorators/menu-access.decorator';
@@ -32,6 +33,15 @@ export class CountryController {
     return new BaseResponseDto(countries, 'Countries retrieved successfully');
   }
 
+  @Get('template/upload')
+  @MenuAccess(MENU_NAME, 'canCreate')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="country-upload-template.csv"')
+  @ApiOperation({ summary: 'Download country upload template' })
+  async downloadUploadTemplate() {
+    return this.countryService.buildUploadTemplate();
+  }
+
   @Get(':id')
   @MenuAccess(MENU_NAME, 'canView')
   @ApiOperation({ summary: 'Get by id', description: 'Retrieve specific country' })
@@ -53,6 +63,16 @@ export class CountryController {
     dto.updated_at = null as unknown as Date;
     const result = await this.countryService.create(dto);
     return new BaseResponseDto(result, 'Country saved successfully');
+  }
+
+  @Post('upload')
+  @MenuAccess(MENU_NAME, 'canCreate')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Upload country template' })
+  async uploadTemplate(@CurrentUser() user: AuthUser, @UploadedFile() file: Express.Multer.File) {
+    const result = await this.countryService.importFromTemplate(file, user.userId);
+    return new BaseResponseDto(result, 'Country upload completed');
   }
 
   @Patch(':id')

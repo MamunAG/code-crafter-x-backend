@@ -32,6 +32,74 @@ export class CountryService {
     return this.normalizeUpdatedAt(await this.findOne(saved.id));
   }
 
+  buildUploadTemplate() {
+    return [
+      'name,isActive',
+      'Bangladesh,true',
+      'United States,true',
+    ].join('\n');
+  }
+
+  async importFromTemplate(file: Express.Multer.File | undefined, userId: string) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('Please upload a country template file.');
+    }
+
+    const rows = this.parseCountryTemplate(file.buffer.toString('utf8'));
+    const uniqueNames = [...new Set(rows.map((row) => row.name.trim()).filter(Boolean))];
+
+    if (!uniqueNames.length) {
+      return {
+        inserted: 0,
+        skipped: 0,
+      };
+    }
+
+    const existingCountries = await this.countryRepository
+      .createQueryBuilder('country')
+      .withDeleted()
+      .select(['country.name'])
+      .where('LOWER(TRIM(country.name)) IN (:...names)', {
+        names: uniqueNames.map((name) => name.toLowerCase()),
+      })
+      .getMany();
+    const existingNameSet = new Set(existingCountries.map((country) => country.name.trim().toLowerCase()));
+    const newCountries = rows
+      .filter((row) => !existingNameSet.has(row.name.trim().toLowerCase()))
+      .map((row) =>
+        this.countryRepository.create({
+          name: row.name.trim(),
+          isActive: row.isActive,
+          created_by_id: userId,
+          updated_by_id: null as unknown as string,
+          updated_at: null as unknown as Date,
+        }),
+      );
+
+    if (!newCountries.length) {
+      return {
+        inserted: 0,
+        skipped: rows.length,
+      };
+    }
+
+    const savedCountries = await this.countryRepository.save(newCountries);
+    await this.countryRepository
+      .createQueryBuilder()
+      .update(Country)
+      .set({
+        updated_by_id: null,
+        updated_at: () => 'NULL',
+      } as unknown as Partial<Country>)
+      .where('id IN (:...ids)', { ids: savedCountries.map((country) => country.id) })
+      .execute();
+
+    return {
+      inserted: savedCountries.length,
+      skipped: rows.length - savedCountries.length,
+    };
+  }
+
   async findAll(
     paginationDto: PaginationDto,
     filters?: Partial<FilterCountryDto>,
@@ -150,5 +218,84 @@ export class CountryService {
     if (existing) {
       throw new BadRequestException('Country already exists');
     }
+  }
+
+  private parseCountryTemplate(content: string) {
+    const lines = content
+      .replace(/^\uFEFF/, '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (lines.length < 2) {
+      throw new BadRequestException('The uploaded template does not contain any country rows.');
+    }
+
+    const headers = this.parseCsvLine(lines[0]).map((header) => header.trim().toLowerCase());
+    const nameIndex = headers.indexOf('name');
+    const activeIndex = headers.indexOf('isactive');
+
+    if (nameIndex === -1) {
+      throw new BadRequestException('The uploaded template must include a name column.');
+    }
+
+    return lines.slice(1).flatMap((line) => {
+      const columns = this.parseCsvLine(line);
+      const name = columns[nameIndex]?.trim() ?? '';
+
+      if (!name) {
+        return [];
+      }
+
+      return [
+        {
+          name,
+          isActive: activeIndex === -1 ? true : this.parseBoolean(columns[activeIndex]),
+        },
+      ];
+    });
+  }
+
+  private parseCsvLine(line: string) {
+    const values: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let index = 0; index < line.length; index += 1) {
+      const character = line[index];
+      const nextCharacter = line[index + 1];
+
+      if (character === '"' && nextCharacter === '"') {
+        current += '"';
+        index += 1;
+        continue;
+      }
+
+      if (character === '"') {
+        inQuotes = !inQuotes;
+        continue;
+      }
+
+      if (character === ',' && !inQuotes) {
+        values.push(current);
+        current = '';
+        continue;
+      }
+
+      current += character;
+    }
+
+    values.push(current);
+    return values;
+  }
+
+  private parseBoolean(value?: string) {
+    const normalizedValue = value?.trim().toLowerCase();
+
+    if (!normalizedValue) {
+      return true;
+    }
+
+    return ['true', 'yes', 'y', '1', 'active'].includes(normalizedValue);
   }
 }
