@@ -44,4 +44,8 @@ export class FilterBuyerDto extends PaginationDto {
   @IsOptional()
   @IsString()
   remarks: string;
+
+  @ApiProperty({ description: 'Return only soft deleted buyers', example: 'true', required: false })
+  @IsOptional()
+  deletedOnly?: string | boolean;
 }
