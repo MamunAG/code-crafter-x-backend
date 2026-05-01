@@ -1,5 +1,5 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional } from 'class-validator';
+import { IsBoolean, IsNotEmpty } from 'class-validator';
 import { Unit } from '../entity/unit.entity';
 
 export class CreateUnitDto extends PartialType(Unit) {
@@ -11,7 +11,7 @@ export class CreateUnitDto extends PartialType(Unit) {
   @IsNotEmpty()
   shortName: string;
 
-  @ApiProperty({ description: 'Active status', example: 'Y' })
-  @IsOptional()
-  isActive: string;
+  @ApiProperty({ description: 'Active status', example: true })
+  @IsBoolean()
+  isActive: boolean = true;
 }

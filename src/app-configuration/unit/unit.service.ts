@@ -26,9 +26,9 @@ export class UnitService {
     await this.uomRepository
       .createQueryBuilder()
       .update(Unit)
-      .set({
-        updated_by_id: null,
-        updated_at: () => 'NULL',
+        .set({
+          updated_by_id: null,
+          updated_at: () => 'NULL',
       } as unknown as Partial<Unit>)
       .where('id = :id', { id: saved.id })
       .andWhere('organization_id = :organizationId', { organizationId })
@@ -135,7 +135,7 @@ export class UnitService {
 
     if (filters?.isActive) {
       queryBuilder.andWhere('uom.isActive = :isActive', {
-        isActive: filters.isActive,
+        isActive: this.parseActiveValue(filters.isActive),
       });
     }
 
@@ -271,14 +271,14 @@ export class UnitService {
         return [];
       }
 
-      return [
-        {
-          name,
-          shortName,
-          isActive: activeIndex === -1 ? 'Y' : this.parseActiveValue(columns[activeIndex]),
-        },
-      ];
-    });
+        return [
+          {
+            name,
+            shortName,
+            isActive: activeIndex === -1 ? true : this.parseActiveValue(columns[activeIndex]),
+          },
+        ];
+      });
   }
 
   private parseCsvLine(line: string) {
@@ -318,9 +318,9 @@ export class UnitService {
     const normalizedValue = value?.trim().toLowerCase();
 
     if (!normalizedValue) {
-      return 'Y';
+      return true;
     }
 
-    return ['true', 'yes', 'y', '1', 'active'].includes(normalizedValue) ? 'Y' : 'N';
+    return ['true', 'yes', 'y', '1', 'active'].includes(normalizedValue);
   }
 }

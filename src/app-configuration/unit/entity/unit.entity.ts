@@ -21,9 +21,9 @@ export class Unit extends BaseEntity {
   @Column({ name: 'organization_id', type: 'uuid', nullable: true })
   organizationId?: string | null;
 
-  @ApiProperty({ description: 'Active status', example: 'Y' })
-  @Column({ name: 'is_active', type: 'varchar', length: 10, default: 'Y', nullable: false })
-  isActive: string;
+  @ApiProperty({ description: 'Active status', example: true })
+  @Column({ name: 'is_active', type: 'boolean', default: true, nullable: false })
+  isActive: boolean;
 
   @ApiProperty({ description: 'Organization', type: () => Organization, required: false })
   @ManyToOne(() => Organization, { nullable: true, onDelete: 'CASCADE' })
