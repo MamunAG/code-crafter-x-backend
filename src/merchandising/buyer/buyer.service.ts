@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -20,22 +20,24 @@ export class BuyerService {
     private countryRepository: Repository<Country>,
   ) { }
 
-  async create(buyerDto: CreateBuyerDto) {
-    await this.ensureEmailIsUnique(buyerDto.email);
-    const country = await this.findCountryOrFail(buyerDto.countryId);
+  async create(buyerDto: CreateBuyerDto, organizationId: string) {
+    await this.ensureEmailIsUnique(buyerDto.email, organizationId);
+    const country = await this.findCountryOrFail(buyerDto.countryId, organizationId);
 
     const buyer = this.buyerRepository.create({
       ...buyerDto,
+      organizationId,
       country,
     });
 
     const saved = await this.buyerRepository.save(buyer);
-    return this.findOne(saved.id);
+    return this.findOne(saved.id, organizationId);
   }
 
   async findAll(
     paginationDto: PaginationDto,
     filters?: Partial<FilterBuyerDto>,
+    organizationId?: string,
   ): Promise<PaginatedResponseDto<Buyer>> {
     const { page = 1, limit = 1000000000000 } = paginationDto;
     const skip = (page - 1) * limit;
@@ -45,6 +47,7 @@ export class BuyerService {
       .leftJoinAndSelect('buyer.country', 'country')
       .leftJoinAndSelect('buyer.created_by_user', 'created_by_user')
       .leftJoinAndSelect('buyer.updated_by_user', 'updated_by_user')
+      .where('buyer.organization_id = :organizationId', { organizationId })
       .skip(skip)
       .take(limit)
       .orderBy('buyer.created_at', 'DESC');
@@ -115,20 +118,28 @@ export class BuyerService {
     };
   }
 
-  findOne(id: string) {
+  findOne(id: string, organizationId: string) {
     return this.buyerRepository
       .createQueryBuilder('buyer')
       .leftJoinAndSelect('buyer.country', 'country')
       .leftJoinAndSelect('buyer.created_by_user', 'created_by_user')
       .leftJoinAndSelect('buyer.updated_by_user', 'updated_by_user')
-      .where('buyer.id = :id', { id })
+      .where('buyer.organization_id = :organizationId', { organizationId })
+      .andWhere('buyer.id = :id', { id })
       .andWhere('buyer.deleted_at IS NULL')
-      .getOne();
+      .getOne()
+      .then((buyer) => {
+        if (!buyer) {
+          throw new NotFoundException('Buyer not found in the selected organization.');
+        }
+
+        return buyer;
+      });
   }
 
-  async update(id: string, dto: UpdateBuyerDto) {
+  async update(id: string, dto: UpdateBuyerDto, organizationId: string) {
     const buyer = await this.buyerRepository.findOne({
-      where: { id },
+      where: { id, organizationId },
       relations: ['country'],
       withDeleted: false,
     });
@@ -138,31 +149,34 @@ export class BuyerService {
     }
 
     if (dto.email) {
-      await this.ensureEmailIsUnique(dto.email, id);
+      await this.ensureEmailIsUnique(dto.email, organizationId, id);
     }
 
     if (dto.countryId !== undefined) {
-      buyer.country = await this.findCountryOrFail(dto.countryId);
+      buyer.country = await this.findCountryOrFail(dto.countryId, organizationId);
     }
 
     Object.assign(buyer, dto);
     const saved = await this.buyerRepository.save(buyer);
-    return this.findOne(saved.id);
+    return this.findOne(saved.id, organizationId);
   }
 
-  remove(id: string) {
-    return this.buyerRepository.softDelete(id);
+  async remove(id: string, organizationId: string) {
+    await this.ensureBuyerExists(id, organizationId);
+    return this.buyerRepository.softDelete({ id, organizationId });
   }
 
-  permanentRemove(id: string) {
-    return this.buyerRepository.delete(id);
+  async permanentRemove(id: string, organizationId: string) {
+    await this.ensureBuyerExists(id, organizationId, true);
+    return this.buyerRepository.delete({ id, organizationId });
   }
 
-  restore(id: string) {
-    return this.buyerRepository.restore(id);
+  async restore(id: string, organizationId: string) {
+    await this.ensureBuyerExists(id, organizationId, true);
+    return this.buyerRepository.restore({ id, organizationId });
   }
 
-  private async ensureEmailIsUnique(email: string, ignoreId?: string) {
+  private async ensureEmailIsUnique(email: string, organizationId: string, ignoreId?: string) {
     if (!email) {
       return;
     }
@@ -172,6 +186,7 @@ export class BuyerService {
       .where('LOWER(TRIM(buyer.email)) = :email', {
         email: email.trim().toLowerCase(),
       })
+      .andWhere('buyer.organization_id = :organizationId', { organizationId })
       .andWhere('buyer.deleted_at IS NULL');
 
     if (ignoreId !== undefined) {
@@ -185,15 +200,36 @@ export class BuyerService {
     }
   }
 
-  private async findCountryOrFail(countryId: number) {
+  private async findCountryOrFail(countryId: number, organizationId: string) {
     const country = await this.countryRepository.findOne({
-      where: { id: countryId },
+      where: { id: countryId, organizationId },
     });
 
     if (!country) {
-      throw new BadRequestException('Country not found');
+      throw new BadRequestException('Country not found in the selected organization.');
     }
 
     return country;
+  }
+
+  private async ensureBuyerExists(id: string, organizationId: string, includeDeleted = false) {
+    const queryBuilder = this.buyerRepository
+      .createQueryBuilder('buyer')
+      .where('buyer.id = :id', { id })
+      .andWhere('buyer.organization_id = :organizationId', { organizationId });
+
+    if (includeDeleted) {
+      queryBuilder.withDeleted();
+    } else {
+      queryBuilder.andWhere('buyer.deleted_at IS NULL');
+    }
+
+    const buyer = await queryBuilder.getOne();
+
+    if (!buyer) {
+      throw new NotFoundException('Buyer not found in the selected organization.');
+    }
+
+    return buyer;
   }
 }

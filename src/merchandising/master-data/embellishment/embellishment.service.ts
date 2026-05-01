@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -16,9 +16,12 @@ export class EmbellishmentService {
     private embellishmentRepository: Repository<Embellishment>,
   ) { }
 
-  async create(embellishmentDto: CreateEmbellishmentDto) {
-    await this.ensureNameIsUnique(embellishmentDto.name);
-    const embellishment = this.embellishmentRepository.create(embellishmentDto);
+  async create(embellishmentDto: CreateEmbellishmentDto, organizationId: string) {
+    await this.ensureNameIsUnique(embellishmentDto.name, organizationId);
+    const embellishment = this.embellishmentRepository.create({
+      ...embellishmentDto,
+      organizationId,
+    });
     const saved = await this.embellishmentRepository.save(embellishment);
     await this.embellishmentRepository
       .createQueryBuilder()
@@ -28,13 +31,15 @@ export class EmbellishmentService {
         updated_at: () => 'NULL',
       } as unknown as Partial<Embellishment>)
       .where('id = :id', { id: saved.id })
+      .andWhere('organization_id = :organizationId', { organizationId })
       .execute();
-    return this.normalizeUpdatedAt(await this.findOne(saved.id));
+    return this.normalizeUpdatedAt(await this.findOne(saved.id, organizationId));
   }
 
   async findAll(
     paginationDto: PaginationDto,
     filters?: Partial<FilterEmbellishmentDto>,
+    organizationId?: string,
   ): Promise<PaginatedResponseDto<Embellishment>> {
     const { page = 1, limit = 1000000000000 } = paginationDto;
     const deletedOnly = filters?.deletedOnly ?? false;
@@ -45,6 +50,7 @@ export class EmbellishmentService {
       .leftJoinAndSelect('embellishment.created_by_user', 'created_by_user')
       .leftJoinAndSelect('embellishment.updated_by_user', 'updated_by_user')
       .leftJoinAndSelect('embellishment.deleted_by_user', 'deleted_by_user')
+      .where('embellishment.organization_id = :organizationId', { organizationId })
       .skip(skip)
       .take(limit)
       .orderBy(deletedOnly ? 'embellishment.deleted_at' : 'embellishment.created_at', 'DESC');
@@ -93,34 +99,46 @@ export class EmbellishmentService {
     };
   }
 
-  findOne(id: number) {
+  findOne(id: number, organizationId: string) {
     return this.embellishmentRepository
       .createQueryBuilder('embellishment')
       .leftJoinAndSelect('embellishment.created_by_user', 'created_by_user')
       .leftJoinAndSelect('embellishment.updated_by_user', 'updated_by_user')
       .leftJoinAndSelect('embellishment.deleted_by_user', 'deleted_by_user')
-      .where('embellishment.id = :id', { id })
+      .where('embellishment.organization_id = :organizationId', { organizationId })
+      .andWhere('embellishment.id = :id', { id })
       .andWhere('embellishment.deleted_at IS NULL')
-      .getOne();
+      .getOne()
+      .then((embellishment) => {
+        if (!embellishment) {
+          throw new NotFoundException('Embellishment not found in the selected organization.');
+        }
+
+        return this.normalizeUpdatedAt(embellishment);
+      });
   }
 
-  async update(id: number, dto: UpdateEmbellishmentDto) {
-    await this.ensureNameIsUnique(dto.name, id);
-    await this.embellishmentRepository.update(id, dto);
-    return this.normalizeUpdatedAt(await this.findOne(id));
+  async update(id: number, dto: UpdateEmbellishmentDto, organizationId: string) {
+    await this.ensureEmbellishmentExists(id, organizationId);
+    await this.ensureNameIsUnique(dto.name, organizationId, id);
+    await this.embellishmentRepository.update({ id, organizationId }, dto);
+    return this.normalizeUpdatedAt(await this.findOne(id, organizationId));
   }
 
-  async remove(id: number, deletedById: string) {
-    await this.embellishmentRepository.update(id, { deleted_by_id: deletedById });
-    return this.embellishmentRepository.softDelete(id);
+  async remove(id: number, deletedById: string, organizationId: string) {
+    await this.ensureEmbellishmentExists(id, organizationId);
+    await this.embellishmentRepository.update({ id, organizationId }, { deleted_by_id: deletedById });
+    return this.embellishmentRepository.softDelete({ id, organizationId });
   }
 
-  permanentRemove(id: number) {
-    return this.embellishmentRepository.delete(id);
+  async permanentRemove(id: number, organizationId: string) {
+    await this.ensureEmbellishmentExists(id, organizationId, true);
+    return this.embellishmentRepository.delete({ id, organizationId });
   }
 
-  restore(id: number) {
-    return this.embellishmentRepository.restore(id);
+  async restore(id: number, organizationId: string) {
+    await this.ensureEmbellishmentExists(id, organizationId, true);
+    return this.embellishmentRepository.restore({ id, organizationId });
   }
 
   private normalizeUpdatedAt<T extends { updated_at?: Date | null; updated_by_id?: string | null; updated_by_user?: unknown } | null>(
@@ -143,12 +161,13 @@ export class EmbellishmentService {
     return values.map((value) => this.normalizeUpdatedAt(value));
   }
 
-  private async ensureNameIsUnique(name: string, ignoreId?: number) {
+  private async ensureNameIsUnique(name: string, organizationId: string, ignoreId?: number) {
     const normalizedName = name.trim().toLowerCase();
 
     const queryBuilder = this.embellishmentRepository
       .createQueryBuilder('embellishment')
       .where('LOWER(TRIM(embellishment.name)) = :name', { name: normalizedName })
+      .andWhere('embellishment.organization_id = :organizationId', { organizationId })
       .andWhere('embellishment.deleted_at IS NULL');
 
     if (ignoreId !== undefined) {
@@ -160,5 +179,26 @@ export class EmbellishmentService {
     if (existing) {
       throw new BadRequestException('Embellishment already exists');
     }
+  }
+
+  private async ensureEmbellishmentExists(id: number, organizationId: string, includeDeleted = false) {
+    const queryBuilder = this.embellishmentRepository
+      .createQueryBuilder('embellishment')
+      .where('embellishment.id = :id', { id })
+      .andWhere('embellishment.organization_id = :organizationId', { organizationId });
+
+    if (includeDeleted) {
+      queryBuilder.withDeleted();
+    } else {
+      queryBuilder.andWhere('embellishment.deleted_at IS NULL');
+    }
+
+    const embellishment = await queryBuilder.getOne();
+
+    if (!embellishment) {
+      throw new NotFoundException('Embellishment not found in the selected organization.');
+    }
+
+    return embellishment;
   }
 }

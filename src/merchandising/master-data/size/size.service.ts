@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -16,16 +16,20 @@ export class SizeService {
     private sizeRepository: Repository<Size>,
   ) { }
 
-  async create(sizeDto: CreateSizeDto) {
-    await this.ensureSizeNameIsUnique(sizeDto.sizeName);
-    const size = this.sizeRepository.create(sizeDto);
+  async create(sizeDto: CreateSizeDto, organizationId: string) {
+    await this.ensureSizeNameIsUnique(sizeDto.sizeName, organizationId);
+    const size = this.sizeRepository.create({
+      ...sizeDto,
+      organizationId,
+    });
     const saved = await this.sizeRepository.save(size);
-    return this.normalizeUpdatedAt(await this.findOne(saved.id));
+    return this.normalizeUpdatedAt(await this.findOne(saved.id, organizationId));
   }
 
   async findAll(
     paginationDto: PaginationDto,
     filters?: Partial<FilterSizeDto>,
+    organizationId?: string,
   ): Promise<PaginatedResponseDto<Size>> {
     const { page = 1, limit = 1000000000000 } = paginationDto;
     const deletedOnly = filters?.deletedOnly ?? false;
@@ -36,6 +40,7 @@ export class SizeService {
       .leftJoinAndSelect('size.created_by_user', 'created_by_user')
       .leftJoinAndSelect('size.updated_by_user', 'updated_by_user')
       .leftJoinAndSelect('size.deleted_by_user', 'deleted_by_user')
+      .where('size.organization_id = :organizationId', { organizationId })
       .skip(skip)
       .take(limit)
       .orderBy(deletedOnly ? 'size.deleted_at' : 'size.created_at', 'DESC');
@@ -74,38 +79,49 @@ export class SizeService {
     };
   }
 
-  findOne(id: number) {
+  findOne(id: number, organizationId: string) {
     return this.sizeRepository
       .createQueryBuilder('size')
       .leftJoinAndSelect('size.created_by_user', 'created_by_user')
       .leftJoinAndSelect('size.updated_by_user', 'updated_by_user')
       .leftJoinAndSelect('size.deleted_by_user', 'deleted_by_user')
-      .where('size.id = :id', { id })
+      .where('size.organization_id = :organizationId', { organizationId })
+      .andWhere('size.id = :id', { id })
       .andWhere('size.deleted_at IS NULL')
       .getOne()
-      .then((size) => this.normalizeUpdatedAt(size));
+      .then((size) => {
+        if (!size) {
+          throw new NotFoundException('Size not found in the selected organization.');
+        }
+
+        return this.normalizeUpdatedAt(size);
+      });
   }
 
-  async update(id: number, dto: UpdateSizeDto) {
-    await this.ensureSizeNameIsUnique(dto.sizeName, id);
-    await this.sizeRepository.update(id, dto);
-    return this.normalizeUpdatedAt(await this.findOne(id));
+  async update(id: number, dto: UpdateSizeDto, organizationId: string) {
+    await this.ensureSizeExists(id, organizationId);
+    await this.ensureSizeNameIsUnique(dto.sizeName, organizationId, id);
+    await this.sizeRepository.update({ id, organizationId }, dto);
+    return this.normalizeUpdatedAt(await this.findOne(id, organizationId));
   }
 
-  async remove(id: number, deletedById: string) {
-    await this.sizeRepository.update(id, { deleted_by_id: deletedById });
-    return this.sizeRepository.softDelete(id);
+  async remove(id: number, deletedById: string, organizationId: string) {
+    await this.ensureSizeExists(id, organizationId);
+    await this.sizeRepository.update({ id, organizationId }, { deleted_by_id: deletedById });
+    return this.sizeRepository.softDelete({ id, organizationId });
   }
 
-  permanentRemove(id: number) {
-    return this.sizeRepository.delete(id);
+  async permanentRemove(id: number, organizationId: string) {
+    await this.ensureSizeExists(id, organizationId, true);
+    return this.sizeRepository.delete({ id, organizationId });
   }
 
-  restore(id: number) {
-    return this.sizeRepository.restore(id);
+  async restore(id: number, organizationId: string) {
+    await this.ensureSizeExists(id, organizationId, true);
+    return this.sizeRepository.restore({ id, organizationId });
   }
 
-  private async ensureSizeNameIsUnique(sizeName: string, ignoreId?: number) {
+  private async ensureSizeNameIsUnique(sizeName: string, organizationId: string, ignoreId?: number) {
     const normalizedSizeName = sizeName.trim().toLowerCase();
 
     const queryBuilder = this.sizeRepository
@@ -113,6 +129,7 @@ export class SizeService {
       .where('LOWER(TRIM(size.sizeName)) = :sizeName', {
         sizeName: normalizedSizeName,
       })
+      .andWhere('size.organization_id = :organizationId', { organizationId })
       .andWhere('size.deleted_at IS NULL');
 
     if (ignoreId !== undefined) {
@@ -124,6 +141,27 @@ export class SizeService {
     if (existingSize) {
       throw new BadRequestException('Size already exists');
     }
+  }
+
+  private async ensureSizeExists(id: number, organizationId: string, includeDeleted = false) {
+    const queryBuilder = this.sizeRepository
+      .createQueryBuilder('size')
+      .where('size.id = :id', { id })
+      .andWhere('size.organization_id = :organizationId', { organizationId });
+
+    if (includeDeleted) {
+      queryBuilder.withDeleted();
+    } else {
+      queryBuilder.andWhere('size.deleted_at IS NULL');
+    }
+
+    const size = await queryBuilder.getOne();
+
+    if (!size) {
+      throw new NotFoundException('Size not found in the selected organization.');
+    }
+
+    return size;
   }
 
   private normalizeUpdatedAt<T extends { updated_at?: Date | null; updated_by_id?: string | null; updated_by_user?: unknown } | null>(

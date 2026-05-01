@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type AuthUser from 'src/auth/dto/auth-user';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
@@ -22,13 +22,22 @@ export class EmbellishmentController {
     private readonly embellishmentService: EmbellishmentService,
   ) { }
 
+  private requireOrganizationId(organizationId?: string) {
+    if (!organizationId?.trim()) {
+      throw new BadRequestException('An organization is required to manage embellishment records. Please select an organization and try again.');
+    }
+
+    return organizationId.trim();
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get all', description: 'Retrieve all items' })
   @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
-  async findAll(@Query() filters: FilterEmbellishmentDto) {
+  async findAll(@Query() filters: FilterEmbellishmentDto, @Headers('x-organization-id') organizationId?: string) {
     const { page, limit, ...embellishmentFilters } = filters;
     const pagination = { page, limit };
-    const embellishments = await this.embellishmentService.findAll(pagination, embellishmentFilters);
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const embellishments = await this.embellishmentService.findAll(pagination, embellishmentFilters, selectedOrganizationId);
     return new BaseResponseDto(embellishments, 'Embellishments retrieved successfully');
   }
 
@@ -36,8 +45,9 @@ export class EmbellishmentController {
   @MenuAccess(MENU_NAME, 'canView')
   @ApiOperation({ summary: 'Get by id', description: 'Retrieve specific item' })
   @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
-  async findOne(@Param('id', new ParseIntPipe()) id: number) {
-    const embellishment = await this.embellishmentService.findOne(id);
+  async findOne(@Param('id', new ParseIntPipe()) id: number, @Headers('x-organization-id') organizationId?: string) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const embellishment = await this.embellishmentService.findOne(id, selectedOrganizationId);
     return new BaseResponseDto(embellishment, 'Embellishment retrieved successfully');
   }
 
@@ -47,11 +57,12 @@ export class EmbellishmentController {
   @ApiResponse({ status: 201, description: 'Item save successfully', type: BaseResponseDto })
   @ApiResponse({ status: 400, description: 'Item already exists' })
   @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
-  async create(@CurrentUser() user: AuthUser, @Body() dto: CreateEmbellishmentDto) {
+  async create(@CurrentUser() user: AuthUser, @Body() dto: CreateEmbellishmentDto, @Headers('x-organization-id') organizationId?: string) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
     dto.created_by_id = user.userId;
     dto.updated_by_id = null as unknown as string;
     dto.updated_at = null as unknown as Date;
-    const result = await this.embellishmentService.create(dto);
+    const result = await this.embellishmentService.create(dto, selectedOrganizationId);
     return new BaseResponseDto(result, 'Embellishment saved successfully');
   }
 
@@ -66,10 +77,12 @@ export class EmbellishmentController {
     @CurrentUser() user: AuthUser,
     @Param('id', new ParseIntPipe()) id: number,
     @Body() dto: UpdateEmbellishmentDto,
+    @Headers('x-organization-id') organizationId?: string,
   ) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
     dto.updated_by_id = user.userId;
     dto.updated_at = new Date();
-    const result = await this.embellishmentService.update(id, dto);
+    const result = await this.embellishmentService.update(id, dto, selectedOrganizationId);
     return new BaseResponseDto(result, 'Embellishment updated successfully');
   }
 
@@ -78,8 +91,9 @@ export class EmbellishmentController {
   @MenuAccess(MENU_NAME, 'canDelete')
   @ApiOperation({ summary: 'delete item' })
   @ApiResponse({ status: 200, description: 'Item delete successfully', type: BaseResponseDto })
-  async remove(@CurrentUser() user: AuthUser, @Param('id', new ParseIntPipe()) id: number) {
-    const result = await this.embellishmentService.remove(id, user.userId);
+  async remove(@CurrentUser() user: AuthUser, @Param('id', new ParseIntPipe()) id: number, @Headers('x-organization-id') organizationId?: string) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const result = await this.embellishmentService.remove(id, user.userId, selectedOrganizationId);
     return new BaseResponseDto(result, 'Embellishment deleted successfully');
   }
 
@@ -87,8 +101,9 @@ export class EmbellishmentController {
   @Roles(RolesEnum.admin)
   @MenuAccess(MENU_NAME, 'canDelete')
   @ApiOperation({ summary: 'delete item permanently' })
-  async permanentRemove(@Param('id', new ParseIntPipe()) id: number) {
-    const result = await this.embellishmentService.permanentRemove(id);
+  async permanentRemove(@Param('id', new ParseIntPipe()) id: number, @Headers('x-organization-id') organizationId?: string) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const result = await this.embellishmentService.permanentRemove(id, selectedOrganizationId);
     return new BaseResponseDto(result, 'Embellishment deleted permanently');
   }
 
@@ -96,8 +111,9 @@ export class EmbellishmentController {
   @Roles(RolesEnum.admin)
   @MenuAccess(MENU_NAME, 'canUpdate')
   @ApiOperation({ summary: 'restore item' })
-  async restore(@Param('id', new ParseIntPipe()) id: number) {
-    const result = await this.embellishmentService.restore(id);
+  async restore(@Param('id', new ParseIntPipe()) id: number, @Headers('x-organization-id') organizationId?: string) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const result = await this.embellishmentService.restore(id, selectedOrganizationId);
     return new BaseResponseDto(result, 'Embellishment restored successfully');
   }
 }

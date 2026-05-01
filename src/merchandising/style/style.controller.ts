@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type AuthUser from 'src/auth/dto/auth-user';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
@@ -19,21 +19,31 @@ export class StyleController {
     private readonly styleService: StyleService,
   ) { }
 
+  private requireOrganizationId(organizationId?: string) {
+    if (!organizationId?.trim()) {
+      throw new BadRequestException('An organization is required to manage style records. Please select an organization and try again.');
+    }
+
+    return organizationId.trim();
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get all', description: 'Retrieve all styles' })
   @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
-  async findAll(@Query() filters: FilterStyleDto) {
+  async findAll(@Query() filters: FilterStyleDto, @Headers('x-organization-id') organizationId?: string) {
     const { page, limit, ...styleFilters } = filters;
     const pagination = { page, limit };
-    const styles = await this.styleService.findAll(pagination, styleFilters);
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const styles = await this.styleService.findAll(pagination, styleFilters, selectedOrganizationId);
     return new BaseResponseDto(styles, 'Styles retrieved successfully');
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get by id', description: 'Retrieve specific style' })
   @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
-  async findOne(@Param('id', new ParseUUIDPipe()) id: string) {
-    const style = await this.styleService.findOne(id);
+  async findOne(@Param('id', new ParseUUIDPipe()) id: string, @Headers('x-organization-id') organizationId?: string) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const style = await this.styleService.findOne(id, selectedOrganizationId);
     return new BaseResponseDto(style, 'Style retrieved successfully');
   }
 
@@ -42,9 +52,10 @@ export class StyleController {
   @ApiResponse({ status: 201, description: 'Style save successfully', type: BaseResponseDto })
   @ApiResponse({ status: 400, description: 'Style already exists' })
   @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
-  async create(@CurrentUser() user: AuthUser, @Body() dto: CreateStyleDto) {
+  async create(@CurrentUser() user: AuthUser, @Body() dto: CreateStyleDto, @Headers('x-organization-id') organizationId?: string) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
     dto.created_by_id = user.userId;
-    const result = await this.styleService.create(dto);
+    const result = await this.styleService.create(dto, selectedOrganizationId);
     return new BaseResponseDto(result, 'Style saved successfully');
   }
 
@@ -57,31 +68,36 @@ export class StyleController {
     @CurrentUser() user: AuthUser,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateStyleDto,
+    @Headers('x-organization-id') organizationId?: string,
   ) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
     dto.updated_by_id = user.userId;
-    const result = await this.styleService.update(id, dto);
+    const result = await this.styleService.update(id, dto, selectedOrganizationId);
     return new BaseResponseDto(result, 'Style updated successfully');
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'delete style' })
   @ApiResponse({ status: 200, description: 'Style delete successfully', type: BaseResponseDto })
-  async remove(@Param('id', new ParseUUIDPipe()) id: string) {
-    const result = await this.styleService.remove(id);
+  async remove(@Param('id', new ParseUUIDPipe()) id: string, @Headers('x-organization-id') organizationId?: string) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const result = await this.styleService.remove(id, selectedOrganizationId);
     return new BaseResponseDto(result, 'Style deleted successfully');
   }
 
   @Delete(':id/permanent')
   @ApiOperation({ summary: 'delete style permanently' })
-  async permanentRemove(@Param('id', new ParseUUIDPipe()) id: string) {
-    const result = await this.styleService.permanentRemove(id);
+  async permanentRemove(@Param('id', new ParseUUIDPipe()) id: string, @Headers('x-organization-id') organizationId?: string) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const result = await this.styleService.permanentRemove(id, selectedOrganizationId);
     return new BaseResponseDto(result, 'Style deleted permanently');
   }
 
   @Post(':id/restore')
   @ApiOperation({ summary: 'restore style' })
-  async restore(@Param('id', new ParseUUIDPipe()) id: string) {
-    const result = await this.styleService.restore(id);
+  async restore(@Param('id', new ParseUUIDPipe()) id: string, @Headers('x-organization-id') organizationId?: string) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const result = await this.styleService.restore(id, selectedOrganizationId);
     return new BaseResponseDto(result, 'Style restored successfully');
   }
 }

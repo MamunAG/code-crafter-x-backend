@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -16,16 +16,20 @@ export class UnitService {
     private uomRepository: Repository<Unit>,
   ) { }
 
-  async create(uomDto: CreateUnitDto) {
-    await this.ensureNameIsUnique(uomDto.name);
-    const uom = this.uomRepository.create(uomDto);
+  async create(uomDto: CreateUnitDto, organizationId: string) {
+    await this.ensureNameIsUnique(uomDto.name, organizationId);
+    const uom = this.uomRepository.create({
+      ...uomDto,
+      organizationId,
+    });
     const saved = await this.uomRepository.save(uom);
-    return this.findOne(saved.id);
+    return this.findOne(saved.id, organizationId);
   }
 
   async findAll(
     paginationDto: PaginationDto,
     filters?: Partial<FilterUnitDto>,
+    organizationId?: string,
   ): Promise<PaginatedResponseDto<Unit>> {
     const { page = 1, limit = 1000000000000 } = paginationDto;
     const skip = (page - 1) * limit;
@@ -34,6 +38,7 @@ export class UnitService {
       .createQueryBuilder('uom')
       .leftJoinAndSelect('uom.created_by_user', 'created_by_user')
       .leftJoinAndSelect('uom.updated_by_user', 'updated_by_user')
+      .where('uom.organization_id = :organizationId', { organizationId })
       .skip(skip)
       .take(limit)
       .orderBy('uom.created_at', 'DESC');
@@ -74,40 +79,53 @@ export class UnitService {
     };
   }
 
-  findOne(id: number) {
+  findOne(id: number, organizationId: string) {
     return this.uomRepository
       .createQueryBuilder('uom')
       .leftJoinAndSelect('uom.created_by_user', 'created_by_user')
       .leftJoinAndSelect('uom.updated_by_user', 'updated_by_user')
-      .where('uom.id = :id', { id })
+      .where('uom.organization_id = :organizationId', { organizationId })
+      .andWhere('uom.id = :id', { id })
       .andWhere('uom.deleted_at IS NULL')
-      .getOne();
+      .getOne()
+      .then((uom) => {
+        if (!uom) {
+          throw new NotFoundException('UOM not found in the selected organization.');
+        }
+
+        return uom;
+      });
   }
 
-  async update(id: number, dto: UpdateUnitDto) {
-    await this.ensureNameIsUnique(dto.name, id);
-    await this.uomRepository.update(id, dto);
-    return this.findOne(id);
+  async update(id: number, dto: UpdateUnitDto, organizationId: string) {
+    await this.ensureUnitExists(id, organizationId);
+    await this.ensureNameIsUnique(dto.name, organizationId, id);
+    await this.uomRepository.update({ id, organizationId }, dto);
+    return this.findOne(id, organizationId);
   }
 
-  remove(id: number) {
-    return this.uomRepository.softDelete(id);
+  async remove(id: number, organizationId: string) {
+    await this.ensureUnitExists(id, organizationId);
+    return this.uomRepository.softDelete({ id, organizationId });
   }
 
-  permanentRemove(id: number) {
-    return this.uomRepository.delete(id);
+  async permanentRemove(id: number, organizationId: string) {
+    await this.ensureUnitExists(id, organizationId, true);
+    return this.uomRepository.delete({ id, organizationId });
   }
 
-  restore(id: number) {
-    return this.uomRepository.restore(id);
+  async restore(id: number, organizationId: string) {
+    await this.ensureUnitExists(id, organizationId, true);
+    return this.uomRepository.restore({ id, organizationId });
   }
 
-  private async ensureNameIsUnique(name: string, ignoreId?: number) {
+  private async ensureNameIsUnique(name: string, organizationId: string, ignoreId?: number) {
     const normalizedName = name.trim().toLowerCase();
 
     const queryBuilder = this.uomRepository
       .createQueryBuilder('uom')
       .where('LOWER(TRIM(uom.name)) = :name', { name: normalizedName })
+      .andWhere('uom.organization_id = :organizationId', { organizationId })
       .andWhere('uom.deleted_at IS NULL');
 
     if (ignoreId !== undefined) {
@@ -119,5 +137,26 @@ export class UnitService {
     if (existing) {
       throw new BadRequestException('UOM already exists');
     }
+  }
+
+  private async ensureUnitExists(id: number, organizationId: string, includeDeleted = false) {
+    const queryBuilder = this.uomRepository
+      .createQueryBuilder('uom')
+      .where('uom.id = :id', { id })
+      .andWhere('uom.organization_id = :organizationId', { organizationId });
+
+    if (includeDeleted) {
+      queryBuilder.withDeleted();
+    } else {
+      queryBuilder.andWhere('uom.deleted_at IS NULL');
+    }
+
+    const uom = await queryBuilder.getOne();
+
+    if (!uom) {
+      throw new NotFoundException('UOM not found in the selected organization.');
+    }
+
+    return uom;
   }
 }

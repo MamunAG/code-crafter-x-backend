@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type AuthUser from 'src/auth/dto/auth-user';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
@@ -22,14 +22,23 @@ export class SizeController {
     private readonly sizeService: SizeService,
   ) { }
 
+  private requireOrganizationId(organizationId?: string) {
+    if (!organizationId?.trim()) {
+      throw new BadRequestException('An organization is required to manage size records. Please select an organization and try again.');
+    }
+
+    return organizationId.trim();
+  }
+
   @Get()
   @MenuAccess(SIZE_MENU_NAME, 'canView')
   @ApiOperation({ summary: 'Get all', description: 'Retrieve all items' })
   @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
-  async findAll(@Query() filters: FilterSizeDto) {
+  async findAll(@Query() filters: FilterSizeDto, @Headers('x-organization-id') organizationId?: string) {
     const { page, limit, ...sizeFilters } = filters;
     const pagination = { page, limit };
-    const sizes = await this.sizeService.findAll(pagination, sizeFilters);
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const sizes = await this.sizeService.findAll(pagination, sizeFilters, selectedOrganizationId);
     return new BaseResponseDto(sizes, 'Sizes retrieved successfully');
   }
 
@@ -37,8 +46,9 @@ export class SizeController {
   @MenuAccess(SIZE_MENU_NAME, 'canView')
   @ApiOperation({ summary: 'Get by id', description: 'Retrieve specific item' })
   @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
-  async findOne(@Param('id', new ParseIntPipe()) id: number) {
-    const size = await this.sizeService.findOne(id);
+  async findOne(@Param('id', new ParseIntPipe()) id: number, @Headers('x-organization-id') organizationId?: string) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const size = await this.sizeService.findOne(id, selectedOrganizationId);
     return new BaseResponseDto(size, 'Size retrieved successfully');
   }
 
@@ -48,9 +58,10 @@ export class SizeController {
   @ApiResponse({ status: 201, description: 'Item save successfully', type: BaseResponseDto })
   @ApiResponse({ status: 400, description: 'Item already exists' })
   @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
-  async create(@CurrentUser() user: AuthUser, @Body() dto: CreateSizeDto) {
+  async create(@CurrentUser() user: AuthUser, @Body() dto: CreateSizeDto, @Headers('x-organization-id') organizationId?: string) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
     dto.created_by_id = user.userId;
-    const result = await this.sizeService.create(dto);
+    const result = await this.sizeService.create(dto, selectedOrganizationId);
     return new BaseResponseDto(result, 'Size saved successfully');
   }
 
@@ -64,9 +75,11 @@ export class SizeController {
     @CurrentUser() user: AuthUser,
     @Param('id', new ParseIntPipe()) id: number,
     @Body() dto: UpdateSizeDto,
+    @Headers('x-organization-id') organizationId?: string,
   ) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
     dto.updated_by_id = user.userId;
-    const result = await this.sizeService.update(id, dto);
+    const result = await this.sizeService.update(id, dto, selectedOrganizationId);
     return new BaseResponseDto(result, 'Size updated successfully');
   }
 
@@ -74,24 +87,27 @@ export class SizeController {
   @MenuAccess(SIZE_MENU_NAME, 'canDelete')
   @ApiOperation({ summary: 'delete item' })
   @ApiResponse({ status: 200, description: 'Item delete successfully', type: BaseResponseDto })
-  async remove(@CurrentUser() user: AuthUser, @Param('id', new ParseIntPipe()) id: number) {
-    const result = await this.sizeService.remove(id, user.userId);
+  async remove(@CurrentUser() user: AuthUser, @Param('id', new ParseIntPipe()) id: number, @Headers('x-organization-id') organizationId?: string) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const result = await this.sizeService.remove(id, user.userId, selectedOrganizationId);
     return new BaseResponseDto(result, 'Size deleted successfully');
   }
 
   @Delete(':id/permanent')
   @MenuAccess(SIZE_MENU_NAME, 'canDelete')
   @ApiOperation({ summary: 'delete item permanently' })
-  async permanentRemove(@Param('id', new ParseIntPipe()) id: number) {
-    const result = await this.sizeService.permanentRemove(id);
+  async permanentRemove(@Param('id', new ParseIntPipe()) id: number, @Headers('x-organization-id') organizationId?: string) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const result = await this.sizeService.permanentRemove(id, selectedOrganizationId);
     return new BaseResponseDto(result, 'Size deleted permanently');
   }
 
   @Post(':id/restore')
   @MenuAccess(SIZE_MENU_NAME, 'canUpdate')
   @ApiOperation({ summary: 'restore item' })
-  async restore(@Param('id', new ParseIntPipe()) id: number) {
-    const result = await this.sizeService.restore(id);
+  async restore(@Param('id', new ParseIntPipe()) id: number, @Headers('x-organization-id') organizationId?: string) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const result = await this.sizeService.restore(id, selectedOrganizationId);
     return new BaseResponseDto(result, 'Size restored successfully');
   }
 }

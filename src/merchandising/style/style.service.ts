@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -52,29 +52,31 @@ export class StyleService {
     private styleToEmbellishmentMapRepository: Repository<StyleToEmbellishmentMap>,
   ) { }
 
-  async create(styleDto: CreateStyleDto) {
-    await this.ensureStyleNoIsUnique(styleDto.styleNo);
-    const buyer = await this.findBuyerOrFail(styleDto.buyerId);
-    const currency = await this.findCurrencyOrFail(styleDto.currencyId);
+  async create(styleDto: CreateStyleDto, organizationId: string) {
+    await this.ensureStyleNoIsUnique(styleDto.styleNo, organizationId);
+    const buyer = await this.findBuyerOrFail(styleDto.buyerId, organizationId);
+    const currency = await this.findCurrencyOrFail(styleDto.currencyId, organizationId);
     const image = styleDto.imageId !== undefined ? await this.findFileOrFail(styleDto.imageId) : null;
 
     const style = this.styleRepository.create({
       ...styleDto,
+      organizationId,
       buyer,
       currency,
       image: image ?? undefined,
     });
 
     const saved = await this.styleRepository.save(style);
-    await this.syncStyleToColorMaps(saved.id, styleDto.styleToColorMaps ?? []);
-    await this.syncStyleToSizeMaps(saved.id, styleDto.styleToSizeMaps ?? []);
-    await this.syncStyleToEmbellishmentMaps(saved.id, styleDto.styleToEmbellishmentMaps ?? []);
-    return this.findOne(saved.id);
+    await this.syncStyleToColorMaps(saved.id, styleDto.styleToColorMaps ?? [], organizationId);
+    await this.syncStyleToSizeMaps(saved.id, styleDto.styleToSizeMaps ?? [], organizationId);
+    await this.syncStyleToEmbellishmentMaps(saved.id, styleDto.styleToEmbellishmentMaps ?? [], organizationId);
+    return this.findOne(saved.id, organizationId);
   }
 
   async findAll(
     paginationDto: PaginationDto,
     filters?: Partial<FilterStyleDto>,
+    organizationId?: string,
   ): Promise<PaginatedResponseDto<Style>> {
     const { page = 1, limit = 1000000000000 } = paginationDto;
     const skip = (page - 1) * limit;
@@ -89,6 +91,7 @@ export class StyleService {
       .leftJoinAndSelect('styleToColorMap.color', 'styleToColorMapColor')
       .leftJoinAndSelect('style.created_by_user', 'created_by_user')
       .leftJoinAndSelect('style.updated_by_user', 'updated_by_user')
+      .where('style.organization_id = :organizationId', { organizationId })
       .skip(skip)
       .take(limit)
       .orderBy('style.created_at', 'DESC');
@@ -153,7 +156,7 @@ export class StyleService {
     };
   }
 
-  findOne(id: string) {
+  findOne(id: string, organizationId: string) {
     return this.styleRepository
       .createQueryBuilder('style')
       .leftJoinAndSelect('style.buyer', 'buyer')
@@ -167,17 +170,25 @@ export class StyleService {
       .leftJoinAndSelect('styleToEmbellishmentMap.embellishment', 'styleToEmbellishmentMapEmbellishment')
       .leftJoinAndSelect('style.created_by_user', 'created_by_user')
       .leftJoinAndSelect('style.updated_by_user', 'updated_by_user')
-      .where('style.id = :id', { id })
+      .where('style.organization_id = :organizationId', { organizationId })
+      .andWhere('style.id = :id', { id })
       .andWhere('style.deleted_at IS NULL')
-      .getOne();
+      .getOne()
+      .then((style) => {
+        if (!style) {
+          throw new NotFoundException('Style not found in the selected organization.');
+        }
+
+        return style;
+      });
   }
 
-  async update(id: string, dto: UpdateStyleDto) {
+  async update(id: string, dto: UpdateStyleDto, organizationId: string) {
     if (dto.styleNo) {
-      await this.ensureStyleNoIsUnique(dto.styleNo, id);
+      await this.ensureStyleNoIsUnique(dto.styleNo, organizationId, id);
     }
     const style = await this.styleRepository.findOne({
-      where: { id },
+      where: { id, organizationId },
       relations: ['buyer', 'currency', 'image'],
       withDeleted: false,
     });
@@ -187,11 +198,11 @@ export class StyleService {
     }
 
     if (dto.buyerId !== undefined) {
-      style.buyer = await this.findBuyerOrFail(dto.buyerId);
+      style.buyer = await this.findBuyerOrFail(dto.buyerId, organizationId);
     }
 
     if (dto.currencyId !== undefined) {
-      style.currency = await this.findCurrencyOrFail(dto.currencyId);
+      style.currency = await this.findCurrencyOrFail(dto.currencyId, organizationId);
     }
 
     if (dto.imageId !== undefined) {
@@ -201,30 +212,33 @@ export class StyleService {
     Object.assign(style, dto);
     const saved = await this.styleRepository.save(style);
     if (dto.styleToColorMaps !== undefined) {
-      await this.syncStyleToColorMaps(saved.id, dto.styleToColorMaps);
+      await this.syncStyleToColorMaps(saved.id, dto.styleToColorMaps, organizationId);
     }
     if (dto.styleToSizeMaps !== undefined) {
-      await this.syncStyleToSizeMaps(saved.id, dto.styleToSizeMaps);
+      await this.syncStyleToSizeMaps(saved.id, dto.styleToSizeMaps, organizationId);
     }
     if (dto.styleToEmbellishmentMaps !== undefined) {
-      await this.syncStyleToEmbellishmentMaps(saved.id, dto.styleToEmbellishmentMaps);
+      await this.syncStyleToEmbellishmentMaps(saved.id, dto.styleToEmbellishmentMaps, organizationId);
     }
-    return this.findOne(saved.id);
+    return this.findOne(saved.id, organizationId);
   }
 
-  remove(id: string) {
-    return this.styleRepository.softDelete(id);
+  async remove(id: string, organizationId: string) {
+    await this.ensureStyleExists(id, organizationId);
+    return this.styleRepository.softDelete({ id, organizationId });
   }
 
-  permanentRemove(id: string) {
-    return this.styleRepository.delete(id);
+  async permanentRemove(id: string, organizationId: string) {
+    await this.ensureStyleExists(id, organizationId, true);
+    return this.styleRepository.delete({ id, organizationId });
   }
 
-  restore(id: string) {
-    return this.styleRepository.restore(id);
+  async restore(id: string, organizationId: string) {
+    await this.ensureStyleExists(id, organizationId, true);
+    return this.styleRepository.restore({ id, organizationId });
   }
 
-  private async ensureStyleNoIsUnique(styleNo: string, ignoreId?: string) {
+  private async ensureStyleNoIsUnique(styleNo: string, organizationId: string, ignoreId?: string) {
     const normalizedStyleNo = styleNo.trim().toLowerCase();
 
     const queryBuilder = this.styleRepository
@@ -232,6 +246,7 @@ export class StyleService {
       .where('LOWER(TRIM(style.styleNo)) = :styleNo', {
         styleNo: normalizedStyleNo,
       })
+      .andWhere('style.organization_id = :organizationId', { organizationId })
       .andWhere('style.deleted_at IS NULL');
 
     if (ignoreId !== undefined) {
@@ -245,25 +260,25 @@ export class StyleService {
     }
   }
 
-  private async findBuyerOrFail(buyerId: string) {
+  private async findBuyerOrFail(buyerId: string, organizationId: string) {
     const buyer = await this.buyerRepository.findOne({
-      where: { id: buyerId },
+      where: { id: buyerId, organizationId },
     });
 
     if (!buyer) {
-      throw new BadRequestException('Buyer not found');
+      throw new BadRequestException('Buyer not found in the selected organization.');
     }
 
     return buyer;
   }
 
-  private async findCurrencyOrFail(currencyId: number) {
+  private async findCurrencyOrFail(currencyId: number, organizationId: string) {
     const currency = await this.currencyRepository.findOne({
-      where: { id: currencyId },
+      where: { id: currencyId, organizationId },
     });
 
     if (!currency) {
-      throw new BadRequestException('Currency not found');
+      throw new BadRequestException('Currency not found in the selected organization.');
     }
 
     return currency;
@@ -281,7 +296,7 @@ export class StyleService {
     return file;
   }
 
-  private async syncStyleToColorMaps(styleId: string, styleToColorMaps: CreateStyleDto['styleToColorMaps']) {
+  private async syncStyleToColorMaps(styleId: string, styleToColorMaps: CreateStyleDto['styleToColorMaps'], organizationId: string) {
     await this.styleToColorMapRepository.softDelete({
       styleId,
     });
@@ -292,7 +307,7 @@ export class StyleService {
 
     const records: StyleToColorMap[] = [];
     for (const item of styleToColorMaps) {
-      const color = await this.findColorOrFail(item.colorId);
+      const color = await this.findColorOrFail(item.colorId, organizationId);
       records.push(
         this.styleToColorMapRepository.create({
           styleId,
@@ -304,7 +319,7 @@ export class StyleService {
     await this.styleToColorMapRepository.save(records);
   }
 
-  private async syncStyleToSizeMaps(styleId: string, styleToSizeMaps: CreateStyleDto['styleToSizeMaps']) {
+  private async syncStyleToSizeMaps(styleId: string, styleToSizeMaps: CreateStyleDto['styleToSizeMaps'], organizationId: string) {
     await this.styleToSizeMapRepository.softDelete({
       styleId,
     });
@@ -315,7 +330,7 @@ export class StyleService {
 
     const records: StyleToSizeMap[] = [];
     for (const item of styleToSizeMaps) {
-      const size = await this.findSizeOrFail(item.sizeId);
+      const size = await this.findSizeOrFail(item.sizeId, organizationId);
       records.push(
         this.styleToSizeMapRepository.create({
           styleId,
@@ -327,7 +342,7 @@ export class StyleService {
     await this.styleToSizeMapRepository.save(records);
   }
 
-  private async syncStyleToEmbellishmentMaps(styleId: string, styleToEmbellishmentMaps: CreateStyleDto['styleToEmbellishmentMaps']) {
+  private async syncStyleToEmbellishmentMaps(styleId: string, styleToEmbellishmentMaps: CreateStyleDto['styleToEmbellishmentMaps'], organizationId: string) {
     await this.styleToEmbellishmentMapRepository.softDelete({
       styleId,
     });
@@ -338,7 +353,7 @@ export class StyleService {
 
     const records: StyleToEmbellishmentMap[] = [];
     for (const item of styleToEmbellishmentMaps) {
-      const embellishment = await this.findEmbellishmentOrFail(item.embellishmentId);
+      const embellishment = await this.findEmbellishmentOrFail(item.embellishmentId, organizationId);
       records.push(
         this.styleToEmbellishmentMapRepository.create({
           styleId,
@@ -350,40 +365,61 @@ export class StyleService {
     await this.styleToEmbellishmentMapRepository.save(records);
   }
 
-  private async findColorOrFail(colorId: number) {
+  private async findColorOrFail(colorId: number, organizationId: string) {
     const color = await this.colorRepository.findOne({
-      where: { id: colorId },
+      where: { id: colorId, organizationId },
     });
 
     if (!color) {
-      throw new BadRequestException('Color not found');
+      throw new BadRequestException('Color not found in the selected organization.');
     }
 
     return color;
   }
 
-  private async findSizeOrFail(sizeId: number) {
+  private async findSizeOrFail(sizeId: number, organizationId: string) {
     const size = await this.sizeRepository.findOne({
-      where: { id: sizeId },
+      where: { id: sizeId, organizationId },
     });
 
     if (!size) {
-      throw new BadRequestException('Size not found');
+      throw new BadRequestException('Size not found in the selected organization.');
     }
 
     return size;
   }
 
-  private async findEmbellishmentOrFail(embellishmentId: number) {
+  private async findEmbellishmentOrFail(embellishmentId: number, organizationId: string) {
     const embellishment = await this.embellishmentRepository.findOne({
-      where: { id: embellishmentId },
+      where: { id: embellishmentId, organizationId },
     });
 
     if (!embellishment) {
-      throw new BadRequestException('Embellishment not found');
+      throw new BadRequestException('Embellishment not found in the selected organization.');
     }
 
     return embellishment;
+  }
+
+  private async ensureStyleExists(id: string, organizationId: string, includeDeleted = false) {
+    const queryBuilder = this.styleRepository
+      .createQueryBuilder('style')
+      .where('style.id = :id', { id })
+      .andWhere('style.organization_id = :organizationId', { organizationId });
+
+    if (includeDeleted) {
+      queryBuilder.withDeleted();
+    } else {
+      queryBuilder.andWhere('style.deleted_at IS NULL');
+    }
+
+    const style = await queryBuilder.getOne();
+
+    if (!style) {
+      throw new NotFoundException('Style not found in the selected organization.');
+    }
+
+    return style;
   }
 }
 

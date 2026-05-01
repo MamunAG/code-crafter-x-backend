@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Currency } from 'src/app-configuration/currency/entity/currency.entity';
 import { Files } from 'src/files/entities/file.entity';
 import { Buyer } from 'src/merchandising/buyer/entity/buyer.entity';
+import { Organization } from 'src/app-configuration/organization/entity/organization.entity';
 import { BaseEntity } from 'src/common/entities/base.entity';
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 import { StyleToEmbellishmentMap } from './style-to-embellishment-map.entity';
@@ -21,6 +22,10 @@ export class Style extends BaseEntity {
   @ApiProperty({ description: 'Buyer ID', example: 'uuid' })
   @Column({ name: 'buyer_id', type: 'uuid', nullable: false })
   buyerId: string;
+
+  @ApiProperty({ description: 'Organization ID', example: 'd290f1ee-6c54-4b01-90e6-d701748f0851' })
+  @Column({ name: 'organization_id', type: 'uuid', nullable: true })
+  organizationId?: string | null;
 
   @ApiProperty({ description: 'Style number', example: 'ST-001' })
   @Column({ name: 'style_no', type: 'varchar', length: 255, nullable: false })
@@ -90,6 +95,11 @@ export class Style extends BaseEntity {
   @ManyToOne(() => Buyer, { nullable: false })
   @JoinColumn({ name: 'buyer_id' })
   buyer: Buyer;
+
+  @ApiProperty({ description: 'Organization object', type: () => Organization, required: false })
+  @ManyToOne(() => Organization, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'organization_id' })
+  organization?: Organization | null;
 
   @ApiProperty({ description: 'Currency object', type: () => Currency })
   @ManyToOne(() => Currency, { nullable: false })

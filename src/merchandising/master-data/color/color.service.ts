@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -16,19 +16,21 @@ export class ColorService {
     private colorRepository: Repository<Color>,
   ) { }
 
-  async create(colorDto: CreateColorDto) {
-    await this.ensureColorNameIsUnique(colorDto.colorName);
+  async create(colorDto: CreateColorDto, organizationId: string) {
+    await this.ensureColorNameIsUnique(colorDto.colorName, organizationId);
     const color = this.colorRepository.create({
       ...colorDto,
+      organizationId,
       colorHexCode: this.normalizeHexColorCode(colorDto.colorHexCode),
     });
     const saved = await this.colorRepository.save(color);
-    return this.normalizeUpdatedAt(await this.findOne(saved.id));
+    return this.normalizeUpdatedAt(await this.findOne(saved.id, organizationId));
   }
 
   async findAll(
     paginationDto: PaginationDto,
     filters?: Partial<FilterColorDto>,
+    organizationId?: string,
   ): Promise<PaginatedResponseDto<Color>> {
     const { page = 1, limit = 1000000000000 } = paginationDto;
     const deletedOnly = filters?.deletedOnly ?? false;
@@ -39,6 +41,7 @@ export class ColorService {
       .leftJoinAndSelect('color.created_by_user', 'created_by_user')
       .leftJoinAndSelect('color.updated_by_user', 'updated_by_user')
       .leftJoinAndSelect('color.deleted_by_user', 'deleted_by_user')
+      .where('color.organization_id = :organizationId', { organizationId })
       .skip(skip)
       .take(limit)
       .orderBy(deletedOnly ? 'color.deleted_at' : 'color.created_at', 'DESC');
@@ -87,28 +90,36 @@ export class ColorService {
     };
   }
 
-  findOne(id: number) {
+  findOne(id: number, organizationId: string) {
     return this.colorRepository
       .createQueryBuilder('color')
       .leftJoinAndSelect('color.created_by_user', 'created_by_user')
       .leftJoinAndSelect('color.updated_by_user', 'updated_by_user')
       .leftJoinAndSelect('color.deleted_by_user', 'deleted_by_user')
-      .where('color.id = :id', { id })
+      .where('color.organization_id = :organizationId', { organizationId })
+      .andWhere('color.id = :id', { id })
       .andWhere('color.deleted_at IS NULL')
       .getOne()
-      .then((color) => this.normalizeUpdatedAt(color));
+      .then((color) => {
+        if (!color) {
+          throw new NotFoundException('Color not found in the selected organization.');
+        }
+
+        return this.normalizeUpdatedAt(color);
+      });
   }
 
-  async update(id: number, dto: UpdateColorDto) {
-    await this.ensureColorNameIsUnique(dto.colorName, id);
+  async update(id: number, dto: UpdateColorDto, organizationId: string) {
+    await this.ensureColorExists(id, organizationId);
+    await this.ensureColorNameIsUnique(dto.colorName, organizationId, id);
     await this.colorRepository.update(id, {
       ...dto,
       colorHexCode: this.normalizeHexColorCode(dto.colorHexCode),
     });
-    return this.normalizeUpdatedAt(await this.findOne(id));
+    return this.normalizeUpdatedAt(await this.findOne(id, organizationId));
   }
 
-  private async ensureColorNameIsUnique(colorName: string, ignoreId?: number) {
+  private async ensureColorNameIsUnique(colorName: string, organizationId: string, ignoreId?: number) {
     const normalizedColorName = colorName.trim().toLowerCase();
 
     const queryBuilder = this.colorRepository
@@ -116,6 +127,7 @@ export class ColorService {
       .where('LOWER(TRIM(color.colorName)) = :colorName', {
         colorName: normalizedColorName,
       })
+      .andWhere('color.organization_id = :organizationId', { organizationId })
       .andWhere('color.deleted_at IS NULL');
 
     if (ignoreId !== undefined) {
@@ -129,9 +141,10 @@ export class ColorService {
     }
   }
 
-  async remove(id: number, deletedById: string) {
-    await this.colorRepository.update(id, { deleted_by_id: deletedById });
-    return this.colorRepository.softDelete(id);
+  async remove(id: number, deletedById: string, organizationId: string) {
+    await this.ensureColorExists(id, organizationId);
+    await this.colorRepository.update({ id, organizationId }, { deleted_by_id: deletedById });
+    return this.colorRepository.softDelete({ id, organizationId });
   }
 
   private normalizeHexColorCode(value?: string | null) {
@@ -144,12 +157,35 @@ export class ColorService {
     return trimmed.startsWith('#') ? trimmed.toUpperCase() : `#${trimmed.toUpperCase()}`;
   }
 
-  permanentRemove(id: number) {
-    return this.colorRepository.delete(id);
+  async permanentRemove(id: number, organizationId: string) {
+    await this.ensureColorExists(id, organizationId, true);
+    return this.colorRepository.delete({ id, organizationId });
   }
 
-  restore(id: number) {
-    return this.colorRepository.restore(id);
+  async restore(id: number, organizationId: string) {
+    await this.ensureColorExists(id, organizationId, true);
+    return this.colorRepository.restore({ id, organizationId });
+  }
+
+  private async ensureColorExists(id: number, organizationId: string, includeDeleted = false) {
+    const queryBuilder = this.colorRepository
+      .createQueryBuilder('color')
+      .where('color.id = :id', { id })
+      .andWhere('color.organization_id = :organizationId', { organizationId });
+
+    if (includeDeleted) {
+      queryBuilder.withDeleted();
+    } else {
+      queryBuilder.andWhere('color.deleted_at IS NULL');
+    }
+
+    const color = await queryBuilder.getOne();
+
+    if (!color) {
+      throw new NotFoundException('Color not found in the selected organization.');
+    }
+
+    return color;
   }
 
   private normalizeUpdatedAt<T extends { updated_at?: Date | null; updated_by_id?: string | null; updated_by_user?: unknown } | null>(

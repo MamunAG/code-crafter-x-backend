@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -16,9 +16,12 @@ export class CurrencyService {
     private currencyRepository: Repository<Currency>,
   ) { }
 
-  async create(currencyDto: CreateCurrencyDto) {
-    await this.ensureCurrencyCodeIsUnique(currencyDto.currencyCode);
-    const currency = this.currencyRepository.create(currencyDto);
+  async create(currencyDto: CreateCurrencyDto, organizationId: string) {
+    await this.ensureCurrencyCodeIsUnique(currencyDto.currencyCode, organizationId);
+    const currency = this.currencyRepository.create({
+      ...currencyDto,
+      organizationId,
+    });
     const saved = await this.currencyRepository.save(currency);
     await this.currencyRepository
       .createQueryBuilder()
@@ -28,15 +31,16 @@ export class CurrencyService {
         updated_at: () => 'NULL',
       } as unknown as Partial<Currency>)
       .where('id = :id', { id: saved.id })
+      .andWhere('organization_id = :organizationId', { organizationId })
       .execute();
-    return this.normalizeUpdatedAt(await this.findOne(saved.id));
+    return this.normalizeUpdatedAt(await this.findOne(saved.id, organizationId));
   }
 
   buildUploadTemplate() {
     return 'currencyName,currencyCode,rate,symbol,isDefault,isActive';
   }
 
-  async importFromTemplate(file: Express.Multer.File | undefined, userId: string) {
+  async importFromTemplate(file: Express.Multer.File | undefined, userId: string, organizationId: string) {
     if (!file?.buffer?.length) {
       throw new BadRequestException('Please upload a currency template file.');
     }
@@ -55,7 +59,8 @@ export class CurrencyService {
       .createQueryBuilder('currency')
       .withDeleted()
       .select(['currency.currencyCode'])
-      .where('LOWER(TRIM(currency.currencyCode)) IN (:...currencyCodes)', {
+      .where('currency.organization_id = :organizationId', { organizationId })
+      .andWhere('LOWER(TRIM(currency.currencyCode)) IN (:...currencyCodes)', {
         currencyCodes: uniqueCurrencyCodes.map((currencyCode) => currencyCode.toLowerCase()),
       })
       .getMany();
@@ -71,6 +76,7 @@ export class CurrencyService {
           symbol: row.symbol.trim(),
           isDefault: row.isDefault,
           isActive: row.isActive,
+          organizationId,
           created_by_id: userId,
           updated_by_id: null as unknown as string,
           updated_at: null as unknown as Date,
@@ -104,6 +110,7 @@ export class CurrencyService {
   async findAll(
     paginationDto: PaginationDto,
     filters?: Partial<FilterCurrencyDto>,
+    organizationId?: string,
   ): Promise<PaginatedResponseDto<Currency>> {
     const { page = 1, limit = 1000000000000 } = paginationDto;
     const deletedOnly = filters?.deletedOnly ?? false;
@@ -114,6 +121,7 @@ export class CurrencyService {
       .leftJoinAndSelect('currency.created_by_user', 'created_by_user')
       .leftJoinAndSelect('currency.updated_by_user', 'updated_by_user')
       .leftJoinAndSelect('currency.deleted_by_user', 'deleted_by_user')
+      .where('currency.organization_id = :organizationId', { organizationId })
       .skip(skip)
       .take(limit)
       .orderBy(deletedOnly ? 'currency.deleted_at' : 'currency.created_at', 'DESC');
@@ -176,34 +184,46 @@ export class CurrencyService {
     };
   }
 
-  findOne(id: number) {
+  findOne(id: number, organizationId: string) {
     return this.currencyRepository
       .createQueryBuilder('currency')
       .leftJoinAndSelect('currency.created_by_user', 'created_by_user')
       .leftJoinAndSelect('currency.updated_by_user', 'updated_by_user')
       .leftJoinAndSelect('currency.deleted_by_user', 'deleted_by_user')
-      .where('currency.id = :id', { id })
+      .where('currency.organization_id = :organizationId', { organizationId })
+      .andWhere('currency.id = :id', { id })
       .andWhere('currency.deleted_at IS NULL')
-      .getOne();
+      .getOne()
+      .then((currency) => {
+        if (!currency) {
+          throw new NotFoundException('Currency not found in the selected organization.');
+        }
+
+        return currency;
+      });
   }
 
-  async update(id: number, dto: UpdateCurrencyDto) {
-    await this.ensureCurrencyCodeIsUnique(dto.currencyCode, id);
-    await this.currencyRepository.update(id, dto);
-    return this.normalizeUpdatedAt(await this.findOne(id));
+  async update(id: number, dto: UpdateCurrencyDto, organizationId: string) {
+    await this.ensureCurrencyExists(id, organizationId);
+    await this.ensureCurrencyCodeIsUnique(dto.currencyCode, organizationId, id);
+    await this.currencyRepository.update({ id, organizationId }, dto);
+    return this.normalizeUpdatedAt(await this.findOne(id, organizationId));
   }
 
-  async remove(id: number, deletedById: string) {
-    await this.currencyRepository.update(id, { deleted_by_id: deletedById });
-    return this.currencyRepository.softDelete(id);
+  async remove(id: number, deletedById: string, organizationId: string) {
+    await this.ensureCurrencyExists(id, organizationId);
+    await this.currencyRepository.update({ id, organizationId }, { deleted_by_id: deletedById });
+    return this.currencyRepository.softDelete({ id, organizationId });
   }
 
-  permanentRemove(id: number) {
-    return this.currencyRepository.delete(id);
+  async permanentRemove(id: number, organizationId: string) {
+    await this.ensureCurrencyExists(id, organizationId, true);
+    return this.currencyRepository.delete({ id, organizationId });
   }
 
-  restore(id: number) {
-    return this.currencyRepository.restore(id);
+  async restore(id: number, organizationId: string) {
+    await this.ensureCurrencyExists(id, organizationId, true);
+    return this.currencyRepository.restore({ id, organizationId });
   }
 
   private normalizeUpdatedAt<T extends { updated_at?: Date | null; updated_by_id?: string | null; updated_by_user?: unknown } | null>(
@@ -226,7 +246,7 @@ export class CurrencyService {
     return values.map((value) => this.normalizeUpdatedAt(value));
   }
 
-  private async ensureCurrencyCodeIsUnique(currencyCode: string, ignoreId?: number) {
+  private async ensureCurrencyCodeIsUnique(currencyCode: string, organizationId: string, ignoreId?: number) {
     const normalizedCurrencyCode = currencyCode.trim().toLowerCase();
 
     const queryBuilder = this.currencyRepository
@@ -234,6 +254,7 @@ export class CurrencyService {
       .where('LOWER(TRIM(currency.currencyCode)) = :currencyCode', {
         currencyCode: normalizedCurrencyCode,
       })
+      .andWhere('currency.organization_id = :organizationId', { organizationId })
       .andWhere('currency.deleted_at IS NULL');
 
     if (ignoreId !== undefined) {
@@ -245,6 +266,27 @@ export class CurrencyService {
     if (existingCurrency) {
       throw new BadRequestException('Currency already exists');
     }
+  }
+
+  private async ensureCurrencyExists(id: number, organizationId: string, includeDeleted = false) {
+    const queryBuilder = this.currencyRepository
+      .createQueryBuilder('currency')
+      .where('currency.id = :id', { id })
+      .andWhere('currency.organization_id = :organizationId', { organizationId });
+
+    if (includeDeleted) {
+      queryBuilder.withDeleted();
+    } else {
+      queryBuilder.andWhere('currency.deleted_at IS NULL');
+    }
+
+    const currency = await queryBuilder.getOne();
+
+    if (!currency) {
+      throw new NotFoundException('Currency not found in the selected organization.');
+    }
+
+    return currency;
   }
 
   private parseCurrencyTemplate(content: string) {
