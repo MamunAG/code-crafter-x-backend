@@ -1,5 +1,5 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 import { Buyer } from '../entity/buyer.entity';
 
 export class CreateBuyerDto extends PartialType(Buyer) {
@@ -32,10 +32,9 @@ export class CreateBuyerDto extends PartialType(Buyer) {
   @IsNotEmpty()
   address: string;
 
-  @ApiProperty({ description: 'Active status', example: 'Y' })
-  @IsOptional()
-  @IsString()
-  isActive: string;
+  @ApiProperty({ description: 'Active status', example: true })
+  @IsBoolean()
+  isActive: boolean;
 
   @ApiProperty({ description: 'Buyer remarks', example: 'Preferred export buyer.' })
   @IsOptional()

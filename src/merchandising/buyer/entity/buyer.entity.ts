@@ -43,8 +43,8 @@ export class Buyer extends BaseEntity {
   remarks: string;
 
   @ApiProperty({ description: 'Active status', example: true })
-  @Column({ name: 'is_active', type: 'varchar', length: 10, default: 'Y', nullable: false })
-  isActive: string;
+  @Column({ name: 'is_active', type: 'boolean', default: true, nullable: false })
+  isActive: boolean;
 
   @ApiProperty({ description: 'Country object', type: () => Country })
   @ManyToOne(() => Country, { nullable: false })

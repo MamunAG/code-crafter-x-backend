@@ -1,5 +1,6 @@
-import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { BadRequestException, Body, Controller, Delete, Get, Header, Headers, Param, ParseIntPipe, Patch, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type AuthUser from 'src/auth/dto/auth-user';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { Roles } from 'src/common/decorators/roles.decorator';
@@ -9,6 +10,9 @@ import { UnitService } from './unit.service';
 import { CreateUnitDto } from './dto/create-unit.dto';
 import { FilterUnitDto } from './dto/filter-unit.dto';
 import { UpdateUnitDto } from './dto/update-unit.dto';
+import { MenuAccess } from '../../common/decorators/menu-access.decorator';
+
+const MENU_NAME = 'Uom Setup';
 
 @ApiTags('Uom')
 @ApiBearerAuth()
@@ -55,8 +59,35 @@ export class UnitController {
   async create(@CurrentUser() user: AuthUser, @Body() dto: CreateUnitDto, @Headers('x-organization-id') organizationId?: string) {
     const selectedOrganizationId = this.requireOrganizationId(organizationId);
     dto.created_by_id = user.userId;
+    dto.updated_by_id = null as unknown as string;
+    dto.updated_at = null as unknown as Date;
     const result = await this.uomService.create(dto, selectedOrganizationId);
     return new BaseResponseDto(result, 'UOM saved successfully');
+  }
+
+  @Get('template/upload')
+  @MenuAccess(MENU_NAME, 'canCreate')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="uom-upload-template.csv"')
+  @ApiOperation({ summary: 'Download UOM upload template' })
+  downloadUploadTemplate(@Headers('x-organization-id') organizationId?: string) {
+    this.requireOrganizationId(organizationId);
+    return this.uomService.buildUploadTemplate();
+  }
+
+  @Post('upload')
+  @MenuAccess(MENU_NAME, 'canCreate')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Upload UOM template' })
+  async uploadTemplate(
+    @CurrentUser() user: AuthUser,
+    @UploadedFile() file: Express.Multer.File,
+    @Headers('x-organization-id') organizationId?: string,
+  ) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const result = await this.uomService.importFromTemplate(file, user.userId, selectedOrganizationId);
+    return new BaseResponseDto(result, 'UOM upload completed');
   }
 
   @Patch(':id')
@@ -72,6 +103,7 @@ export class UnitController {
   ) {
     const selectedOrganizationId = this.requireOrganizationId(organizationId);
     dto.updated_by_id = user.userId;
+    dto.updated_at = new Date();
     const result = await this.uomService.update(id, dto, selectedOrganizationId);
     return new BaseResponseDto(result, 'UOM updated successfully');
   }
