@@ -1,4 +1,4 @@
-import { ApiProperty, PartialType } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { IsBoolean, IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 import { Buyer } from '../entity/buyer.entity';
 
@@ -13,31 +13,32 @@ export class CreateBuyerDto extends PartialType(Buyer) {
   @IsNotEmpty()
   displayName: string;
 
-  @ApiProperty({ description: 'Buyer contact', example: '+8801712345678' })
+  @ApiPropertyOptional({ description: 'Buyer contact', example: '+8801712345678' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  contact: string;
+  contact?: string | null;
 
-  @ApiProperty({ description: 'Buyer email', example: 'buyer@example.com' })
+  @ApiPropertyOptional({ description: 'Buyer email', example: 'buyer@example.com' })
+  @IsOptional()
   @IsEmail()
-  @IsNotEmpty()
-  email: string;
+  email?: string | null;
 
-  @ApiProperty({ description: 'Country ID', example: 1 })
+  @ApiPropertyOptional({ description: 'Country ID', example: 1 })
+  @IsOptional()
   @IsNumber()
-  countryId: number;
+  countryId?: number | null;
 
-  @ApiProperty({ description: 'Buyer address', example: 'Dhaka, Bangladesh' })
+  @ApiPropertyOptional({ description: 'Buyer address', example: 'Dhaka, Bangladesh' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  address: string;
+  address?: string | null;
 
   @ApiProperty({ description: 'Active status', example: true })
   @IsBoolean()
   isActive: boolean;
 
-  @ApiProperty({ description: 'Buyer remarks', example: 'Preferred export buyer.' })
+  @ApiPropertyOptional({ description: 'Buyer remarks', example: 'Preferred export buyer.' })
   @IsOptional()
   @IsString()
-  remarks: string;
+  remarks?: string | null;
 }

@@ -18,38 +18,38 @@ export class Buyer extends BaseEntity {
   @Column({ name: 'display_name', nullable: false })
   displayName: string;
 
-  @ApiProperty({ description: 'Buyer contact number', example: '+8801712345678' })
-  @Column({ name: 'contact', nullable: false })
-  contact: string;
+  @ApiProperty({ description: 'Buyer contact number', example: '+8801712345678', required: false, nullable: true })
+  @Column({ name: 'contact', nullable: true })
+  contact?: string | null;
 
-  @ApiProperty({ description: 'Buyer email', example: 'buyer@example.com' })
-  @Column({ name: 'email', nullable: false })
-  email: string;
+  @ApiProperty({ description: 'Buyer email', example: 'buyer@example.com', required: false, nullable: true })
+  @Column({ name: 'email', nullable: true })
+  email?: string | null;
 
-  @ApiProperty({ description: 'Country ID', example: 1 })
-  @Column({ name: 'country_id', nullable: false })
-  countryId: number;
+  @ApiProperty({ description: 'Country ID', example: 1, required: false, nullable: true })
+  @Column({ name: 'country_id', nullable: true })
+  countryId?: number | null;
 
   @ApiProperty({ description: 'Organization ID', example: 'd290f1ee-6c54-4b01-90e6-d701748f0851' })
   @Column({ name: 'organization_id', type: 'uuid', nullable: true })
   organizationId?: string | null;
 
-  @ApiProperty({ description: 'Buyer address', example: 'Dhaka, Bangladesh' })
-  @Column({ name: 'address', nullable: false })
-  address: string;
+  @ApiProperty({ description: 'Buyer address', example: 'Dhaka, Bangladesh', required: false, nullable: true })
+  @Column({ name: 'address', nullable: true })
+  address?: string | null;
 
   @ApiProperty({ description: 'Buyer remarks', example: 'Preferred export buyer.' })
   @Column({ name: 'remarks', type: 'text', nullable: true })
-  remarks: string;
+  remarks?: string | null;
 
   @ApiProperty({ description: 'Active status', example: true })
   @Column({ name: 'is_active', type: 'boolean', default: true, nullable: false })
   isActive: boolean;
 
-  @ApiProperty({ description: 'Country object', type: () => Country })
-  @ManyToOne(() => Country, { nullable: false })
+  @ApiProperty({ description: 'Country object', type: () => Country, required: false, nullable: true })
+  @ManyToOne(() => Country, { nullable: true })
   @JoinColumn({ name: 'country_id' })
-  country: Country;
+  country?: Country | null;
 
   @ApiProperty({ description: 'Organization', type: () => Organization, required: false })
   @ManyToOne(() => Organization, { nullable: true, onDelete: 'CASCADE' })

@@ -25,11 +25,12 @@ export class BuyerService {
   ) { }
 
   async create(buyerDto: CreateBuyerDto, organizationId: string) {
-    await this.ensureEmailIsUnique(buyerDto.email, organizationId);
-    const country = await this.findCountryOrFail(buyerDto.countryId, organizationId);
+    const normalizedBuyer = this.normalizeBuyerPayload(buyerDto);
+    await this.ensureEmailIsUnique(normalizedBuyer.email, organizationId);
+    const country = normalizedBuyer.countryId ? await this.findCountryOrFail(normalizedBuyer.countryId, organizationId) : null;
 
     const buyer = this.buyerRepository.create({
-      ...buyerDto,
+      ...normalizedBuyer,
       organizationId,
       country,
     });
@@ -67,56 +68,78 @@ export class BuyerService {
       };
     }
 
-    const normalizedRows = rows.map((row) => ({
-      ...row,
-      email: row.email.trim().toLowerCase(),
-    }));
-
-    const uniqueCountryIds = [...new Set(normalizedRows.map((row) => row.countryId))];
-    const validCountries = await this.countryRepository
-      .createQueryBuilder('country')
-      .select(['country.id'])
-      .where('country.organization_id = :organizationId', { organizationId })
-      .andWhere('country.id IN (:...countryIds)', { countryIds: uniqueCountryIds })
-      .getMany();
+    const normalizedRows = rows.map((row) => this.normalizeBuyerPayload(row));
+    const uniqueCountryIds = [
+      ...new Set(
+        normalizedRows
+          .map((row) => row.countryId)
+          .filter((countryId): countryId is number => typeof countryId === 'number' && Number.isInteger(countryId) && countryId > 0),
+      ),
+    ];
+    const validCountries = uniqueCountryIds.length
+      ? await this.countryRepository
+        .createQueryBuilder('country')
+        .select(['country.id'])
+        .where('country.organization_id = :organizationId', { organizationId })
+        .andWhere('country.id IN (:...countryIds)', { countryIds: uniqueCountryIds })
+        .getMany()
+      : [];
 
     const validCountryIdSet = new Set(validCountries.map((country) => country.id));
-    const filteredRows = normalizedRows.filter((row) => validCountryIdSet.has(row.countryId));
-    const uniqueEmails = [...new Set(filteredRows.map((row) => row.email))];
-    const existingBuyers = await this.buyerRepository
-      .createQueryBuilder('buyer')
-      .withDeleted()
-      .select(['buyer.email'])
-      .where('buyer.organization_id = :organizationId', { organizationId })
-      .andWhere('LOWER(TRIM(buyer.email)) IN (:...emails)', {
-        emails: uniqueEmails,
-      })
-      .getMany();
+    const filteredRows = normalizedRows.filter((row) => !row.countryId || validCountryIdSet.has(row.countryId));
+    const uniqueEmails = [
+      ...new Set(
+        filteredRows
+          .map((row) => row.email?.trim().toLowerCase())
+          .filter((email): email is string => Boolean(email)),
+      ),
+    ];
+    const existingBuyers = uniqueEmails.length
+      ? await this.buyerRepository
+        .createQueryBuilder('buyer')
+        .withDeleted()
+        .select(['buyer.email'])
+        .where('buyer.organization_id = :organizationId', { organizationId })
+        .andWhere('LOWER(TRIM(buyer.email)) IN (:...emails)', {
+          emails: uniqueEmails,
+        })
+        .getMany()
+      : [];
 
-    const existingEmailSet = new Set(existingBuyers.map((buyer) => buyer.email.trim().toLowerCase()));
+    const existingEmailSet = new Set(
+      existingBuyers
+        .map((buyer) => buyer.email?.trim().toLowerCase())
+        .filter((email): email is string => Boolean(email)),
+    );
     const seenEmailSet = new Set<string>();
     const buyersToCreate = filteredRows
       .filter((row) => {
-        if (existingEmailSet.has(row.email)) {
+        const email = row.email?.trim().toLowerCase();
+
+        if (!email) {
+          return true;
+        }
+
+        if (existingEmailSet.has(email)) {
           return false;
         }
 
-        if (seenEmailSet.has(row.email)) {
+        if (seenEmailSet.has(email)) {
           return false;
         }
 
-        seenEmailSet.add(row.email);
+        seenEmailSet.add(email);
         return true;
       })
       .map((row) =>
         this.buyerRepository.create({
-          name: row.name.trim(),
-          displayName: row.displayName.trim(),
-          contact: row.contact.trim(),
-          email: row.email.trim(),
+          name: row.name,
+          displayName: row.displayName,
+          contact: row.contact,
+          email: row.email,
           countryId: row.countryId,
-          address: row.address.trim(),
-          remarks: row.remarks?.trim() || undefined,
+          address: row.address,
+          remarks: row.remarks,
           isActive: row.isActive,
           organizationId,
           created_by_id: userId,
@@ -266,16 +289,18 @@ export class BuyerService {
   }
 
   async update(id: string, dto: UpdateBuyerDto, organizationId: string) {
-    if (dto.email) {
-      await this.ensureEmailIsUnique(dto.email, organizationId, id);
+    const normalizedBuyer = this.normalizeBuyerPayload(dto);
+
+    if (normalizedBuyer.email) {
+      await this.ensureEmailIsUnique(normalizedBuyer.email, organizationId, id);
     }
 
-    if (dto.countryId !== undefined) {
-      await this.findCountryOrFail(dto.countryId, organizationId);
+    if (normalizedBuyer.countryId) {
+      await this.findCountryOrFail(normalizedBuyer.countryId, organizationId);
     }
 
     await this.ensureBuyerExists(id, organizationId);
-    await this.buyerRepository.update({ id, organizationId }, dto);
+    await this.buyerRepository.update({ id, organizationId }, normalizedBuyer);
     return this.normalizeUpdatedAt(await this.findOne(id, organizationId));
   }
 
@@ -295,15 +320,17 @@ export class BuyerService {
     return this.buyerRepository.restore({ id, organizationId });
   }
 
-  private async ensureEmailIsUnique(email: string, organizationId: string, ignoreId?: string) {
-    if (!email) {
+  private async ensureEmailIsUnique(email: string | null | undefined, organizationId: string, ignoreId?: string) {
+    const normalizedEmail = email?.trim().toLowerCase();
+
+    if (!normalizedEmail) {
       return;
     }
 
     const queryBuilder = this.buyerRepository
       .createQueryBuilder('buyer')
       .where('LOWER(TRIM(buyer.email)) = :email', {
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
       })
       .andWhere('buyer.organization_id = :organizationId', { organizationId })
       .andWhere('buyer.deleted_at IS NULL');
@@ -329,6 +356,58 @@ export class BuyerService {
     }
 
     return country;
+  }
+
+  private normalizeBuyerPayload(dto: Partial<CreateBuyerDto>): Partial<Buyer> {
+    const payload: Partial<Buyer> = {};
+
+    if (dto.name !== undefined) {
+      payload.name = dto.name.trim();
+    }
+
+    if (dto.displayName !== undefined) {
+      payload.displayName = dto.displayName.trim();
+    }
+
+    if ('contact' in dto) {
+      payload.contact = this.nullableString(dto.contact);
+    }
+
+    if ('email' in dto) {
+      payload.email = this.nullableString(dto.email)?.toLowerCase() ?? null;
+    }
+
+    if ('countryId' in dto) {
+      payload.countryId = this.nullableNumber(dto.countryId);
+    }
+
+    if ('address' in dto) {
+      payload.address = this.nullableString(dto.address);
+    }
+
+    if ('remarks' in dto) {
+      payload.remarks = this.nullableString(dto.remarks);
+    }
+
+    if (dto.isActive !== undefined) {
+      payload.isActive = dto.isActive;
+    }
+
+    return payload;
+  }
+
+  private nullableString(value: string | null | undefined) {
+    const trimmedValue = value?.trim() ?? '';
+    return trimmedValue || null;
+  }
+
+  private nullableNumber(value: number | string | null | undefined) {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    const numericValue = Number(value);
+    return Number.isInteger(numericValue) && numericValue > 0 ? numericValue : null;
   }
 
   private parseBuyerTemplate(content: string) {
@@ -359,26 +438,24 @@ export class BuyerService {
     if (
       nameIndex === -1 ||
       displayNameIndex === -1 ||
-      contactIndex === -1 ||
-      emailIndex === -1 ||
-      countryIdIndex === -1 ||
-      addressIndex === -1
+      isActiveIndex === -1
     ) {
-      throw new BadRequestException('The uploaded template must include name, displayName, contact, email, countryId, and address columns.');
+      throw new BadRequestException('The uploaded template must include name, displayName, and isActive columns.');
     }
 
     return lines.slice(1).flatMap((line) => {
       const columns = this.parseCsvLine(line);
       const name = columns[nameIndex]?.trim() ?? '';
       const displayName = columns[displayNameIndex]?.trim() ?? '';
-      const contact = columns[contactIndex]?.trim() ?? '';
-      const email = columns[emailIndex]?.trim() ?? '';
-      const address = columns[addressIndex]?.trim() ?? '';
-      const countryId = Number(columns[countryIdIndex]);
+      const contact = contactIndex === -1 ? null : columns[contactIndex]?.trim() || null;
+      const email = emailIndex === -1 ? null : columns[emailIndex]?.trim() || null;
+      const address = addressIndex === -1 ? null : columns[addressIndex]?.trim() || null;
+      const countryIdValue = countryIdIndex === -1 ? '' : columns[countryIdIndex]?.trim() ?? '';
+      const countryId = countryIdValue ? Number(countryIdValue) : null;
       const remarks = remarksIndex === -1 ? '' : columns[remarksIndex]?.trim() ?? '';
-      const isActive = isActiveIndex === -1 ? true : this.parseBoolean(columns[isActiveIndex]);
+      const isActive = this.parseBoolean(columns[isActiveIndex]);
 
-      if (!name || !displayName || !contact || !email || !address || !Number.isInteger(countryId) || countryId <= 0) {
+      if (!name || !displayName || (countryId !== null && (!Number.isInteger(countryId) || countryId <= 0))) {
         return [];
       }
 
