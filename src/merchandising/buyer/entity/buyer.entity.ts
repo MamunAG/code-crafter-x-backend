@@ -19,15 +19,15 @@ export class Buyer extends BaseEntity {
   displayName: string;
 
   @ApiProperty({ description: 'Buyer contact number', example: '+8801712345678', required: false, nullable: true })
-  @Column({ name: 'contact', nullable: true })
+  @Column({ name: 'contact', type: 'varchar', nullable: true })
   contact?: string | null;
 
   @ApiProperty({ description: 'Buyer email', example: 'buyer@example.com', required: false, nullable: true })
-  @Column({ name: 'email', nullable: true })
+  @Column({ name: 'email', type: 'varchar', nullable: true })
   email?: string | null;
 
   @ApiProperty({ description: 'Country ID', example: 1, required: false, nullable: true })
-  @Column({ name: 'country_id', nullable: true })
+  @Column({ name: 'country_id', type: 'integer', nullable: true })
   countryId?: number | null;
 
   @ApiProperty({ description: 'Organization ID', example: 'd290f1ee-6c54-4b01-90e6-d701748f0851' })
@@ -35,7 +35,7 @@ export class Buyer extends BaseEntity {
   organizationId?: string | null;
 
   @ApiProperty({ description: 'Buyer address', example: 'Dhaka, Bangladesh', required: false, nullable: true })
-  @Column({ name: 'address', nullable: true })
+  @Column({ name: 'address', type: 'varchar', nullable: true })
   address?: string | null;
 
   @ApiProperty({ description: 'Buyer remarks', example: 'Preferred export buyer.' })
