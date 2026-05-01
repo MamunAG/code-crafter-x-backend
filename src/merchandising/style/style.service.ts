@@ -57,9 +57,10 @@ export class StyleService {
     const buyer = await this.findBuyerOrFail(styleDto.buyerId, organizationId);
     const currency = await this.findCurrencyOrFail(styleDto.currencyId, organizationId);
     const image = styleDto.imageId !== undefined ? await this.findFileOrFail(styleDto.imageId) : null;
+    const { styleToColorMaps, styleToSizeMaps, styleToEmbellishmentMaps, ...stylePayload } = styleDto;
 
     const style = this.styleRepository.create({
-      ...styleDto,
+      ...stylePayload,
       organizationId,
       buyer,
       currency,
@@ -67,9 +68,9 @@ export class StyleService {
     });
 
     const saved = await this.styleRepository.save(style);
-    await this.syncStyleToColorMaps(saved.id, styleDto.styleToColorMaps ?? [], organizationId);
-    await this.syncStyleToSizeMaps(saved.id, styleDto.styleToSizeMaps ?? [], organizationId);
-    await this.syncStyleToEmbellishmentMaps(saved.id, styleDto.styleToEmbellishmentMaps ?? [], organizationId);
+    await this.syncStyleToColorMaps(saved.id, styleToColorMaps ?? [], organizationId);
+    await this.syncStyleToSizeMaps(saved.id, styleToSizeMaps ?? [], organizationId);
+    await this.syncStyleToEmbellishmentMaps(saved.id, styleToEmbellishmentMaps ?? [], organizationId);
     return this.findOne(saved.id, organizationId);
   }
 
@@ -80,6 +81,7 @@ export class StyleService {
   ): Promise<PaginatedResponseDto<Style>> {
     const { page = 1, limit = 1000000000000 } = paginationDto;
     const skip = (page - 1) * limit;
+    const deletedOnly = filters?.deletedOnly === true || filters?.deletedOnly === 'true';
 
     const queryBuilder = this.styleRepository
       .createQueryBuilder('style')
@@ -89,12 +91,23 @@ export class StyleService {
       .leftJoinAndSelect('style.image', 'image')
       .leftJoinAndSelect('style.styleToColorMaps', 'styleToColorMap')
       .leftJoinAndSelect('styleToColorMap.color', 'styleToColorMapColor')
+      .leftJoinAndSelect('style.styleToSizeMaps', 'styleToSizeMap')
+      .leftJoinAndSelect('styleToSizeMap.size', 'styleToSizeMapSize')
+      .leftJoinAndSelect('style.styleToEmbellishmentMaps', 'styleToEmbellishmentMap')
+      .leftJoinAndSelect('styleToEmbellishmentMap.embellishment', 'styleToEmbellishmentMapEmbellishment')
       .leftJoinAndSelect('style.created_by_user', 'created_by_user')
       .leftJoinAndSelect('style.updated_by_user', 'updated_by_user')
+      .leftJoinAndSelect('style.deleted_by_user', 'deleted_by_user')
       .where('style.organization_id = :organizationId', { organizationId })
       .skip(skip)
       .take(limit)
       .orderBy('style.created_at', 'DESC');
+
+    if (deletedOnly) {
+      queryBuilder.withDeleted().andWhere('style.deleted_at IS NOT NULL');
+    } else {
+      queryBuilder.andWhere('style.deleted_at IS NULL');
+    }
 
     if (filters?.productType) {
       queryBuilder.andWhere('style.productType ILIKE :productType', {
@@ -132,9 +145,9 @@ export class StyleService {
       });
     }
 
-    if (filters?.isActive !== undefined) {
+    if (filters?.isActive !== undefined && filters.isActive !== '') {
       queryBuilder.andWhere('style.isActive = :isActive', {
-        isActive: filters.isActive,
+        isActive: filters.isActive === 'true',
       });
     }
 
@@ -209,27 +222,32 @@ export class StyleService {
       style.image = await this.findFileOrFail(dto.imageId);
     }
 
-    Object.assign(style, dto);
+    const { styleToColorMaps, styleToSizeMaps, styleToEmbellishmentMaps, ...stylePayload } = dto;
+    Object.assign(style, stylePayload);
     const saved = await this.styleRepository.save(style);
-    if (dto.styleToColorMaps !== undefined) {
-      await this.syncStyleToColorMaps(saved.id, dto.styleToColorMaps, organizationId);
+    if (styleToColorMaps !== undefined) {
+      await this.syncStyleToColorMaps(saved.id, styleToColorMaps, organizationId);
     }
-    if (dto.styleToSizeMaps !== undefined) {
-      await this.syncStyleToSizeMaps(saved.id, dto.styleToSizeMaps, organizationId);
+    if (styleToSizeMaps !== undefined) {
+      await this.syncStyleToSizeMaps(saved.id, styleToSizeMaps, organizationId);
     }
-    if (dto.styleToEmbellishmentMaps !== undefined) {
-      await this.syncStyleToEmbellishmentMaps(saved.id, dto.styleToEmbellishmentMaps, organizationId);
+    if (styleToEmbellishmentMaps !== undefined) {
+      await this.syncStyleToEmbellishmentMaps(saved.id, styleToEmbellishmentMaps, organizationId);
     }
     return this.findOne(saved.id, organizationId);
   }
 
-  async remove(id: string, organizationId: string) {
+  async remove(id: string, deletedById: string, organizationId: string) {
     await this.ensureStyleExists(id, organizationId);
+    await this.styleRepository.update({ id, organizationId }, { deleted_by_id: deletedById });
     return this.styleRepository.softDelete({ id, organizationId });
   }
 
   async permanentRemove(id: string, organizationId: string) {
     await this.ensureStyleExists(id, organizationId, true);
+    await this.styleToColorMapRepository.delete({ styleId: id });
+    await this.styleToSizeMapRepository.delete({ styleId: id });
+    await this.styleToEmbellishmentMapRepository.delete({ styleId: id });
     return this.styleRepository.delete({ id, organizationId });
   }
 

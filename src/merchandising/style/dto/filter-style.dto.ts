@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 
 export class FilterStyleDto extends PaginationDto {
@@ -38,6 +38,10 @@ export class FilterStyleDto extends PaginationDto {
 
   @ApiProperty({ description: 'Active status', example: true, required: false })
   @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
+  @IsString()
+  isActive?: string;
+
+  @ApiProperty({ description: 'Return only soft deleted styles', example: 'true', required: false })
+  @IsOptional()
+  deletedOnly?: string | boolean;
 }
