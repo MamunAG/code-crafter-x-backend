@@ -12,7 +12,7 @@ import { FilterUnitDto } from './dto/filter-unit.dto';
 import { UpdateUnitDto } from './dto/update-unit.dto';
 import { MenuAccess } from '../../common/decorators/menu-access.decorator';
 
-const MENU_NAME = 'Uom Setup';
+const MENU_NAME = 'Unit Setup';
 
 @ApiTags('Uom')
 @ApiBearerAuth()
