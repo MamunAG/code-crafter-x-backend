@@ -1,8 +1,8 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { IsNotEmpty, IsOptional } from 'class-validator';
-import { Uom } from '../entity/uom.entity';
+import { Unit } from '../entity/unit.entity';
 
-export class CreateUomDto extends PartialType(Uom) {
+export class CreateUnitDto extends PartialType(Unit) {
   @ApiProperty({ description: 'UOM name', example: 'Kilogram' })
   @IsNotEmpty()
   name: string;

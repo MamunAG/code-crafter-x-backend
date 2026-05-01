@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -16,9 +16,12 @@ export class CountryService {
     private countryRepository: Repository<Country>,
   ) { }
 
-  async create(countryDto: CreateCountryDto) {
-    await this.ensureNameIsUnique(countryDto.name);
-    const country = this.countryRepository.create(countryDto);
+  async create(countryDto: CreateCountryDto, organizationId: string) {
+    await this.ensureNameIsUnique(countryDto.name, organizationId);
+    const country = this.countryRepository.create({
+      ...countryDto,
+      organizationId,
+    });
     const saved = await this.countryRepository.save(country);
     await this.countryRepository
       .createQueryBuilder()
@@ -28,19 +31,16 @@ export class CountryService {
         updated_at: () => 'NULL',
       } as unknown as Partial<Country>)
       .where('id = :id', { id: saved.id })
+      .andWhere('organization_id = :organizationId', { organizationId })
       .execute();
-    return this.normalizeUpdatedAt(await this.findOne(saved.id));
+    return this.normalizeUpdatedAt(await this.findOne(saved.id, organizationId));
   }
 
   buildUploadTemplate() {
-    return [
-      'name,isActive',
-      'Bangladesh,true',
-      'United States,true',
-    ].join('\n');
+    return 'name,isActive';
   }
 
-  async importFromTemplate(file: Express.Multer.File | undefined, userId: string) {
+  async importFromTemplate(file: Express.Multer.File | undefined, userId: string, organizationId: string) {
     if (!file?.buffer?.length) {
       throw new BadRequestException('Please upload a country template file.');
     }
@@ -59,7 +59,8 @@ export class CountryService {
       .createQueryBuilder('country')
       .withDeleted()
       .select(['country.name'])
-      .where('LOWER(TRIM(country.name)) IN (:...names)', {
+      .where('country.organization_id = :organizationId', { organizationId })
+      .andWhere('LOWER(TRIM(country.name)) IN (:...names)', {
         names: uniqueNames.map((name) => name.toLowerCase()),
       })
       .getMany();
@@ -70,6 +71,7 @@ export class CountryService {
         this.countryRepository.create({
           name: row.name.trim(),
           isActive: row.isActive,
+          organizationId,
           created_by_id: userId,
           updated_by_id: null as unknown as string,
           updated_at: null as unknown as Date,
@@ -102,7 +104,8 @@ export class CountryService {
 
   async findAll(
     paginationDto: PaginationDto,
-    filters?: Partial<FilterCountryDto>,
+    filters: Partial<FilterCountryDto> | undefined,
+    organizationId: string,
   ): Promise<PaginatedResponseDto<Country>> {
     const { page = 1, limit = 1000000000000 } = paginationDto;
     const deletedOnly = filters?.deletedOnly ?? false;
@@ -113,6 +116,7 @@ export class CountryService {
       .leftJoinAndSelect('country.created_by_user', 'created_by_user')
       .leftJoinAndSelect('country.updated_by_user', 'updated_by_user')
       .leftJoinAndSelect('country.deleted_by_user', 'deleted_by_user')
+      .where('country.organization_id = :organizationId', { organizationId })
       .skip(skip)
       .take(limit)
       .orderBy(deletedOnly ? 'country.deleted_at' : 'country.created_at', 'DESC');
@@ -151,34 +155,46 @@ export class CountryService {
     };
   }
 
-  findOne(id: number) {
+  findOne(id: number, organizationId: string) {
     return this.countryRepository
       .createQueryBuilder('country')
       .leftJoinAndSelect('country.created_by_user', 'created_by_user')
       .leftJoinAndSelect('country.updated_by_user', 'updated_by_user')
       .leftJoinAndSelect('country.deleted_by_user', 'deleted_by_user')
-      .where('country.id = :id', { id })
+      .where('country.organization_id = :organizationId', { organizationId })
+      .andWhere('country.id = :id', { id })
       .andWhere('country.deleted_at IS NULL')
-      .getOne();
+      .getOne()
+      .then((country) => {
+        if (!country) {
+          throw new NotFoundException('Country not found in the selected organization.');
+        }
+
+        return this.normalizeUpdatedAt(country);
+      });
   }
 
-  async update(id: number, dto: UpdateCountryDto) {
-    await this.ensureNameIsUnique(dto.name, id);
-    await this.countryRepository.update(id, dto);
-    return this.normalizeUpdatedAt(await this.findOne(id));
+  async update(id: number, dto: UpdateCountryDto, organizationId: string) {
+    await this.ensureCountryExists(id, organizationId);
+    await this.ensureNameIsUnique(dto.name, organizationId, id);
+    await this.countryRepository.update({ id, organizationId }, dto);
+    return this.normalizeUpdatedAt(await this.findOne(id, organizationId));
   }
 
-  async remove(id: number, deletedById: string) {
-    await this.countryRepository.update(id, { deleted_by_id: deletedById });
-    return this.countryRepository.softDelete(id);
+  async remove(id: number, deletedById: string, organizationId: string) {
+    await this.ensureCountryExists(id, organizationId);
+    await this.countryRepository.update({ id, organizationId }, { deleted_by_id: deletedById });
+    return this.countryRepository.softDelete({ id, organizationId });
   }
 
-  permanentRemove(id: number) {
-    return this.countryRepository.delete(id);
+  async permanentRemove(id: number, organizationId: string) {
+    await this.ensureCountryExists(id, organizationId, true);
+    return this.countryRepository.delete({ id, organizationId });
   }
 
-  restore(id: number) {
-    return this.countryRepository.restore(id);
+  async restore(id: number, organizationId: string) {
+    await this.ensureCountryExists(id, organizationId, true);
+    return this.countryRepository.restore({ id, organizationId });
   }
 
   private normalizeUpdatedAt<T extends { updated_at?: Date | null; updated_by_id?: string | null; updated_by_user?: unknown } | null>(
@@ -201,12 +217,13 @@ export class CountryService {
     return values.map((value) => this.normalizeUpdatedAt(value));
   }
 
-  private async ensureNameIsUnique(name: string, ignoreId?: number) {
+  private async ensureNameIsUnique(name: string, organizationId: string, ignoreId?: number) {
     const normalizedName = name.trim().toLowerCase();
 
     const queryBuilder = this.countryRepository
       .createQueryBuilder('country')
       .where('LOWER(TRIM(country.name)) = :name', { name: normalizedName })
+      .andWhere('country.organization_id = :organizationId', { organizationId })
       .andWhere('country.deleted_at IS NULL');
 
     if (ignoreId !== undefined) {
@@ -220,6 +237,27 @@ export class CountryService {
     }
   }
 
+  private async ensureCountryExists(id: number, organizationId: string, includeDeleted = false) {
+    const queryBuilder = this.countryRepository
+      .createQueryBuilder('country')
+      .where('country.id = :id', { id })
+      .andWhere('country.organization_id = :organizationId', { organizationId });
+
+    if (includeDeleted) {
+      queryBuilder.withDeleted();
+    } else {
+      queryBuilder.andWhere('country.deleted_at IS NULL');
+    }
+
+    const country = await queryBuilder.getOne();
+
+    if (!country) {
+      throw new NotFoundException('Country not found in the selected organization.');
+    }
+
+    return country;
+  }
+
   private parseCountryTemplate(content: string) {
     const lines = content
       .replace(/^\uFEFF/, '')
@@ -227,8 +265,12 @@ export class CountryService {
       .map((line) => line.trim())
       .filter(Boolean);
 
-    if (lines.length < 2) {
+    if (lines.length === 0) {
       throw new BadRequestException('The uploaded template does not contain any country rows.');
+    }
+
+    if (lines.length === 1) {
+      return [];
     }
 
     const headers = this.parseCsvLine(lines[0]).map((header) => header.trim().toLowerCase());

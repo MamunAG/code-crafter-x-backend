@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Header, Param, ParseIntPipe, Patch, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type AuthUser from 'src/auth/dto/auth-user';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { MenuAccess } from '../../common/decorators/menu-access.decorator';
@@ -33,6 +34,15 @@ export class CurrencyController {
     return new BaseResponseDto(currencies, 'Currencies retrieved successfully');
   }
 
+  @Get('template/upload')
+  @MenuAccess(MENU_NAME, 'canCreate')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="currency-upload-template.csv"')
+  @ApiOperation({ summary: 'Download currency upload template' })
+  downloadUploadTemplate() {
+    return this.currencyService.buildUploadTemplate();
+  }
+
   @Get(':id')
   @MenuAccess(MENU_NAME, 'canView')
   @ApiOperation({ summary: 'Get by id', description: 'Retrieve specific currency' })
@@ -54,6 +64,16 @@ export class CurrencyController {
     dto.updated_at = null as unknown as Date;
     const result = await this.currencyService.create(dto);
     return new BaseResponseDto(result, 'Currency saved successfully');
+  }
+
+  @Post('upload')
+  @MenuAccess(MENU_NAME, 'canCreate')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Upload currency template' })
+  async uploadTemplate(@CurrentUser() user: AuthUser, @UploadedFile() file: Express.Multer.File) {
+    const result = await this.currencyService.importFromTemplate(file, user.userId);
+    return new BaseResponseDto(result, 'Currency upload completed');
   }
 
   @Patch(':id')

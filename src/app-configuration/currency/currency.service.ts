@@ -32,6 +32,75 @@ export class CurrencyService {
     return this.normalizeUpdatedAt(await this.findOne(saved.id));
   }
 
+  buildUploadTemplate() {
+    return 'currencyName,currencyCode,rate,symbol,isDefault,isActive';
+  }
+
+  async importFromTemplate(file: Express.Multer.File | undefined, userId: string) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('Please upload a currency template file.');
+    }
+
+    const rows = this.parseCurrencyTemplate(file.buffer.toString('utf8'));
+    const uniqueCurrencyCodes = [...new Set(rows.map((row) => row.currencyCode.trim()).filter(Boolean))];
+
+    if (!uniqueCurrencyCodes.length) {
+      return {
+        inserted: 0,
+        skipped: 0,
+      };
+    }
+
+    const existingCurrencies = await this.currencyRepository
+      .createQueryBuilder('currency')
+      .withDeleted()
+      .select(['currency.currencyCode'])
+      .where('LOWER(TRIM(currency.currencyCode)) IN (:...currencyCodes)', {
+        currencyCodes: uniqueCurrencyCodes.map((currencyCode) => currencyCode.toLowerCase()),
+      })
+      .getMany();
+
+    const existingCurrencyCodeSet = new Set(existingCurrencies.map((currency) => currency.currencyCode.trim().toLowerCase()));
+    const newCurrencies = rows
+      .filter((row) => !existingCurrencyCodeSet.has(row.currencyCode.trim().toLowerCase()))
+      .map((row) =>
+        this.currencyRepository.create({
+          currencyName: row.currencyName.trim(),
+          currencyCode: row.currencyCode.trim().toUpperCase(),
+          rate: row.rate,
+          symbol: row.symbol.trim(),
+          isDefault: row.isDefault,
+          isActive: row.isActive,
+          created_by_id: userId,
+          updated_by_id: null as unknown as string,
+          updated_at: null as unknown as Date,
+        }),
+      );
+
+    if (!newCurrencies.length) {
+      return {
+        inserted: 0,
+        skipped: rows.length,
+      };
+    }
+
+    const savedCurrencies = await this.currencyRepository.save(newCurrencies);
+    await this.currencyRepository
+      .createQueryBuilder()
+      .update(Currency)
+      .set({
+        updated_by_id: null,
+        updated_at: () => 'NULL',
+      } as unknown as Partial<Currency>)
+      .where('id IN (:...ids)', { ids: savedCurrencies.map((currency) => currency.id) })
+      .execute();
+
+    return {
+      inserted: savedCurrencies.length,
+      skipped: rows.length - savedCurrencies.length,
+    };
+  }
+
   async findAll(
     paginationDto: PaginationDto,
     filters?: Partial<FilterCurrencyDto>,
@@ -176,5 +245,110 @@ export class CurrencyService {
     if (existingCurrency) {
       throw new BadRequestException('Currency already exists');
     }
+  }
+
+  private parseCurrencyTemplate(content: string) {
+    const lines = content
+      .replace(/^\uFEFF/, '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (lines.length === 0) {
+      throw new BadRequestException('The uploaded template does not contain any currency rows.');
+    }
+
+    if (lines.length === 1) {
+      return [];
+    }
+
+    const headers = this.parseCsvLine(lines[0]).map((header) => header.trim().toLowerCase());
+    const currencyNameIndex = headers.indexOf('currencyname');
+    const currencyCodeIndex = headers.indexOf('currencycode');
+    const rateIndex = headers.indexOf('rate');
+    const symbolIndex = headers.indexOf('symbol');
+    const defaultIndex = headers.indexOf('isdefault');
+    const activeIndex = headers.indexOf('isactive');
+
+    if (currencyNameIndex === -1 || currencyCodeIndex === -1 || rateIndex === -1 || symbolIndex === -1) {
+      throw new BadRequestException('The uploaded template must include currencyName, currencyCode, rate, and symbol columns.');
+    }
+
+    return lines.slice(1).flatMap((line) => {
+      const columns = this.parseCsvLine(line);
+      const currencyName = columns[currencyNameIndex]?.trim() ?? '';
+      const currencyCode = columns[currencyCodeIndex]?.trim() ?? '';
+      const rate = this.parseNumber(columns[rateIndex]);
+      const symbol = columns[symbolIndex]?.trim() ?? '';
+
+      if (!currencyName || !currencyCode || rate === null || !symbol) {
+        return [];
+      }
+
+      return [
+        {
+          currencyName,
+          currencyCode,
+          rate,
+          symbol,
+          isDefault: defaultIndex === -1 ? false : this.parseBoolean(columns[defaultIndex]),
+          isActive: activeIndex === -1 ? true : this.parseBoolean(columns[activeIndex]),
+        },
+      ];
+    });
+  }
+
+  private parseCsvLine(line: string) {
+    const values: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let index = 0; index < line.length; index += 1) {
+      const character = line[index];
+      const nextCharacter = line[index + 1];
+
+      if (character === '"' && nextCharacter === '"') {
+        current += '"';
+        index += 1;
+        continue;
+      }
+
+      if (character === '"') {
+        inQuotes = !inQuotes;
+        continue;
+      }
+
+      if (character === ',' && !inQuotes) {
+        values.push(current);
+        current = '';
+        continue;
+      }
+
+      current += character;
+    }
+
+    values.push(current);
+    return values;
+  }
+
+  private parseBoolean(value?: string) {
+    const normalizedValue = value?.trim().toLowerCase();
+
+    if (!normalizedValue) {
+      return false;
+    }
+
+    return ['true', 'yes', 'y', '1', 'active'].includes(normalizedValue);
+  }
+
+  private parseNumber(value?: string) {
+    const normalizedValue = value?.trim();
+
+    if (!normalizedValue) {
+      return null;
+    }
+
+    const parsed = Number(normalizedValue);
+    return Number.isFinite(parsed) ? parsed : null;
   }
 }

@@ -18,7 +18,7 @@ import { ColorModule } from './merchandising/master-data/color/color.module';
 import { SizeModule } from './merchandising/master-data/size/size.module';
 import { EmbellishmentModule } from './merchandising/master-data/embellishment/embellishment.module';
 import { CurrencyModule } from './app-configuration/currency/currency.module';
-import { UomModule } from './app-configuration/uom/uom.module';
+import { UnitModule } from './app-configuration/unit/unit.module';
 import { CountryModule } from './app-configuration/country/country.module';
 import { MenuModule } from './app-configuration/menu/menu.module';
 import { MenuPermissionModule } from './app-configuration/menu-permission/menu-permission.module';
@@ -53,7 +53,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     SizeModule,
     EmbellishmentModule,
     CurrencyModule,
-    UomModule,
+    UnitModule,
     CountryModule,
     MenuModule,
     MenuPermissionModule,

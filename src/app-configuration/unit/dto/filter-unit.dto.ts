@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsOptional } from 'class-validator';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 
-export class FilterUomDto extends PaginationDto {
+export class FilterUnitDto extends PaginationDto {
   @ApiProperty({ description: 'UOM name', example: 'Kilogram', required: false })
   @IsOptional()
   name: string;

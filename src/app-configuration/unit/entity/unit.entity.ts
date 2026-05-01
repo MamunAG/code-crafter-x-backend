@@ -3,7 +3,7 @@ import { BaseEntity } from 'src/common/entities/base.entity';
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('uom')
-export class Uom extends BaseEntity {
+export class Unit extends BaseEntity {
   @ApiProperty({ description: 'Primary ID' })
   @PrimaryGeneratedColumn()
   id: number;

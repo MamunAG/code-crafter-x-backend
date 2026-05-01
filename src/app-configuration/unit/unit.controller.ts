@@ -5,24 +5,24 @@ import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { BaseResponseDto } from 'src/common/dto/base-response.dto';
 import { RolesEnum } from 'src/common/enums/role.enum';
-import { UomService } from './uom.service';
-import { CreateUomDto } from './dto/create-uom.dto';
-import { FilterUomDto } from './dto/filter-uom.dto';
-import { UpdateUomDto } from './dto/update-uom.dto';
+import { UnitService } from './unit.service';
+import { CreateUnitDto } from './dto/create-unit.dto';
+import { FilterUnitDto } from './dto/filter-unit.dto';
+import { UpdateUnitDto } from './dto/update-unit.dto';
 
 @ApiTags('Uom')
 @ApiBearerAuth()
 @Roles(RolesEnum.admin, RolesEnum.user)
-@Controller('api/v1/uom')
-export class UomController {
+@Controller('api/v1/unit')
+export class UnitController {
   constructor(
-    private readonly uomService: UomService,
+    private readonly uomService: UnitService,
   ) { }
 
   @Get()
   @ApiOperation({ summary: 'Get all', description: 'Retrieve all UOMs' })
   @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
-  async findAll(@Query() filters: FilterUomDto) {
+  async findAll(@Query() filters: FilterUnitDto) {
     const { page, limit, ...uomFilters } = filters;
     const pagination = { page, limit };
     const items = await this.uomService.findAll(pagination, uomFilters);
@@ -42,7 +42,7 @@ export class UomController {
   @ApiResponse({ status: 201, description: 'UOM save successfully', type: BaseResponseDto })
   @ApiResponse({ status: 400, description: 'UOM already exists' })
   @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
-  async create(@CurrentUser() user: AuthUser, @Body() dto: CreateUomDto) {
+  async create(@CurrentUser() user: AuthUser, @Body() dto: CreateUnitDto) {
     dto.created_by_id = user.userId;
     const result = await this.uomService.create(dto);
     return new BaseResponseDto(result, 'UOM saved successfully');
@@ -56,7 +56,7 @@ export class UomController {
   async update(
     @CurrentUser() user: AuthUser,
     @Param('id', new ParseIntPipe()) id: number,
-    @Body() dto: UpdateUomDto,
+    @Body() dto: UpdateUnitDto,
   ) {
     dto.updated_by_id = user.userId;
     const result = await this.uomService.update(id, dto);

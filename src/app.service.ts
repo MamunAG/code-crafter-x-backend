@@ -14,7 +14,7 @@ import { Color } from './merchandising/master-data/color/entity/color.entity';
 import { Size } from './merchandising/master-data/size/entity/size.entity';
 import { Embellishment } from './merchandising/master-data/embellishment/entity/embellishment.entity';
 import { Currency } from './app-configuration/currency/entity/currency.entity';
-import { Uom } from './app-configuration/uom/entity/uom.entity';
+import { Unit } from './app-configuration/unit/entity/unit.entity';
 import { Country } from './app-configuration/country/entity/country.entity';
 import { Menu } from './app-configuration/menu/entity/menu.entity';
 import { MenuPermission } from './app-configuration/menu-permission/entity/menu-permission.entity';
@@ -60,7 +60,7 @@ export class AppService implements TypeOrmOptionsFactory {
         Size,
         Embellishment,
         Currency,
-        Uom,
+        Unit,
         Country,
         Menu,
         MenuPermission,

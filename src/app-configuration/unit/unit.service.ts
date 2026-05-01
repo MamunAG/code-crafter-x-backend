@@ -4,19 +4,19 @@ import { Repository } from 'typeorm';
 
 import { PaginatedResponseDto } from 'src/common/dto/paginated-response.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
-import { Uom } from './entity/uom.entity';
-import { CreateUomDto } from './dto/create-uom.dto';
-import { FilterUomDto } from './dto/filter-uom.dto';
-import { UpdateUomDto } from './dto/update-uom.dto';
+import { Unit } from './entity/unit.entity';
+import { CreateUnitDto } from './dto/create-unit.dto';
+import { FilterUnitDto } from './dto/filter-unit.dto';
+import { UpdateUnitDto } from './dto/update-unit.dto';
 
 @Injectable()
-export class UomService {
+export class UnitService {
   constructor(
-    @InjectRepository(Uom)
-    private uomRepository: Repository<Uom>,
+    @InjectRepository(Unit)
+    private uomRepository: Repository<Unit>,
   ) { }
 
-  async create(uomDto: CreateUomDto) {
+  async create(uomDto: CreateUnitDto) {
     await this.ensureNameIsUnique(uomDto.name);
     const uom = this.uomRepository.create(uomDto);
     const saved = await this.uomRepository.save(uom);
@@ -25,8 +25,8 @@ export class UomService {
 
   async findAll(
     paginationDto: PaginationDto,
-    filters?: Partial<FilterUomDto>,
-  ): Promise<PaginatedResponseDto<Uom>> {
+    filters?: Partial<FilterUnitDto>,
+  ): Promise<PaginatedResponseDto<Unit>> {
     const { page = 1, limit = 1000000000000 } = paginationDto;
     const skip = (page - 1) * limit;
 
@@ -84,7 +84,7 @@ export class UomService {
       .getOne();
   }
 
-  async update(id: number, dto: UpdateUomDto) {
+  async update(id: number, dto: UpdateUnitDto) {
     await this.ensureNameIsUnique(dto.name, id);
     await this.uomRepository.update(id, dto);
     return this.findOne(id);
