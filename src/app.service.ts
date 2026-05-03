@@ -30,6 +30,7 @@ import { StyleToEmbellishmentMap } from './merchandising/style/entity/style-to-e
 import { StyleToSizeMap } from './merchandising/style/entity/style-to-size-map.entity';
 import { Notification } from './notifications/entity/notification.entity';
 import { UserFirebaseToken } from './notifications/entity/user-firebase-token.entity';
+import { Factory } from './app-configuration/factory/entity/factory.entity';
 
 @Injectable()
 
@@ -75,7 +76,8 @@ export class AppService implements TypeOrmOptionsFactory {
         Style,
         StyleToColorMap,
         StyleToEmbellishmentMap,
-        StyleToSizeMap
+        StyleToSizeMap,
+        Factory
       ],
       synchronize: false, // Never use synchronize in production
       logging: isDevelopment,

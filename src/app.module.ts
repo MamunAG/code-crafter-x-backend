@@ -31,6 +31,7 @@ import { BuyerModule } from './merchandising/buyer/buyer.module';
 import { StyleModule } from './merchandising/style/style.module';
 import { CommonController } from './common/common.controller';
 import { NotificationsModule } from './notifications/notifications.module';
+import { FactoryModule } from './app-configuration/factory/factory.module';
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     OrganizationAccessRequestModule,
     BuyerModule,
     StyleModule,
+    FactoryModule
   ],
   controllers: [AppController, CommonController],
   providers: [
