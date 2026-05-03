@@ -32,6 +32,7 @@ export class FactoryController {
     @Get()
     @MenuAccess(MENU_NAME, 'canView')
     @ApiOperation({ summary: 'Get all', description: 'Retrieve all factories' })
+    @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
     async findAll(@Query() filters: FilterFactoryDto, @Headers('x-organization-id') organizationId?: string) {
         const { page, limit, ...factoryFilters } = filters;
         const selectedOrganizationId = this.requireOrganizationId(organizationId);
@@ -51,6 +52,8 @@ export class FactoryController {
 
     @Get(':id')
     @MenuAccess(MENU_NAME, 'canView')
+    @ApiOperation({ summary: 'Get by id', description: 'Retrieve specific factory' })
+    @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
     async findOne(@Param('id', new ParseUUIDPipe()) id: string, @Headers('x-organization-id') organizationId?: string) {
         const selectedOrganizationId = this.requireOrganizationId(organizationId);
         const factory = await this.factoryService.findOne(id, selectedOrganizationId);
@@ -61,6 +64,8 @@ export class FactoryController {
     @MenuAccess(MENU_NAME, 'canCreate')
     @ApiOperation({ summary: 'save factory' })
     @ApiResponse({ status: 201, description: 'Factory save successfully', type: BaseResponseDto })
+    @ApiResponse({ status: 400, description: 'Factory already exists' })
+    @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
     async create(@CurrentUser() user: AuthUser, @Body() dto: CreateFactoryDto, @Headers('x-organization-id') organizationId?: string) {
         const selectedOrganizationId = this.requireOrganizationId(organizationId);
         dto.created_by_id = user.userId;
@@ -87,6 +92,10 @@ export class FactoryController {
 
     @Patch(':id')
     @MenuAccess(MENU_NAME, 'canUpdate')
+    @ApiOperation({ summary: 'update factory' })
+    @ApiResponse({ status: 201, description: 'Factory update successfully', type: BaseResponseDto })
+    @ApiResponse({ status: 400, description: 'Factory already exists' })
+    @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
     async update(
         @CurrentUser() user: AuthUser,
         @Param('id', new ParseUUIDPipe()) id: string,
@@ -102,6 +111,8 @@ export class FactoryController {
 
     @Delete(':id')
     @MenuAccess(MENU_NAME, 'canDelete')
+    @ApiOperation({ summary: 'delete factory' })
+    @ApiResponse({ status: 200, description: 'Factory delete successfully', type: BaseResponseDto })
     async remove(@CurrentUser() user: AuthUser, @Param('id', new ParseUUIDPipe()) id: string, @Headers('x-organization-id') organizationId?: string) {
         const selectedOrganizationId = this.requireOrganizationId(organizationId);
         const result = await this.factoryService.remove(id, user.userId, selectedOrganizationId);
@@ -110,6 +121,7 @@ export class FactoryController {
 
     @Delete(':id/permanent')
     @MenuAccess(MENU_NAME, 'canDelete')
+    @ApiOperation({ summary: 'delete factory permanently' })
     async permanentRemove(@Param('id', new ParseUUIDPipe()) id: string, @Headers('x-organization-id') organizationId?: string) {
         const selectedOrganizationId = this.requireOrganizationId(organizationId);
         const result = await this.factoryService.permanentRemove(id, selectedOrganizationId);
@@ -118,6 +130,7 @@ export class FactoryController {
 
     @Post(':id/restore')
     @MenuAccess(MENU_NAME, 'canUpdate')
+    @ApiOperation({ summary: 'restore factory' })
     async restore(@Param('id', new ParseUUIDPipe()) id: string, @Headers('x-organization-id') organizationId?: string) {
         const selectedOrganizationId = this.requireOrganizationId(organizationId);
         const result = await this.factoryService.restore(id, selectedOrganizationId);
