@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 import { Factory } from '../entity/factory.entity';
 
 export class CreateFactoryDto extends PartialType(Factory) {
@@ -27,6 +27,11 @@ export class CreateFactoryDto extends PartialType(Factory) {
     @IsOptional()
     @IsEmail()
     email?: string | null;
+
+    @ApiPropertyOptional({ description: 'Factory image file ID', example: 1 })
+    @IsOptional()
+    @IsNumber()
+    imageId?: number | null;
 
     @ApiPropertyOptional({ description: 'Factory address', example: 'Dhaka, Bangladesh' })
     @IsOptional()

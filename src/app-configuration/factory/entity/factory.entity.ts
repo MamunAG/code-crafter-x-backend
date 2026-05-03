@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Organization } from 'src/app-configuration/organization/entity/organization.entity';
 import { BaseEntity } from 'src/common/entities/base.entity';
+import { Files } from 'src/files/entities/file.entity';
 import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('factory')
@@ -29,6 +30,10 @@ export class Factory extends BaseEntity {
     @Column({ name: 'email', type: 'varchar', nullable: true })
     email?: string | null;
 
+    @ApiProperty({ description: 'Factory image file ID', example: 1, required: false, nullable: true })
+    @Column({ name: 'image_id', type: 'integer', nullable: true })
+    imageId?: number | null;
+
     @ApiProperty({ description: 'Organization ID', example: 'd290f1ee-6c54-4b01-90e6-d701748f0851' })
     @Column({ name: 'organization_id', type: 'uuid', nullable: true })
     organizationId?: string | null;
@@ -49,4 +54,9 @@ export class Factory extends BaseEntity {
     @ManyToOne(() => Organization, { nullable: true, onDelete: 'CASCADE' })
     @JoinColumn({ name: 'organization_id' })
     organization?: Organization | null;
+
+    @ApiProperty({ description: 'Factory image file', type: () => Files, required: false })
+    @ManyToOne(() => Files, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'image_id' })
+    image?: Files | null;
 }

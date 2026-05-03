@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 
 import { PaginatedResponseDto } from 'src/common/dto/paginated-response.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
+import { Files } from 'src/files/entities/file.entity';
 import { Factory } from './entity/factory.entity';
 import { CreateFactoryDto } from './dto/create-factory.dto';
 import { FilterFactoryDto } from './dto/filter-factory.dto';
@@ -18,15 +19,20 @@ export class FactoryService {
     constructor(
         @InjectRepository(Factory)
         private factoryRepository: Repository<Factory>,
+
+        @InjectRepository(Files)
+        private filesRepository: Repository<Files>,
     ) { }
 
     async create(factoryDto: CreateFactoryDto, organizationId: string) {
         const normalizedFactory = this.normalizeFactoryPayload(factoryDto);
         await this.ensureFactoryIsUnique(normalizedFactory.name, normalizedFactory.code, organizationId);
+        const image = factoryDto.imageId != null ? await this.findFileOrFail(factoryDto.imageId) : null;
 
         const factory = this.factoryRepository.create({
             ...normalizedFactory,
             organizationId,
+            image: image ?? undefined,
         });
 
         const saved = await this.factoryRepository.save(factory);
@@ -171,6 +177,7 @@ export class FactoryService {
 
         const queryBuilder = this.factoryRepository
             .createQueryBuilder('factory')
+            .leftJoinAndSelect('factory.image', 'image')
             .leftJoinAndSelect('factory.created_by_user', 'created_by_user')
             .leftJoinAndSelect('factory.updated_by_user', 'updated_by_user')
             .leftJoinAndSelect('factory.deleted_by_user', 'deleted_by_user')
@@ -241,6 +248,7 @@ export class FactoryService {
     findOne(id: string, organizationId: string) {
         return this.factoryRepository
             .createQueryBuilder('factory')
+            .leftJoinAndSelect('factory.image', 'image')
             .leftJoinAndSelect('factory.created_by_user', 'created_by_user')
             .leftJoinAndSelect('factory.updated_by_user', 'updated_by_user')
             .leftJoinAndSelect('factory.deleted_by_user', 'deleted_by_user')
@@ -264,8 +272,24 @@ export class FactoryService {
             await this.ensureFactoryIsUnique(normalizedFactory.name, normalizedFactory.code, organizationId, id);
         }
 
-        await this.ensureFactoryExists(id, organizationId);
-        await this.factoryRepository.update({ id, organizationId }, normalizedFactory);
+        const factory = await this.factoryRepository.findOne({
+            where: { id, organizationId },
+            relations: ['image'],
+            withDeleted: false,
+        });
+
+        if (!factory) {
+            throw new NotFoundException('Factory not found in the selected organization.');
+        }
+
+        if (dto.imageId === null) {
+            factory.image = null;
+        } else if (dto.imageId !== undefined) {
+            factory.image = await this.findFileOrFail(dto.imageId);
+        }
+
+        Object.assign(factory, normalizedFactory);
+        await this.factoryRepository.save(factory);
 
         return this.normalizeUpdatedAt(await this.findOne(id, organizationId));
     }
@@ -337,6 +361,18 @@ export class FactoryService {
     private nullableString(value: string | null | undefined) {
         const trimmedValue = value?.trim() ?? '';
         return trimmedValue || null;
+    }
+
+    private async findFileOrFail(fileId: number) {
+        const file = await this.filesRepository.findOne({
+            where: { id: fileId },
+        });
+
+        if (!file) {
+            throw new BadRequestException('Image not found');
+        }
+
+        return file;
     }
 
     private parseFactoryTemplate(content: string) {
