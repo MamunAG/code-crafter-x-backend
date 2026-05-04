@@ -205,8 +205,8 @@ export class EmployeeService {
 
     buildUploadTemplate() {
         return [
-            'factoryId,employeeCode,employeeName,designationId,departmentId,phoneNo,email,gender,joiningDate,nidNo,address,remarks,isActive',
-            '00000000-0000-0000-0000-000000000000,EMP-001,Abdur Rahman,00000000-0000-0000-0000-000000000000,00000000-0000-0000-0000-000000000000,+8801700000000,employee@example.com,Male,2026-05-03,1234567890,"Dhaka, Bangladesh",Permanent employee,true',
+            'factoryName,employeeCode,employeeName,designationName,departmentName,phoneNo,email,gender,joiningDate,nidNo,address,remarks,isActive',
+            'Main Factory,EMP-001,Abdur Rahman,Operator,Sewing,+8801700000000,employee@example.com,Male,2026-05-03,1234567890,"Dhaka, Bangladesh",Permanent employee,true',
         ].join('\n');
     }
 
@@ -224,51 +224,102 @@ export class EmployeeService {
             };
         }
 
-        const factoryIds = [...new Set(rows.map((row) => row.factoryId))];
-        const designationIds = [
-            ...new Set(rows.map((row) => row.designationId).filter((id): id is string => Boolean(id))),
-        ];
-        const departmentIds = [
-            ...new Set(rows.map((row) => row.departmentId).filter((id): id is string => Boolean(id))),
-        ];
-
         const [factories, designations, departments] = await Promise.all([
             this.factoryRepository
                 .createQueryBuilder('factory')
-                .select(['factory.id'])
+                .select(['factory.id', 'factory.name', 'factory.displayName', 'factory.code'])
                 .where('factory.organization_id = :organizationId', { organizationId })
                 .andWhere('factory.deleted_at IS NULL')
-                .andWhere('factory.id IN (:...factoryIds)', { factoryIds })
+                .andWhere('factory.is_active = :isActive', { isActive: true })
                 .getMany(),
-            designationIds.length
-                ? this.designationRepository
-                    .createQueryBuilder('designation')
-                    .select(['designation.id'])
-                    .where('designation.organization_id = :organizationId', { organizationId })
-                    .andWhere('designation.deleted_at IS NULL')
-                    .andWhere('designation.id IN (:...designationIds)', { designationIds })
-                    .getMany()
-                : Promise.resolve([]),
-            departmentIds.length
-                ? this.departmentRepository
-                    .createQueryBuilder('department')
-                    .select(['department.id'])
-                    .where('department.organization_id = :organizationId', { organizationId })
-                    .andWhere('department.deleted_at IS NULL')
-                    .andWhere('department.id IN (:...departmentIds)', { departmentIds })
-                    .getMany()
-                : Promise.resolve([]),
+            this.designationRepository
+                .createQueryBuilder('designation')
+                .select(['designation.id', 'designation.designationName'])
+                .where('designation.organization_id = :organizationId', { organizationId })
+                .andWhere('designation.deleted_at IS NULL')
+                .andWhere('designation.is_active = :isActive', { isActive: true })
+                .getMany(),
+            this.departmentRepository
+                .createQueryBuilder('department')
+                .select(['department.id', 'department.departmentName'])
+                .where('department.organization_id = :organizationId', { organizationId })
+                .andWhere('department.deleted_at IS NULL')
+                .andWhere('department.is_active = :isActive', { isActive: true })
+                .getMany(),
         ]);
 
-        const validFactoryIdSet = new Set(factories.map((factory) => factory.id));
-        const validDesignationIdSet = new Set(designations.map((designation) => designation.id));
-        const validDepartmentIdSet = new Set(departments.map((department) => department.id));
-        const filteredRows = rows.filter(
-            (row) =>
-                validFactoryIdSet.has(row.factoryId) &&
-                (!row.designationId || validDesignationIdSet.has(row.designationId)) &&
-                (!row.departmentId || validDepartmentIdSet.has(row.departmentId)),
+        const factoryIdByName = new Map<string, string>();
+        for (const factory of factories) {
+            [factory.name, factory.displayName, factory.code]
+                .map((value) => value?.trim().toLowerCase())
+                .filter((value): value is string => Boolean(value))
+                .forEach((value) => factoryIdByName.set(value, factory.id));
+        }
+
+        const designationIdByName = new Map(
+            designations
+                .map((designation) => [designation.designationName?.trim().toLowerCase(), designation.id] as const)
+                .filter((entry): entry is readonly [string, string] => Boolean(entry[0])),
         );
+        const departmentIdByName = new Map(
+            departments
+                .map((department) => [department.departmentName?.trim().toLowerCase(), department.id] as const)
+                .filter((entry): entry is readonly [string, string] => Boolean(entry[0])),
+        );
+
+        const missingFactories = new Set<string>();
+        const missingDesignations = new Set<string>();
+        const missingDepartments = new Set<string>();
+        let missingRequiredRows = 0;
+        let invalidJoiningDateRows = 0;
+        const filteredRows = rows.flatMap((row) => {
+            const factoryId = this.resolveLookupName(row.factoryName, factoryIdByName);
+            const designationId = this.resolveLookupName(row.designationName, designationIdByName);
+            const departmentId = this.resolveLookupName(row.departmentName, departmentIdByName);
+            const joiningDate = this.parseOptionalDate(row.joiningDate);
+            let hasMissingSetup = false;
+
+            if (row.factoryName && !factoryId) {
+                missingFactories.add(row.factoryName);
+                hasMissingSetup = true;
+            }
+
+            if (row.designationName && !designationId) {
+                missingDesignations.add(row.designationName);
+                hasMissingSetup = true;
+            }
+
+            if (row.departmentName && !departmentId) {
+                missingDepartments.add(row.departmentName);
+                hasMissingSetup = true;
+            }
+
+            if (!row.employeeCode || !row.employeeName || (!factoryId && !hasMissingSetup)) {
+                missingRequiredRows += 1;
+                return [];
+            }
+
+            if (hasMissingSetup || !factoryId) {
+                return [];
+            }
+
+            if (row.joiningDate && !joiningDate) {
+                invalidJoiningDateRows += 1;
+                return [];
+            }
+
+            return [
+                {
+                    ...row,
+                    factoryId,
+                    designationId,
+                    departmentId,
+                    joiningDate,
+                },
+            ];
+        });
+
+        this.throwMissingSetupError(missingFactories, missingDepartments, missingDesignations, rows.length);
 
         const existingEmployees = filteredRows.length
             ? await this.employeeRepository
@@ -288,11 +339,13 @@ export class EmployeeService {
             ),
         );
         const seenKeySet = new Set<string>();
+        const duplicateEmployees = new Set<string>();
         const employeesToCreate = filteredRows
             .filter((row) => {
                 const key = `${row.factoryId}:${row.employeeCode.trim().toLowerCase()}`;
 
                 if (existingKeySet.has(key) || seenKeySet.has(key)) {
+                    duplicateEmployees.add(`${row.factoryName} / ${row.employeeCode}`);
                     return false;
                 }
 
@@ -325,6 +378,11 @@ export class EmployeeService {
             return {
                 inserted: 0,
                 skipped: rows.length,
+                skippedReasons: {
+                    duplicateEmployees: [...duplicateEmployees],
+                    missingRequiredRows,
+                    invalidJoiningDateRows,
+                },
             };
         }
 
@@ -333,6 +391,11 @@ export class EmployeeService {
         return {
             inserted: savedEmployees.length,
             skipped: rows.length - savedEmployees.length,
+            skippedReasons: {
+                duplicateEmployees: [...duplicateEmployees],
+                missingRequiredRows,
+                invalidJoiningDateRows,
+            },
         };
     }
 
@@ -423,11 +486,11 @@ export class EmployeeService {
         }
 
         const headers = this.parseCsvLine(lines[0]).map((header) => header.trim().toLowerCase());
-        const factoryIdIndex = headers.indexOf('factoryid');
+        const factoryNameIndex = headers.indexOf('factoryname');
         const employeeCodeIndex = headers.indexOf('employeecode');
         const employeeNameIndex = headers.indexOf('employeename');
-        const designationIdIndex = headers.indexOf('designationid');
-        const departmentIdIndex = headers.indexOf('departmentid');
+        const designationNameIndex = headers.indexOf('designationname');
+        const departmentNameIndex = headers.indexOf('departmentname');
         const phoneNoIndex = headers.indexOf('phoneno');
         const emailIndex = headers.indexOf('email');
         const genderIndex = headers.indexOf('gender');
@@ -437,44 +500,34 @@ export class EmployeeService {
         const remarksIndex = headers.indexOf('remarks');
         const isActiveIndex = headers.indexOf('isactive');
 
-        if (factoryIdIndex === -1 || employeeCodeIndex === -1 || employeeNameIndex === -1 || isActiveIndex === -1) {
-            throw new BadRequestException('The uploaded template must include factoryId, employeeCode, employeeName, and isActive columns.');
+        if (factoryNameIndex === -1 || employeeCodeIndex === -1 || employeeNameIndex === -1 || isActiveIndex === -1) {
+            throw new BadRequestException('The uploaded template must include factoryName, employeeCode, employeeName, and isActive columns.');
         }
 
-        return lines.slice(1).flatMap((line) => {
+        return lines.slice(1).map((line) => {
             const columns = this.parseCsvLine(line);
-            const factoryId = columns[factoryIdIndex]?.trim() ?? '';
+            const factoryName = factoryNameIndex === -1 ? '' : columns[factoryNameIndex]?.trim() ?? '';
             const employeeCode = columns[employeeCodeIndex]?.trim() ?? '';
             const employeeName = columns[employeeNameIndex]?.trim() ?? '';
-            const designationId = designationIdIndex === -1 ? null : columns[designationIdIndex]?.trim() || null;
-            const departmentId = departmentIdIndex === -1 ? null : columns[departmentIdIndex]?.trim() || null;
+            const designationName = designationNameIndex === -1 ? null : columns[designationNameIndex]?.trim() || null;
+            const departmentName = departmentNameIndex === -1 ? null : columns[departmentNameIndex]?.trim() || null;
             const gender = genderIndex === -1 ? null : this.parseGender(columns[genderIndex]);
 
-            if (!factoryId || !employeeCode || !employeeName || !this.isUuid(factoryId)) {
-                return [];
-            }
-
-            if ((designationId && !this.isUuid(designationId)) || (departmentId && !this.isUuid(departmentId))) {
-                return [];
-            }
-
-            return [
-                {
-                    factoryId,
-                    employeeCode,
-                    employeeName,
-                    designationId,
-                    departmentId,
-                    phoneNo: phoneNoIndex === -1 ? null : columns[phoneNoIndex]?.trim() || null,
-                    email: emailIndex === -1 ? null : columns[emailIndex]?.trim()?.toLowerCase() || null,
-                    gender,
-                    joiningDate: joiningDateIndex === -1 ? null : columns[joiningDateIndex]?.trim() || null,
-                    nidNo: nidNoIndex === -1 ? null : columns[nidNoIndex]?.trim() || null,
-                    address: addressIndex === -1 ? null : columns[addressIndex]?.trim() || null,
-                    remarks: remarksIndex === -1 ? null : columns[remarksIndex]?.trim() || null,
-                    isActive: this.parseBoolean(columns[isActiveIndex]),
-                },
-            ];
+            return {
+                factoryName,
+                employeeCode,
+                employeeName,
+                designationName,
+                departmentName,
+                phoneNo: phoneNoIndex === -1 ? null : columns[phoneNoIndex]?.trim() || null,
+                email: emailIndex === -1 ? null : columns[emailIndex]?.trim()?.toLowerCase() || null,
+                gender,
+                joiningDate: joiningDateIndex === -1 ? null : columns[joiningDateIndex]?.trim() || null,
+                nidNo: nidNoIndex === -1 ? null : columns[nidNoIndex]?.trim() || null,
+                address: addressIndex === -1 ? null : columns[addressIndex]?.trim() || null,
+                remarks: remarksIndex === -1 ? null : columns[remarksIndex]?.trim() || null,
+                isActive: this.parseBoolean(columns[isActiveIndex]),
+            };
         });
     }
 
@@ -534,7 +587,45 @@ export class EmployeeService {
         return Object.values(Gender).includes(normalizedValue as Gender) ? normalizedValue as Gender : null;
     }
 
-    private isUuid(value: string) {
-        return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+    private resolveLookupName(name: string | null | undefined, idByName: Map<string, string>) {
+        const normalizedName = name?.trim().toLowerCase() ?? '';
+        return normalizedName ? idByName.get(normalizedName) ?? null : null;
+    }
+
+    private throwMissingSetupError(
+        factories: Set<string>,
+        departments: Set<string>,
+        designations: Set<string>,
+        totalRows: number,
+    ) {
+        const missing = {
+            factories: [...factories],
+            departments: [...departments],
+            designations: [...designations],
+        };
+
+        if (!missing.factories.length && !missing.departments.length && !missing.designations.length) {
+            return;
+        }
+
+        throw new BadRequestException({
+            message: 'Employee upload could not be completed because required setup data is missing. Please add the missing setup records first, then upload the template again.',
+            uploadReport: {
+                inserted: 0,
+                skipped: totalRows,
+                missing,
+            },
+        });
+    }
+
+    private parseOptionalDate(value: string | null | undefined) {
+        const trimmedValue = value?.trim() ?? '';
+
+        if (!trimmedValue) {
+            return null;
+        }
+
+        const date = new Date(trimmedValue);
+        return Number.isNaN(date.getTime()) ? null : trimmedValue;
     }
 }
