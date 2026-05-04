@@ -11,7 +11,7 @@ import { FilterJobDto } from './dto/filter-job.dto';
 import { UpdateJobDto } from './dto/update-job.dto';
 import { JobService } from './job.service';
 
-const MENU_NAME = 'Job Setup';
+const MENU_NAME = 'Purchase Order';
 
 @ApiTags('Job')
 @ApiBearerAuth()
