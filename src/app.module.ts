@@ -35,6 +35,7 @@ import { FactoryModule } from './app-configuration/factory/factory.module';
 import { DepartmentModule } from './hr-payroll/master-data/department/department.module';
 import { DesignationModule } from './hr-payroll/master-data/designation/designation.module';
 import { EmployeeModule } from './hr-payroll/employee/employee.module';
+import { JobModule } from './merchandising/job/job.module';
 
 @Module({
   imports: [
@@ -72,7 +73,8 @@ import { EmployeeModule } from './hr-payroll/employee/employee.module';
     FactoryModule,
     DepartmentModule,
     DesignationModule,
-    EmployeeModule
+    EmployeeModule,
+    JobModule
   ],
   controllers: [AppController, CommonController],
   providers: [
