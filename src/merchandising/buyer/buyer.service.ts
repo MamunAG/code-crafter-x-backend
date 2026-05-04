@@ -51,7 +51,10 @@ export class BuyerService {
   }
 
   buildUploadTemplate() {
-    return 'name,displayName,contact,email,countryId,address,isActive,remarks';
+    return [
+      'name,displayName,contact,email,countryName,address,isActive,remarks',
+      'example-buyer,Example Buyer,+8801700000000,buyer@example.com,Bangladesh,"Dhaka, Bangladesh",true,Sample buyer',
+    ].join('\n');
   }
 
   async importFromTemplate(file: Express.Multer.File | undefined, userId: string, organizationId: string) {
@@ -68,25 +71,37 @@ export class BuyerService {
       };
     }
 
-    const normalizedRows = rows.map((row) => this.normalizeBuyerPayload(row));
-    const uniqueCountryIds = [
-      ...new Set(
-        normalizedRows
-          .map((row) => row.countryId)
-          .filter((countryId): countryId is number => typeof countryId === 'number' && Number.isInteger(countryId) && countryId > 0),
-      ),
-    ];
-    const validCountries = uniqueCountryIds.length
-      ? await this.countryRepository
-        .createQueryBuilder('country')
-        .select(['country.id'])
-        .where('country.organization_id = :organizationId', { organizationId })
-        .andWhere('country.id IN (:...countryIds)', { countryIds: uniqueCountryIds })
-        .getMany()
-      : [];
+    const countries = await this.countryRepository
+      .createQueryBuilder('country')
+      .select(['country.id', 'country.name'])
+      .where('country.organization_id = :organizationId', { organizationId })
+      .andWhere('country.deleted_at IS NULL')
+      .andWhere('country.is_active = :isActive', { isActive: true })
+      .getMany();
+    const countryIdByName = new Map(
+      countries
+        .map((country) => [country.name?.trim().toLowerCase(), country.id] as const)
+        .filter((entry): entry is readonly [string, number] => Boolean(entry[0])),
+    );
+    const missingCountries = new Set<string>();
+    const filteredRows = rows.flatMap((row) => {
+      const countryId = this.resolveCountryName(row.countryName, countryIdByName);
 
-    const validCountryIdSet = new Set(validCountries.map((country) => country.id));
-    const filteredRows = normalizedRows.filter((row) => !row.countryId || validCountryIdSet.has(row.countryId));
+      if (row.countryName && !countryId) {
+        missingCountries.add(row.countryName);
+        return [];
+      }
+
+      return [
+        {
+          ...this.normalizeBuyerPayload(row),
+          countryId,
+        },
+      ];
+    });
+
+    this.throwMissingSetupError(missingCountries, rows.length);
+
     const uniqueEmails = [
       ...new Set(
         filteredRows
@@ -410,6 +425,30 @@ export class BuyerService {
     return Number.isInteger(numericValue) && numericValue > 0 ? numericValue : null;
   }
 
+  private resolveCountryName(name: string | null | undefined, idByName: Map<string, number>) {
+    const normalizedName = name?.trim().toLowerCase() ?? '';
+    return normalizedName ? idByName.get(normalizedName) ?? null : null;
+  }
+
+  private throwMissingSetupError(countries: Set<string>, totalRows: number) {
+    const missing = {
+      countries: [...countries],
+    };
+
+    if (!missing.countries.length) {
+      return;
+    }
+
+    throw new BadRequestException({
+      message: 'Buyer upload could not be completed because required setup data is missing. Please add the missing setup records first, then upload the template again.',
+      uploadReport: {
+        inserted: 0,
+        skipped: totalRows,
+        missing,
+      },
+    });
+  }
+
   private parseBuyerTemplate(content: string) {
     const lines = content
       .replace(/^\uFEFF/, '')
@@ -430,7 +469,7 @@ export class BuyerService {
     const displayNameIndex = headers.indexOf('displayname');
     const contactIndex = headers.indexOf('contact');
     const emailIndex = headers.indexOf('email');
-    const countryIdIndex = headers.indexOf('countryid');
+    const countryNameIndex = headers.indexOf('countryname');
     const addressIndex = headers.indexOf('address');
     const isActiveIndex = headers.indexOf('isactive');
     const remarksIndex = headers.indexOf('remarks');
@@ -450,12 +489,11 @@ export class BuyerService {
       const contact = contactIndex === -1 ? null : columns[contactIndex]?.trim() || null;
       const email = emailIndex === -1 ? null : columns[emailIndex]?.trim() || null;
       const address = addressIndex === -1 ? null : columns[addressIndex]?.trim() || null;
-      const countryIdValue = countryIdIndex === -1 ? '' : columns[countryIdIndex]?.trim() ?? '';
-      const countryId = countryIdValue ? Number(countryIdValue) : null;
+      const countryName = countryNameIndex === -1 ? null : columns[countryNameIndex]?.trim() || null;
       const remarks = remarksIndex === -1 ? '' : columns[remarksIndex]?.trim() ?? '';
       const isActive = this.parseBoolean(columns[isActiveIndex]);
 
-      if (!name || !displayName || (countryId !== null && (!Number.isInteger(countryId) || countryId <= 0))) {
+      if (!name || !displayName) {
         return [];
       }
 
@@ -465,7 +503,7 @@ export class BuyerService {
           displayName,
           contact,
           email,
-          countryId,
+          countryName,
           address,
           remarks: remarks || null,
           isActive,
