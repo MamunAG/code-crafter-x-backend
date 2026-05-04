@@ -16,15 +16,123 @@ export class DepartmentService {
     ) { }
 
     async create(dto: CreateDepartmentDto, organizationId: string) {
-        await this.ensureDepartmentNameIsUnique(dto.departmentName, organizationId);
+        const normalizedDepartment = {
+            departmentName: dto.departmentName.trim(),
+            description: this.nullableString(dto.description),
+            isActive: dto.isActive === undefined ? true : this.parseBoolean(dto.isActive),
+        };
+        await this.ensureDepartmentNameIsUnique(normalizedDepartment.departmentName, organizationId);
 
         const department = this.departmentRepository.create({
-            ...dto,
+            ...normalizedDepartment,
             organizationId,
         });
 
         const saved = await this.departmentRepository.save(department);
         return this.findOne(saved.id, organizationId);
+    }
+
+    buildUploadTemplate() {
+        return 'departmentName,description,isActive';
+    }
+
+    async importFromTemplate(file: Express.Multer.File | undefined, userId: string, organizationId: string) {
+        if (!file?.buffer?.length) {
+            throw new BadRequestException('Please upload a department template file.');
+        }
+
+        const rows = this.parseDepartmentTemplate(file.buffer.toString('utf8'));
+
+        if (!rows.length) {
+            return {
+                inserted: 0,
+                skipped: 0,
+            };
+        }
+
+        const normalizedRows = rows.map((row) => ({
+            departmentName: row.departmentName?.trim(),
+            description: this.nullableString(row.description),
+            isActive: row.isActive ?? true,
+        }));
+        const uniqueNames = [
+            ...new Set(
+                normalizedRows
+                    .map((row) => row.departmentName?.trim().toLowerCase())
+                    .filter((name): name is string => Boolean(name)),
+            ),
+        ];
+        const existingDepartments = uniqueNames.length
+            ? await this.departmentRepository
+                .createQueryBuilder('department')
+                .withDeleted()
+                .select(['department.departmentName'])
+                .where('department.organization_id = :organizationId', { organizationId })
+                .andWhere('LOWER(TRIM(department.departmentName)) IN (:...names)', { names: uniqueNames })
+                .getMany()
+            : [];
+
+        const existingNameSet = new Set(
+            existingDepartments
+                .map((department) => department.departmentName?.trim().toLowerCase())
+                .filter((name): name is string => Boolean(name)),
+        );
+        const seenNameSet = new Set<string>();
+        const departmentsToCreate = normalizedRows
+            .filter((row) => {
+                const name = row.departmentName?.trim().toLowerCase();
+
+                if (!name) {
+                    return false;
+                }
+
+                if (existingNameSet.has(name)) {
+                    return false;
+                }
+
+                if (seenNameSet.has(name)) {
+                    return false;
+                }
+
+                seenNameSet.add(name);
+                return true;
+            })
+            .map((row) => {
+                const departmentName = row.departmentName?.trim();
+
+                return this.departmentRepository.create({
+                    departmentName: departmentName as string,
+                    description: this.nullableString(row.description),
+                    isActive: row.isActive ?? true,
+                    organizationId,
+                    created_by_id: userId,
+                    updated_by_id: null as unknown as string,
+                    updated_at: null as unknown as Date,
+                });
+            });
+
+        if (!departmentsToCreate.length) {
+            return {
+                inserted: 0,
+                skipped: rows.length,
+            };
+        }
+
+        const savedDepartments = await this.departmentRepository.save(departmentsToCreate);
+        await this.departmentRepository
+            .createQueryBuilder()
+            .update(Department)
+            .set({
+                updated_by_id: null,
+                updated_at: () => 'NULL',
+            } as unknown as Partial<Department>)
+            .where('id IN (:...ids)', { ids: savedDepartments.map((department) => department.id) })
+            .execute();
+
+        return {
+            inserted: savedDepartments.length,
+            skipped: rows.length - savedDepartments.length,
+        };
     }
 
     async findAll(
@@ -167,5 +275,100 @@ export class DepartmentService {
         }
 
         return department;
+    }
+
+    private nullableString(value: string | null | undefined) {
+        const trimmedValue = value?.trim() ?? '';
+        return trimmedValue || undefined;
+    }
+
+    private parseBoolean(value: boolean | string | null | undefined) {
+        if (typeof value === 'boolean') {
+            return value;
+        }
+
+        const normalizedValue = value?.trim().toLowerCase();
+        if (!normalizedValue) {
+            return true;
+        }
+
+        return ['true', 'yes', 'y', '1', 'active'].includes(normalizedValue);
+    }
+
+    private parseDepartmentTemplate(content: string) {
+        const lines = content
+            .replace(/^\uFEFF/, '')
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter(Boolean);
+
+        if (lines.length === 0) {
+            throw new BadRequestException('The uploaded template does not contain any department rows.');
+        }
+
+        if (lines.length === 1) {
+            return [];
+        }
+
+        const headers = this.parseCsvLine(lines[0]).map((header) => header.trim().toLowerCase());
+        const departmentNameIndex = headers.indexOf('departmentname');
+        const descriptionIndex = headers.indexOf('description');
+        const isActiveIndex = headers.indexOf('isactive');
+
+        if (departmentNameIndex === -1 || isActiveIndex === -1) {
+            throw new BadRequestException('The uploaded template must include departmentName and isActive columns.');
+        }
+
+        return lines.slice(1).flatMap((line) => {
+            const columns = this.parseCsvLine(line);
+            const departmentName = columns[departmentNameIndex]?.trim() ?? '';
+            const description = descriptionIndex === -1 ? null : columns[descriptionIndex]?.trim() || null;
+            const isActive = this.parseBoolean(columns[isActiveIndex]);
+
+            if (!departmentName) {
+                return [];
+            }
+
+            return [
+                {
+                    departmentName,
+                    description,
+                    isActive,
+                },
+            ];
+        });
+    }
+
+    private parseCsvLine(line: string) {
+        const values: string[] = [];
+        let current = '';
+        let inQuotes = false;
+
+        for (let index = 0; index < line.length; index += 1) {
+            const character = line[index];
+            const nextCharacter = line[index + 1];
+
+            if (character === '"' && nextCharacter === '"') {
+                current += '"';
+                index += 1;
+                continue;
+            }
+
+            if (character === '"') {
+                inQuotes = !inQuotes;
+                continue;
+            }
+
+            if (character === ',' && !inQuotes) {
+                values.push(current);
+                current = '';
+                continue;
+            }
+
+            current += character;
+        }
+
+        values.push(current);
+        return values;
     }
 }

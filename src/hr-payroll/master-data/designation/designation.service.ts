@@ -16,15 +16,123 @@ export class DesignationService {
     ) { }
 
     async create(dto: CreateDesignationDto, organizationId: string) {
-        await this.ensureDesignationNameIsUnique(dto.designationName, organizationId);
+        const normalizedDesignation = {
+            designationName: dto.designationName.trim(),
+            description: this.nullableString(dto.description),
+            isActive: dto.isActive === undefined ? true : this.parseBoolean(dto.isActive),
+        };
+        await this.ensureDesignationNameIsUnique(normalizedDesignation.designationName, organizationId);
 
         const designation = this.designationRepository.create({
-            ...dto,
+            ...normalizedDesignation,
             organizationId,
         });
 
         const saved = await this.designationRepository.save(designation);
         return this.findOne(saved.id, organizationId);
+    }
+
+    buildUploadTemplate() {
+        return 'designationName,description,isActive';
+    }
+
+    async importFromTemplate(file: Express.Multer.File | undefined, userId: string, organizationId: string) {
+        if (!file?.buffer?.length) {
+            throw new BadRequestException('Please upload a designation template file.');
+        }
+
+        const rows = this.parseDesignationTemplate(file.buffer.toString('utf8'));
+
+        if (!rows.length) {
+            return {
+                inserted: 0,
+                skipped: 0,
+            };
+        }
+
+        const normalizedRows = rows.map((row) => ({
+            designationName: row.designationName?.trim(),
+            description: this.nullableString(row.description),
+            isActive: row.isActive ?? true,
+        }));
+        const uniqueNames = [
+            ...new Set(
+                normalizedRows
+                    .map((row) => row.designationName?.trim().toLowerCase())
+                    .filter((name): name is string => Boolean(name)),
+            ),
+        ];
+        const existingDesignations = uniqueNames.length
+            ? await this.designationRepository
+                .createQueryBuilder('designation')
+                .withDeleted()
+                .select(['designation.designationName'])
+                .where('designation.organization_id = :organizationId', { organizationId })
+                .andWhere('LOWER(TRIM(designation.designationName)) IN (:...names)', { names: uniqueNames })
+                .getMany()
+            : [];
+
+        const existingNameSet = new Set(
+            existingDesignations
+                .map((designation) => designation.designationName?.trim().toLowerCase())
+                .filter((name): name is string => Boolean(name)),
+        );
+        const seenNameSet = new Set<string>();
+        const designationsToCreate = normalizedRows
+            .filter((row) => {
+                const name = row.designationName?.trim().toLowerCase();
+
+                if (!name) {
+                    return false;
+                }
+
+                if (existingNameSet.has(name)) {
+                    return false;
+                }
+
+                if (seenNameSet.has(name)) {
+                    return false;
+                }
+
+                seenNameSet.add(name);
+                return true;
+            })
+            .map((row) => {
+                const designationName = row.designationName?.trim();
+
+                return this.designationRepository.create({
+                    designationName: designationName as string,
+                    description: this.nullableString(row.description),
+                    isActive: row.isActive ?? true,
+                    organizationId,
+                    created_by_id: userId,
+                    updated_by_id: null as unknown as string,
+                    updated_at: null as unknown as Date,
+                });
+            });
+
+        if (!designationsToCreate.length) {
+            return {
+                inserted: 0,
+                skipped: rows.length,
+            };
+        }
+
+        const savedDesignations = await this.designationRepository.save(designationsToCreate);
+        await this.designationRepository
+            .createQueryBuilder()
+            .update(Designation)
+            .set({
+                updated_by_id: null,
+                updated_at: () => 'NULL',
+            } as unknown as Partial<Designation>)
+            .where('id IN (:...ids)', { ids: savedDesignations.map((designation) => designation.id) })
+            .execute();
+
+        return {
+            inserted: savedDesignations.length,
+            skipped: rows.length - savedDesignations.length,
+        };
     }
 
     async findAll(
@@ -167,5 +275,100 @@ export class DesignationService {
         }
 
         return designation;
+    }
+
+    private nullableString(value: string | null | undefined) {
+        const trimmedValue = value?.trim() ?? '';
+        return trimmedValue || undefined;
+    }
+
+    private parseBoolean(value: boolean | string | null | undefined) {
+        if (typeof value === 'boolean') {
+            return value;
+        }
+
+        const normalizedValue = value?.trim().toLowerCase();
+        if (!normalizedValue) {
+            return true;
+        }
+
+        return ['true', 'yes', 'y', '1', 'active'].includes(normalizedValue);
+    }
+
+    private parseDesignationTemplate(content: string) {
+        const lines = content
+            .replace(/^\uFEFF/, '')
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter(Boolean);
+
+        if (lines.length === 0) {
+            throw new BadRequestException('The uploaded template does not contain any designation rows.');
+        }
+
+        if (lines.length === 1) {
+            return [];
+        }
+
+        const headers = this.parseCsvLine(lines[0]).map((header) => header.trim().toLowerCase());
+        const designationNameIndex = headers.indexOf('designationname');
+        const descriptionIndex = headers.indexOf('description');
+        const isActiveIndex = headers.indexOf('isactive');
+
+        if (designationNameIndex === -1 || isActiveIndex === -1) {
+            throw new BadRequestException('The uploaded template must include designationName and isActive columns.');
+        }
+
+        return lines.slice(1).flatMap((line) => {
+            const columns = this.parseCsvLine(line);
+            const designationName = columns[designationNameIndex]?.trim() ?? '';
+            const description = descriptionIndex === -1 ? null : columns[descriptionIndex]?.trim() || null;
+            const isActive = this.parseBoolean(columns[isActiveIndex]);
+
+            if (!designationName) {
+                return [];
+            }
+
+            return [
+                {
+                    designationName,
+                    description,
+                    isActive,
+                },
+            ];
+        });
+    }
+
+    private parseCsvLine(line: string) {
+        const values: string[] = [];
+        let current = '';
+        let inQuotes = false;
+
+        for (let index = 0; index < line.length; index += 1) {
+            const character = line[index];
+            const nextCharacter = line[index + 1];
+
+            if (character === '"' && nextCharacter === '"') {
+                current += '"';
+                index += 1;
+                continue;
+            }
+
+            if (character === '"') {
+                inQuotes = !inQuotes;
+                continue;
+            }
+
+            if (character === ',' && !inQuotes) {
+                values.push(current);
+                current = '';
+                continue;
+            }
+
+            current += character;
+        }
+
+        values.push(current);
+        return values;
     }
 }

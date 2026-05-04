@@ -1,5 +1,6 @@
-import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { BadRequestException, Body, Controller, Delete, Get, Header, Headers, Param, ParseUUIDPipe, Patch, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type AuthUser from 'src/auth/dto/auth-user';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { MenuAccess } from 'src/common/decorators/menu-access.decorator';
@@ -44,6 +45,16 @@ export class DesignationController {
         return new BaseResponseDto(result, 'Designations retrieved successfully');
     }
 
+    @Get('template/upload')
+    @MenuAccess(MENU_NAME, 'canCreate')
+    @Header('Content-Type', 'text/csv; charset=utf-8')
+    @Header('Content-Disposition', 'attachment; filename="designation-upload-template.csv"')
+    @ApiOperation({ summary: 'Download designation upload template' })
+    downloadUploadTemplate(@Headers('x-organization-id') organizationId?: string) {
+        this.requireOrganizationId(organizationId);
+        return this.designationService.buildUploadTemplate();
+    }
+
     @Get(':id')
     @MenuAccess(MENU_NAME, 'canView')
     @ApiOperation({ summary: 'Get designation by id' })
@@ -65,6 +76,21 @@ export class DesignationController {
 
         const result = await this.designationService.create(dto, selectedOrganizationId);
         return new BaseResponseDto(result, 'Designation saved successfully');
+    }
+
+    @Post('upload')
+    @MenuAccess(MENU_NAME, 'canCreate')
+    @UseInterceptors(FileInterceptor('file'))
+    @ApiConsumes('multipart/form-data')
+    @ApiOperation({ summary: 'Upload designation template' })
+    async uploadTemplate(
+        @CurrentUser() user: AuthUser,
+        @UploadedFile() file: Express.Multer.File,
+        @Headers('x-organization-id') organizationId?: string,
+    ) {
+        const selectedOrganizationId = this.requireOrganizationId(organizationId);
+        const result = await this.designationService.importFromTemplate(file, user.userId, selectedOrganizationId);
+        return new BaseResponseDto(result, 'Designation upload completed');
     }
 
     @Patch(':id')
