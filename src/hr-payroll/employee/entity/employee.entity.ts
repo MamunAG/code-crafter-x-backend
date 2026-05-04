@@ -5,6 +5,7 @@ import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 't
 import { Factory } from 'src/app-configuration/factory/entity/factory.entity';
 import { Designation } from 'src/hr-payroll/master-data/designation/entity/designation.entity';
 import { Department } from 'src/hr-payroll/master-data/department/entity/department.entity';
+import { Files } from 'src/files/entities/file.entity';
 import { Gender } from '../dto/gender.enum';
 
 @Entity('employees')
@@ -36,6 +37,10 @@ export class Employee extends BaseEntity {
     @ApiProperty({ description: 'Department ID', example: 'uuid' })
     @Column({ name: 'department_id', type: 'uuid', nullable: true })
     departmentId?: string | null;
+
+    @ApiProperty({ description: 'Employee image file ID', example: 1, required: false, nullable: true })
+    @Column({ name: 'image_id', type: 'integer', nullable: true })
+    imageId?: number | null;
 
     @ApiProperty({ description: 'Phone number', example: '+8801700000000' })
     @Column({ name: 'phone_no', type: 'varchar', length: 50, nullable: true })
@@ -88,4 +93,9 @@ export class Employee extends BaseEntity {
     @ManyToOne(() => Department, { nullable: true })
     @JoinColumn({ name: 'department_id' })
     department?: Department | null;
+
+    @ApiProperty({ description: 'Employee image file', type: () => Files, required: false })
+    @ManyToOne(() => Files, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'image_id' })
+    image?: Files | null;
 }
