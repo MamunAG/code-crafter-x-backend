@@ -1,6 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import { IsEnum, IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { OrderType } from '../entity/job.entity';
 
@@ -16,10 +15,9 @@ export class FilterJobDto extends PaginationDto {
   buyerId?: string;
 
   @ApiPropertyOptional({ description: 'Merchandiser ID' })
-  @Type(() => Number)
   @IsOptional()
-  @IsNumber()
-  merchandiserId?: number;
+  @IsUUID()
+  merchandiserId?: string;
 
   @ApiPropertyOptional({ description: 'Order type', enum: OrderType })
   @IsOptional()

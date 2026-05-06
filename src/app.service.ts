@@ -34,6 +34,9 @@ import { Factory } from './app-configuration/factory/entity/factory.entity';
 import { Designation } from './hr-payroll/master-data/designation/entity/designation.entity';
 import { Department } from './hr-payroll/master-data/department/entity/department.entity';
 import { Employee } from './hr-payroll/employee/entity/employee.entity';
+import { PurchaseOrder } from './merchandising/job/entity/purchase-order.entity';
+import { Job } from './merchandising/job/entity/job.entity';
+import { JobDetails } from './merchandising/job/entity/job-details.entity';
 
 @Injectable()
 
@@ -83,7 +86,10 @@ export class AppService implements TypeOrmOptionsFactory {
         Factory,
         Designation,
         Department,
-        Employee
+        Employee,
+        PurchaseOrder,
+        Job,
+        JobDetails
       ],
       synchronize: false, // Never use synchronize in production
       logging: isDevelopment,

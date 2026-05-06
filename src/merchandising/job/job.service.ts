@@ -7,6 +7,7 @@ import { Buyer } from 'src/merchandising/buyer/entity/buyer.entity';
 import { Color } from 'src/merchandising/master-data/color/entity/color.entity';
 import { Size } from 'src/merchandising/master-data/size/entity/size.entity';
 import { Style } from 'src/merchandising/style/entity/style.entity';
+import { Employee } from 'src/hr-payroll/employee/entity/employee.entity';
 import { Repository } from 'typeorm';
 import { CreateJobDetailDto } from './dto/create-job-detail.dto';
 import { CreateJobDto } from './dto/create-job.dto';
@@ -46,11 +47,17 @@ export class JobService {
 
     @InjectRepository(Color)
     private colorRepository: Repository<Color>,
-  ) {}
+
+    @InjectRepository(Employee)
+    private employeeRepository: Repository<Employee>,
+  ) { }
 
   async create(dto: CreateJobDto, userId: string, organizationId: string) {
     await this.findFactoryOrFail(dto.factoryId, organizationId);
     await this.findBuyerOrFail(dto.buyerId, organizationId);
+    if (dto.merchandiserId !== undefined && dto.merchandiserId !== null) {
+      await this.findEmployeeOrFail(dto.merchandiserId, organizationId);
+    }
 
     const details = dto.jobDetails ?? [];
     await this.validateDetails(details, organizationId);
@@ -58,7 +65,7 @@ export class JobService {
     const job = this.jobRepository.create({
       factoryId: dto.factoryId,
       buyerId: dto.buyerId,
-      merchandiserId: this.nullableNumber(dto.merchandiserId) ?? 0,
+      merchandiserId: dto.merchandiserId ?? undefined,
       ordertype: dto.ordertype ?? undefined,
       totalPoQty: details.length ? this.sumDetailQuantity(details) : this.numberOrDefault(dto.totalPoQty, 0),
       poReceiveDate: this.parseOptionalDate(dto.poReceiveDate) ?? undefined,
@@ -88,6 +95,7 @@ export class JobService {
       .distinct(true)
       .leftJoinAndSelect('job.factory', 'factory')
       .leftJoinAndSelect('job.buyer', 'buyer')
+      .leftJoinAndSelect('job.merchandiser', 'merchandiser')
       .leftJoinAndSelect('job.jobDetails', 'jobDetails')
       .leftJoinAndSelect('jobDetails.purchaseOrder', 'purchaseOrder')
       .leftJoinAndSelect('jobDetails.style', 'style')
@@ -156,6 +164,7 @@ export class JobService {
       .createQueryBuilder('job')
       .leftJoinAndSelect('job.factory', 'factory')
       .leftJoinAndSelect('job.buyer', 'buyer')
+      .leftJoinAndSelect('job.merchandiser', 'merchandiser')
       .leftJoinAndSelect('job.jobDetails', 'jobDetails')
       .leftJoinAndSelect('jobDetails.purchaseOrder', 'purchaseOrder')
       .leftJoinAndSelect('jobDetails.style', 'style')
@@ -180,6 +189,7 @@ export class JobService {
     const job = await this.jobRepository
       .createQueryBuilder('job')
       .leftJoinAndSelect('job.factory', 'factory')
+      .leftJoinAndSelect('job.merchandiser', 'merchandiser')
       .where('job.id = :id', { id })
       .andWhere('factory.organization_id = :organizationId', { organizationId })
       .andWhere('job.deleted_at IS NULL')
@@ -199,8 +209,11 @@ export class JobService {
       job.buyerId = dto.buyerId;
     }
 
-    if (dto.merchandiserId !== undefined) {
-      job.merchandiserId = this.nullableNumber(dto.merchandiserId) ?? 0;
+    if (dto.merchandiserId != null) {
+      await this.findEmployeeOrFail(dto.merchandiserId, organizationId);
+      job.merchandiserId = dto.merchandiserId;
+    } else if (dto.merchandiserId === null) {
+      job.merchandiserId = null;
     }
 
     if (dto.ordertype !== undefined) {
@@ -369,6 +382,18 @@ export class JobService {
     }
 
     return buyer;
+  }
+
+  private async findEmployeeOrFail(employeeId: string, organizationId: string) {
+    const employee = await this.employeeRepository.findOne({
+      where: { id: employeeId, organizationId },
+    });
+
+    if (!employee) {
+      throw new BadRequestException('Merchandiser not found in the selected organization.');
+    }
+
+    return employee;
   }
 
   private async findStyleOrFail(styleId: string, organizationId: string) {

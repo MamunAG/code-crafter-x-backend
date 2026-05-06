@@ -13,11 +13,10 @@ export class CreateJobDto {
   @IsUUID()
   buyerId: string;
 
-  @ApiPropertyOptional({ description: 'Merchandiser ID', example: 1 })
-  @Type(() => Number)
+  @ApiPropertyOptional({ description: 'Merchandiser ID', example: '8bf7d37e-4a62-47b1-b1e5-ded54c3cfb1f' })
   @IsOptional()
-  @IsNumber()
-  merchandiserId?: number | null;
+  @IsUUID()
+  merchandiserId?: string | null;
 
   @ApiPropertyOptional({ description: 'Order type', enum: OrderType, example: OrderType.Retail })
   @IsOptional()

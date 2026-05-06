@@ -10,6 +10,7 @@ import {
     PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Factory } from 'src/app-configuration/factory/entity/factory.entity';
+import { Employee } from 'src/hr-payroll/employee/entity/employee.entity';
 import { JobDetails } from './job-details.entity';
 
 export enum OrderType {
@@ -29,8 +30,8 @@ export class Job extends BaseEntity {
     @Column({ name: 'buyer_id', type: 'uuid', nullable: false })
     buyerId: string;
 
-    @Column({ name: 'merchandiser_id', type: 'integer', nullable: true, default: 0 })
-    merchandiserId?: number;
+    @Column({ name: 'merchandiser_id', type: 'uuid', nullable: true })
+    merchandiserId?: string | null;
 
     @Column({
         name: 'ordertype',
@@ -54,6 +55,11 @@ export class Job extends BaseEntity {
     @ManyToOne(() => Factory, { nullable: false })
     @JoinColumn({ name: 'factory_id' })
     factory: Factory;
+
+    @ApiProperty({ description: 'Merchandiser', type: () => Employee, required: false, nullable: true })
+    @ManyToOne(() => Employee, { nullable: true })
+    @JoinColumn({ name: 'merchandiser_id' })
+    merchandiser?: Employee | null;
 
     @ManyToOne(() => Buyer, { nullable: false })
     @JoinColumn({ name: 'buyer_id' })
