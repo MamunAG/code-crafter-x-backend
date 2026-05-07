@@ -1,7 +1,10 @@
 import * as dotenv from 'dotenv';
 import { DataSource } from 'typeorm';
+import { getDatabasePoolConfig } from './database-pool.config';
 
 dotenv.config(); // Loads .env
+
+const poolConfig = getDatabasePoolConfig((key) => process.env[key]);
 
 export default new DataSource({
   type: 'postgres',
@@ -13,6 +16,11 @@ export default new DataSource({
   entities: ['src/**/*.entity.ts'],
   migrations: ['src/migrations/*.ts'],
   synchronize: false,
+  extra: {
+    max: poolConfig.max,
+    idleTimeoutMillis: poolConfig.idleTimeoutMillis,
+    connectionTimeoutMillis: poolConfig.connectionTimeoutMillis,
+  },
   ssl:
     process.env.DB_SSL_ENABLED === 'true'
       ? {

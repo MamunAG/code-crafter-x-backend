@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { CommandModule } from 'nestjs-command';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { ConfigModule } from '@nestjs/config';
+import { AppService, createTypeOrmOptions } from './app.service';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
@@ -45,7 +45,8 @@ import { JobModule } from './merchandising/job/job.module';
       cache: true,
     }),
     TypeOrmModule.forRootAsync({
-      useClass: AppService,
+      inject: [ConfigService],
+      useFactory: createTypeOrmOptions,
     }),
     ScheduleModule.forRoot(),
     AuthModule,
@@ -74,7 +75,7 @@ import { JobModule } from './merchandising/job/job.module';
     DepartmentModule,
     DesignationModule,
     EmployeeModule,
-    JobModule
+    JobModule,
   ],
   controllers: [AppController, CommonController],
   providers: [
@@ -94,5 +95,4 @@ import { JobModule } from './merchandising/job/job.module';
     },
   ],
 })
-export class AppModule { }
-
+export class AppModule {}

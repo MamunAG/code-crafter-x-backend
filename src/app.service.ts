@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModuleOptions, TypeOrmOptionsFactory } from '@nestjs/typeorm';
 import { RefreshToken } from './auth/entities/refresh-token.entity';
@@ -37,84 +37,95 @@ import { Employee } from './hr-payroll/employee/entity/employee.entity';
 import { PurchaseOrder } from './merchandising/job/entity/purchase-order.entity';
 import { Job } from './merchandising/job/entity/job.entity';
 import { JobDetails } from './merchandising/job/entity/job-details.entity';
+import { getDatabasePoolConfig } from './config/database-pool.config';
 
-@Injectable()
+const databaseLogger = new Logger('Database');
 
-export class AppService implements TypeOrmOptionsFactory {
-  constructor(private configService: ConfigService) { }
+export function createTypeOrmOptions(
+  configService: ConfigService,
+): TypeOrmModuleOptions {
+  const isDevelopment = configService.get('NODE_ENV') === 'development';
+  const poolConfig = getDatabasePoolConfig((key) =>
+    configService.get<string>(key),
+  );
 
-  createTypeOrmOptions(): TypeOrmModuleOptions {
-    const isDevelopment = this.configService.get('NODE_ENV') === 'development';
+  databaseLogger.log(
+    `Database pool configured: max=${poolConfig.max}, idleTimeoutMillis=${poolConfig.idleTimeoutMillis}, connectionTimeoutMillis=${poolConfig.connectionTimeoutMillis}`,
+  );
 
-    return {
-      type: 'postgres',
-      host: this.configService.get('DB_HOST'),
-      port: this.configService.get('DB_PORT'),
-      username: this.configService.get('DB_USERNAME'),
-      password: this.configService.get('DB_PASSWORD'),
-      database: this.configService.get('DB_NAME'),
-      entities: [
-        RefreshToken,
-        PasswordResetToken,
-        EmailVerificationToken,
-        User,
-        Files,
-        FileReference,
-        DeleteAccount,
-        Contact,
-        UserLocation,
-        Color,
-        Size,
-        Embellishment,
-        Currency,
-        Unit,
-        Country,
-        Menu,
-        MenuPermission,
-        MenuToOrganizationMap,
-        ModuleEntry,
-        Organization,
-        UserToOranizationMap,
-        OrganizationAccessRequest,
-        Notification,
-        UserFirebaseToken,
-        Buyer,
-        Style,
-        StyleToColorMap,
-        StyleToEmbellishmentMap,
-        StyleToSizeMap,
-        Factory,
-        Designation,
-        Department,
-        Employee,
-        PurchaseOrder,
-        Job,
-        JobDetails
-      ],
-      synchronize: false, // Never use synchronize in production
-      logging: isDevelopment,
-      migrations: isDevelopment ? [] : ['dist/migrations/*.js'],
-      migrationsRun: !isDevelopment,
-      migrationsTableName: 'migrations',
-      // Connection pool settings
-      extra: {
-        max: 20, // Maximum number of connections in the pool
-        min: 5, // Minimum number of connections in the pool
-        acquire: 60000, // Maximum time (ms) that pool will try to get connection before throwing error
-        idle: 10000, // Maximum time (ms) that a connection can be idle before being released
-      },
-      // SSL configuration - controlled by environment variable
-      ssl:
-        this.configService.get('DB_SSL_ENABLED') === 'true'
-          ? {
+  return {
+    type: 'postgres',
+    host: configService.get('DB_HOST'),
+    port: Number.parseInt(configService.get<string>('DB_PORT') || '5432', 10),
+    username: configService.get('DB_USERNAME'),
+    password: configService.get('DB_PASSWORD'),
+    database: configService.get('DB_NAME'),
+    entities: [
+      RefreshToken,
+      PasswordResetToken,
+      EmailVerificationToken,
+      User,
+      Files,
+      FileReference,
+      DeleteAccount,
+      Contact,
+      UserLocation,
+      Color,
+      Size,
+      Embellishment,
+      Currency,
+      Unit,
+      Country,
+      Menu,
+      MenuPermission,
+      MenuToOrganizationMap,
+      ModuleEntry,
+      Organization,
+      UserToOranizationMap,
+      OrganizationAccessRequest,
+      Notification,
+      UserFirebaseToken,
+      Buyer,
+      Style,
+      StyleToColorMap,
+      StyleToEmbellishmentMap,
+      StyleToSizeMap,
+      Factory,
+      Designation,
+      Department,
+      Employee,
+      PurchaseOrder,
+      Job,
+      JobDetails,
+    ],
+    synchronize: false, // Never use synchronize in production
+    logging: isDevelopment,
+    migrations: isDevelopment ? [] : ['dist/migrations/*.js'],
+    migrationsRun: !isDevelopment,
+    migrationsTableName: 'migrations',
+    extra: {
+      max: poolConfig.max,
+      idleTimeoutMillis: poolConfig.idleTimeoutMillis,
+      connectionTimeoutMillis: poolConfig.connectionTimeoutMillis,
+    },
+    // SSL configuration - controlled by environment variable
+    ssl:
+      configService.get('DB_SSL_ENABLED') === 'true'
+        ? {
             rejectUnauthorized: false,
           }
-          : false,
-      // Retry configuration
-      retryAttempts: 10,
-      retryDelay: 3000,
-    };
-  }
+        : false,
+    // Retry configuration
+    retryAttempts: 10,
+    retryDelay: 3000,
+  };
 }
 
+@Injectable()
+export class AppService implements TypeOrmOptionsFactory {
+  constructor(private configService: ConfigService) {}
 
+  createTypeOrmOptions(): TypeOrmModuleOptions {
+    return createTypeOrmOptions(this.configService);
+  }
+}
