@@ -1,5 +1,6 @@
-import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, ParseUUIDPipe, Patch, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type AuthUser from 'src/auth/dto/auth-user';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { MenuAccess } from 'src/common/decorators/menu-access.decorator';
@@ -11,7 +12,7 @@ import { FilterJobDto } from './dto/filter-job.dto';
 import { UpdateJobDto } from './dto/update-job.dto';
 import { JobService } from './job.service';
 
-const MENU_NAME = 'Purchase Order';
+const MENU_NAME = 'Job Entry';
 
 @ApiTags('Job')
 @ApiBearerAuth()
@@ -58,6 +59,18 @@ export class JobController {
     const selectedOrganizationId = this.requireOrganizationId(organizationId);
     const result = await this.jobService.create(dto, user.userId, selectedOrganizationId);
     return new BaseResponseDto(result, 'Job saved successfully');
+  }
+
+  @Post('ai-assist')
+  @MenuAccess(MENU_NAME, 'canCreate')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Extract PO detail rows from an uploaded PDF or Excel file' })
+  @ApiResponse({ status: 201, description: 'AI Assist data extracted successfully', type: BaseResponseDto })
+  async aiAssist(@UploadedFile() file: Express.Multer.File, @Headers('x-organization-id') organizationId?: string) {
+    this.requireOrganizationId(organizationId);
+    const result = await this.jobService.analyzeAiAssistFile(file);
+    return new BaseResponseDto(result, 'AI Assist data extracted successfully');
   }
 
   @Patch(':id')

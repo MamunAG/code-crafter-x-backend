@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import axios from 'axios';
+import { PDFParse } from 'pdf-parse';
 import { Factory } from 'src/app-configuration/factory/entity/factory.entity';
 import { PaginatedResponseDto } from 'src/common/dto/paginated-response.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
@@ -9,6 +11,7 @@ import { Size } from 'src/merchandising/master-data/size/entity/size.entity';
 import { Style } from 'src/merchandising/style/entity/style.entity';
 import { Employee } from 'src/hr-payroll/employee/entity/employee.entity';
 import { Repository } from 'typeorm';
+import * as XLSX from 'xlsx';
 import { CreateJobDetailDto } from './dto/create-job-detail.dto';
 import { CreateJobDto } from './dto/create-job.dto';
 import { FilterJobDto } from './dto/filter-job.dto';
@@ -20,6 +23,25 @@ import { PurchaseOrder } from './entity/purchase-order.entity';
 type JobListFilters = Partial<FilterJobDto> & {
   deletedOnly?: string | boolean;
 };
+
+type JobAiAssistRow = {
+  poNumber: string;
+  styleNo: string;
+  color: string;
+  size: string;
+  quantity: number;
+};
+
+type OpenRouterChatResponse = {
+  choices?: Array<{
+    message?: {
+      content?: string;
+    };
+  }>;
+};
+
+const AI_ASSIST_TEXT_LIMIT = 30000;
+const AI_ASSIST_ALLOWED_EXTENSIONS = new Set(['pdf', 'xls', 'xlsx', 'csv']);
 
 @Injectable()
 export class JobService {
@@ -262,6 +284,25 @@ export class JobService {
     return this.jobRepository.restore({ id });
   }
 
+  async analyzeAiAssistFile(file?: Express.Multer.File) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('Please upload a PDF or Excel file for AI Assist.');
+    }
+
+    const extension = this.getFileExtension(file.originalname);
+    if (!AI_ASSIST_ALLOWED_EXTENSIONS.has(extension)) {
+      throw new BadRequestException('AI Assist supports PDF, XLS, XLSX, and CSV files only.');
+    }
+
+    const extractedText = await this.extractAiAssistText(file, extension);
+    if (!extractedText.trim()) {
+      throw new BadRequestException('No readable PO detail data was found in the uploaded file.');
+    }
+
+    const rows = await this.extractAiAssistRowsWithOpenRouter(extractedText);
+    return { rows };
+  }
+
   private async syncJobDetails(jobId: string, details: CreateJobDetailDto[], userId: string) {
     await this.jobDetailsRepository.delete({ jobId });
 
@@ -476,5 +517,186 @@ export class JobService {
     }
 
     return ['true', 'yes', 'y', '1', 'active'].includes(value?.trim().toLowerCase() ?? '');
+  }
+
+  private getFileExtension(fileName?: string) {
+    const parts = fileName?.toLowerCase().split('.') ?? [];
+    return parts.length > 1 ? parts[parts.length - 1] : '';
+  }
+
+  private async extractAiAssistText(file: Express.Multer.File, extension: string) {
+    if (extension === 'pdf') {
+      const parser = new PDFParse({ data: file.buffer });
+
+      try {
+        const result = await parser.getText();
+        return this.limitAiAssistText(result.text ?? '');
+      } finally {
+        await parser.destroy();
+      }
+    }
+
+    const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+    const sheetTexts = workbook.SheetNames.map((sheetName) => {
+      const sheet = workbook.Sheets[sheetName];
+      const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
+      return [`Sheet: ${sheetName}`, csv].filter(Boolean).join('\n');
+    });
+
+    return this.limitAiAssistText(sheetTexts.join('\n\n'));
+  }
+
+  private limitAiAssistText(text: string) {
+    return text.replace(/\u0000/g, '').slice(0, AI_ASSIST_TEXT_LIMIT);
+  }
+
+  private async extractAiAssistRowsWithOpenRouter(extractedText: string) {
+    const apiKey = process.env.OPEN_ROUTER_KEY?.trim();
+    if (!apiKey) {
+      throw new BadRequestException('OpenRouter key is not configured for AI Assist.');
+    }
+
+    const model = process.env.OPEN_ROUTER_MODEL?.trim() || 'openai/gpt-4o-mini';
+    const systemPrompt = [
+      'You are a careful garment merchandising purchase-order data extraction engine.',
+      'Extract only line-level PO detail rows from document text, tables, or CSV-like sheet data.',
+      'Return strict JSON only. Do not include markdown, comments, explanations, or extra keys.',
+      'Output shape must be exactly: {"rows":[{"poNumber":"","styleNo":"","color":"","size":"","quantity":0}]}',
+      'Rules:',
+      '1. Create one row per PO/style/color/size/quantity combination.',
+      '2. If sizes are shown as columns (for example XS,S,M,L) with quantities under them, expand each non-zero size quantity into a separate row.',
+      '3. If PO number, style no, or color appears once above multiple rows, carry that value forward until a new value is shown.',
+      '4. Ignore totals, subtotals, grand totals, prices, FOB, CM, dates, buyer names, addresses, descriptions, and remarks.',
+      '5. Do not guess missing values. Use an empty string for missing text fields and 0 only when quantity is unreadable.',
+      '6. Quantity must be a number, not text. Remove commas from quantity values.',
+      '7. Preserve PO number, style no, color, and size exactly as written except trim extra whitespace.',
+      '8. If there are no valid detail rows, return {"rows":[]}.',
+    ].join('\n');
+    const userPrompt = [
+      'Extract PO detail rows from the document text below.',
+      'Required fields: poNumber, styleNo, color, size, quantity.',
+      '',
+      'DOCUMENT TEXT:',
+      '```',
+      extractedText,
+      '```',
+    ].join('\n');
+    const response = await axios.post<OpenRouterChatResponse>(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        model,
+        temperature: 0,
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content: systemPrompt,
+          },
+          {
+            role: 'user',
+            content: userPrompt,
+          },
+        ],
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 60000,
+      },
+    );
+
+    const content = response.data.choices?.[0]?.message?.content;
+    if (!content) {
+      throw new BadRequestException('AI Assist did not return any extracted rows.');
+    }
+
+    return this.normalizeAiAssistRows(this.parseAiAssistJson(content));
+  }
+
+  private parseAiAssistJson(content: string) {
+    const trimmed = content.trim();
+    const withoutFence = trimmed
+      .replace(/^```(?:json)?/i, '')
+      .replace(/```$/i, '')
+      .trim();
+
+    try {
+      return JSON.parse(withoutFence);
+    } catch {
+      const jsonStart = withoutFence.indexOf('{');
+      const jsonEnd = withoutFence.lastIndexOf('}');
+
+      if (jsonStart >= 0 && jsonEnd > jsonStart) {
+        return JSON.parse(withoutFence.slice(jsonStart, jsonEnd + 1));
+      }
+
+      throw new BadRequestException('AI Assist returned data in an unreadable format.');
+    }
+  }
+
+  private normalizeAiAssistRows(payload: unknown): JobAiAssistRow[] {
+    const sourceRows = Array.isArray(payload)
+      ? payload
+      : Array.isArray((payload as { rows?: unknown[] })?.rows)
+        ? (payload as { rows: unknown[] }).rows
+        : [];
+
+    const rows = sourceRows
+      .map((row) => this.normalizeAiAssistRow(row))
+      .filter((row): row is JobAiAssistRow => Boolean(row));
+
+    if (!rows.length) {
+      throw new BadRequestException('AI Assist could not find PO detail rows in this file.');
+    }
+
+    return rows;
+  }
+
+  private normalizeAiAssistRow(row: unknown): JobAiAssistRow | null {
+    if (!row || typeof row !== 'object') {
+      return null;
+    }
+
+    const record = row as Record<string, unknown>;
+    const normalizedRow = {
+      poNumber: this.pickAiAssistString(record, ['poNumber', 'po_number', 'poNo', 'po_no', 'pono', 'PO Number']),
+      styleNo: this.pickAiAssistString(record, ['styleNo', 'style_no', 'style', 'styleNumber', 'Style No', 'Style']),
+      color: this.pickAiAssistString(record, ['color', 'colour', 'Color', 'Colour']),
+      size: this.pickAiAssistString(record, ['size', 'Size']),
+      quantity: this.pickAiAssistNumber(record, ['quantity', 'qty', 'Quantity', 'Qty']),
+    };
+
+    const hasAnyData = normalizedRow.poNumber || normalizedRow.styleNo || normalizedRow.color || normalizedRow.size || normalizedRow.quantity > 0;
+    return hasAnyData ? normalizedRow : null;
+  }
+
+  private pickAiAssistString(record: Record<string, unknown>, keys: string[]) {
+    for (const key of keys) {
+      const value = record[key];
+      if (value !== undefined && value !== null) {
+        const text = String(value).trim();
+        if (text) {
+          return text;
+        }
+      }
+    }
+
+    return '';
+  }
+
+  private pickAiAssistNumber(record: Record<string, unknown>, keys: string[]) {
+    for (const key of keys) {
+      const value = record[key];
+      if (value !== undefined && value !== null && value !== '') {
+        const numberValue = Number(String(value).replace(/,/g, '').trim());
+        if (Number.isFinite(numberValue)) {
+          return numberValue;
+        }
+      }
+    }
+
+    return 0;
   }
 }
