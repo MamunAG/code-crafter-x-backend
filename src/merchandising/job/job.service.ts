@@ -30,6 +30,8 @@ type JobAiAssistRow = {
   color: string;
   size: string;
   quantity: number;
+  deliveryDate: string | null;
+  fob: number | null;
 };
 
 type OpenRouterChatResponse = {
@@ -561,20 +563,23 @@ export class JobService {
       'You are a careful garment merchandising purchase-order data extraction engine.',
       'Extract only line-level PO detail rows from document text, tables, or CSV-like sheet data.',
       'Return strict JSON only. Do not include markdown, comments, explanations, or extra keys.',
-      'Output shape must be exactly: {"rows":[{"poNumber":"","styleNo":"","color":"","size":"","quantity":0}]}',
+      'Output shape must be exactly: {"rows":[{"poNumber":"","styleNo":"","color":"","size":"","quantity":0,"deliveryDate":null,"fob":null}]}',
       'Rules:',
-      '1. Create one row per PO/style/color/size/quantity combination.',
+      '1. Create one row per PO/style/color/size/quantity/deliveryDate/fob combination.',
       '2. If sizes are shown as columns (for example XS,S,M,L) with quantities under them, expand each non-zero size quantity into a separate row.',
-      '3. If PO number, style no, or color appears once above multiple rows, carry that value forward until a new value is shown.',
-      '4. Ignore totals, subtotals, grand totals, prices, FOB, CM, dates, buyer names, addresses, descriptions, and remarks.',
-      '5. Do not guess missing values. Use an empty string for missing text fields and 0 only when quantity is unreadable.',
+      '3. If PO number, style no, color, delivery date, ship date, or FOB appears once above multiple rows, carry that value forward until a new value is shown.',
+      '4. Use deliveryDate from these labels only, in this priority: Delivery Date, Shipping Date, Shipment Date, Ship Date. If several are present, prefer the first available by this priority.',
+      '5. Do not guess missing values. Use an empty string for missing text fields, null for missing deliveryDate and fob, and 0 only when quantity is unreadable.',
       '6. Quantity must be a number, not text. Remove commas from quantity values.',
-      '7. Preserve PO number, style no, color, and size exactly as written except trim extra whitespace.',
-      '8. If there are no valid detail rows, return {"rows":[]}.',
+      '7. FOB must be a number without currency symbols or commas when present; otherwise null.',
+      '8. Preserve PO number, style no, color, size, and deliveryDate exactly as written except trim extra whitespace.',
+      '9. Never use order header Date, document Date, revision date, issue date, or amendment date as deliveryDate.',
+      '10. Ignore totals, subtotals, grand totals, CM, buyer names, addresses, descriptions, and remarks.',
+      '11. If there are no valid detail rows, return {"rows":[]}.',
     ].join('\n');
     const userPrompt = [
       'Extract PO detail rows from the document text below.',
-      'Required fields: poNumber, styleNo, color, size, quantity.',
+      'Required fields: poNumber, styleNo, color, size, quantity, deliveryDate, fob.',
       '',
       'DOCUMENT TEXT:',
       '```',
@@ -666,9 +671,34 @@ export class JobService {
       color: this.pickAiAssistString(record, ['color', 'colour', 'Color', 'Colour']),
       size: this.pickAiAssistString(record, ['size', 'Size']),
       quantity: this.pickAiAssistNumber(record, ['quantity', 'qty', 'Quantity', 'Qty']),
+      deliveryDate: this.pickAiAssistNullableString(record, [
+        'deliveryDate',
+        'delivery_date',
+        'delivery',
+        'shipDate',
+        'ship_date',
+        'ship',
+        'shippingDate',
+        'shipping_date',
+        'shipping',
+        'shipmentDate',
+        'shipment_date',
+        'Delivery Date',
+        'Shipping Date',
+        'Ship Date',
+        'Shipment Date',
+      ]),
+      fob: this.pickAiAssistNullableNumber(record, ['fob', 'FOB', 'unitFob', 'unit_fob', 'price', 'Price']),
     };
 
-    const hasAnyData = normalizedRow.poNumber || normalizedRow.styleNo || normalizedRow.color || normalizedRow.size || normalizedRow.quantity > 0;
+    const hasAnyData =
+      normalizedRow.poNumber ||
+      normalizedRow.styleNo ||
+      normalizedRow.color ||
+      normalizedRow.size ||
+      normalizedRow.quantity > 0 ||
+      normalizedRow.deliveryDate ||
+      normalizedRow.fob !== null;
     return hasAnyData ? normalizedRow : null;
   }
 
@@ -698,5 +728,33 @@ export class JobService {
     }
 
     return 0;
+  }
+
+  private pickAiAssistNullableString(record: Record<string, unknown>, keys: string[]) {
+    for (const key of keys) {
+      const value = record[key];
+      if (value !== undefined && value !== null) {
+        const text = String(value).trim();
+        if (text) {
+          return text;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private pickAiAssistNullableNumber(record: Record<string, unknown>, keys: string[]) {
+    for (const key of keys) {
+      const value = record[key];
+      if (value !== undefined && value !== null && value !== '') {
+        const numberValue = Number(String(value).replace(/[$,]/g, '').trim());
+        if (Number.isFinite(numberValue)) {
+          return numberValue;
+        }
+      }
+    }
+
+    return null;
   }
 }
