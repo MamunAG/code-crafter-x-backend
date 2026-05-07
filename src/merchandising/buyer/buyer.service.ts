@@ -26,7 +26,7 @@ export class BuyerService {
 
   async create(buyerDto: CreateBuyerDto, organizationId: string) {
     const normalizedBuyer = this.normalizeBuyerPayload(buyerDto);
-    await this.ensureEmailIsUnique(normalizedBuyer.email, organizationId);
+    await this.ensureBuyerIdentityPairUnique(normalizedBuyer.name, normalizedBuyer.displayName, organizationId);
     const country = normalizedBuyer.countryId ? await this.findCountryOrFail(normalizedBuyer.countryId, organizationId) : null;
 
     const buyer = this.buyerRepository.create({
@@ -102,48 +102,59 @@ export class BuyerService {
 
     this.throwMissingSetupError(missingCountries, rows.length);
 
-    const uniqueEmails = [
+    const uniqueBuyerNames = [
       ...new Set(
         filteredRows
-          .map((row) => row.email?.trim().toLowerCase())
-          .filter((email): email is string => Boolean(email)),
+          .map((row) => row.name?.trim().toLowerCase())
+          .filter((name): name is string => Boolean(name)),
       ),
     ];
-    const existingBuyers = uniqueEmails.length
+    const uniqueBuyerDisplayNames = [
+      ...new Set(
+        filteredRows
+          .map((row) => row.displayName?.trim().toLowerCase())
+          .filter((displayName): displayName is string => Boolean(displayName)),
+      ),
+    ];
+    const existingBuyerIdentities = uniqueBuyerNames.length || uniqueBuyerDisplayNames.length
       ? await this.buyerRepository
         .createQueryBuilder('buyer')
         .withDeleted()
-        .select(['buyer.email'])
+        .select(['buyer.name', 'buyer.displayName'])
         .where('buyer.organization_id = :organizationId', { organizationId })
-        .andWhere('LOWER(TRIM(buyer.email)) IN (:...emails)', {
-          emails: uniqueEmails,
-        })
+        .andWhere(
+          '(LOWER(TRIM(buyer.name)) IN (:...names) OR LOWER(TRIM(buyer.displayName)) IN (:...displayNames))',
+          {
+            names: uniqueBuyerNames.length ? uniqueBuyerNames : [''],
+            displayNames: uniqueBuyerDisplayNames.length ? uniqueBuyerDisplayNames : [''],
+          },
+        )
         .getMany()
       : [];
-
-    const existingEmailSet = new Set(
-      existingBuyers
-        .map((buyer) => buyer.email?.trim().toLowerCase())
-        .filter((email): email is string => Boolean(email)),
+    const existingBuyerPairSet = new Set(
+      existingBuyerIdentities
+        .map((buyer) => this.normalizeBuyerIdentityKey(buyer.name, buyer.displayName))
+        .filter((identity): identity is string => Boolean(identity)),
     );
-    const seenEmailSet = new Set<string>();
+    const seenBuyerPairSet = new Set<string>();
     const buyersToCreate = filteredRows
       .filter((row) => {
-        const email = row.email?.trim().toLowerCase();
+        const identityKey = this.normalizeBuyerIdentityKey(row.name, row.displayName);
 
-        if (!email) {
-          return true;
-        }
-
-        if (existingEmailSet.has(email)) {
+        if (!identityKey) {
           return false;
         }
 
-        if (seenEmailSet.has(email)) {
+        if (existingBuyerPairSet.has(identityKey)) {
           return false;
         }
 
-        seenEmailSet.add(email);
+        if (seenBuyerPairSet.has(identityKey)) {
+          return false;
+        }
+
+        seenBuyerPairSet.add(identityKey);
+
         return true;
       })
       .map((row) =>
@@ -305,16 +316,19 @@ export class BuyerService {
 
   async update(id: string, dto: UpdateBuyerDto, organizationId: string) {
     const normalizedBuyer = this.normalizeBuyerPayload(dto);
+    const existingBuyer = await this.ensureBuyerExists(id, organizationId);
 
-    if (normalizedBuyer.email) {
-      await this.ensureEmailIsUnique(normalizedBuyer.email, organizationId, id);
-    }
+    await this.ensureBuyerIdentityPairUnique(
+      normalizedBuyer.name ?? existingBuyer.name,
+      normalizedBuyer.displayName ?? existingBuyer.displayName,
+      organizationId,
+      id,
+    );
 
     if (normalizedBuyer.countryId) {
       await this.findCountryOrFail(normalizedBuyer.countryId, organizationId);
     }
 
-    await this.ensureBuyerExists(id, organizationId);
     await this.buyerRepository.update({ id, organizationId }, normalizedBuyer);
     return this.normalizeUpdatedAt(await this.findOne(id, organizationId));
   }
@@ -333,32 +347,6 @@ export class BuyerService {
   async restore(id: string, organizationId: string) {
     await this.ensureBuyerExists(id, organizationId, true);
     return this.buyerRepository.restore({ id, organizationId });
-  }
-
-  private async ensureEmailIsUnique(email: string | null | undefined, organizationId: string, ignoreId?: string) {
-    const normalizedEmail = email?.trim().toLowerCase();
-
-    if (!normalizedEmail) {
-      return;
-    }
-
-    const queryBuilder = this.buyerRepository
-      .createQueryBuilder('buyer')
-      .where('LOWER(TRIM(buyer.email)) = :email', {
-        email: normalizedEmail,
-      })
-      .andWhere('buyer.organization_id = :organizationId', { organizationId })
-      .andWhere('buyer.deleted_at IS NULL');
-
-    if (ignoreId !== undefined) {
-      queryBuilder.andWhere('buyer.id != :ignoreId', { ignoreId });
-    }
-
-    const existing = await queryBuilder.getOne();
-
-    if (existing) {
-      throw new BadRequestException('Buyer already exists');
-    }
   }
 
   private async findCountryOrFail(countryId: number, organizationId: string) {
@@ -428,6 +416,51 @@ export class BuyerService {
   private resolveCountryName(name: string | null | undefined, idByName: Map<string, number>) {
     const normalizedName = name?.trim().toLowerCase() ?? '';
     return normalizedName ? idByName.get(normalizedName) ?? null : null;
+  }
+
+  private normalizeBuyerIdentityKey(name: string | null | undefined, displayName: string | null | undefined) {
+    const normalizedName = name?.trim().toLowerCase();
+    const normalizedDisplayName = displayName?.trim().toLowerCase();
+
+    if (!normalizedName || !normalizedDisplayName) {
+      return null;
+    }
+
+    return `${normalizedName}::${normalizedDisplayName}`;
+  }
+
+  private async ensureBuyerIdentityPairUnique(
+    name: string | null | undefined,
+    displayName: string | null | undefined,
+    organizationId: string,
+    ignoreId?: string,
+  ) {
+    const identityKey = this.normalizeBuyerIdentityKey(name, displayName);
+
+    if (!identityKey) {
+      return;
+    }
+
+    const queryBuilder = this.buyerRepository
+      .createQueryBuilder('buyer')
+      .withDeleted()
+      .where('buyer.organization_id = :organizationId', { organizationId })
+      .andWhere('LOWER(TRIM(buyer.name)) = :name', {
+        name: name?.trim().toLowerCase(),
+      })
+      .andWhere('LOWER(TRIM(buyer.displayName)) = :displayName', {
+        displayName: displayName?.trim().toLowerCase(),
+      });
+
+    if (ignoreId !== undefined) {
+      queryBuilder.andWhere('buyer.id != :ignoreId', { ignoreId });
+    }
+
+    const existing = await queryBuilder.getOne();
+
+    if (existing) {
+      throw new BadRequestException('Buyer already exists');
+    }
   }
 
   private throwMissingSetupError(countries: Set<string>, totalRows: number) {
