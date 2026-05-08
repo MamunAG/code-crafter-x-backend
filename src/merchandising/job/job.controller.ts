@@ -9,6 +9,7 @@ import { BaseResponseDto } from 'src/common/dto/base-response.dto';
 import { RolesEnum } from 'src/common/enums/role.enum';
 import { CreateJobDto } from './dto/create-job.dto';
 import { FilterJobDto } from './dto/filter-job.dto';
+import { ResolveAiAssistRowDto } from './dto/resolve-ai-assist-row.dto';
 import { UpdateJobDto } from './dto/update-job.dto';
 import { JobService } from './job.service';
 
@@ -38,6 +39,16 @@ export class JobController {
     const selectedOrganizationId = this.requireOrganizationId(organizationId);
     const jobs = await this.jobService.findAll({ page, limit }, jobFilters, selectedOrganizationId);
     return new BaseResponseDto(jobs, 'Jobs retrieved successfully');
+  }
+
+  @Get('next-number')
+  @MenuAccess(MENU_NAME, 'canCreate')
+  @ApiOperation({ summary: 'Preview next job number' })
+  @ApiResponse({ status: 200, description: 'Next job number retrieved successfully', type: BaseResponseDto })
+  async getNextJobNumber(@Headers('x-organization-id') organizationId?: string) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const result = await this.jobService.getNextJobNumberPreview(selectedOrganizationId);
+    return new BaseResponseDto(result, 'Next job number retrieved successfully');
   }
 
   @Get(':id')
@@ -71,6 +82,20 @@ export class JobController {
     this.requireOrganizationId(organizationId);
     const result = await this.jobService.analyzeAiAssistFile(file);
     return new BaseResponseDto(result, 'AI Assist data extracted successfully');
+  }
+
+  @Post('ai-assist/resolve-row')
+  @MenuAccess(MENU_NAME, 'canCreate')
+  @ApiOperation({ summary: 'Resolve or create AI Assist row master data' })
+  @ApiResponse({ status: 200, description: 'AI Assist row resolved successfully', type: BaseResponseDto })
+  async resolveAiAssistRow(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: ResolveAiAssistRowDto,
+    @Headers('x-organization-id') organizationId?: string,
+  ) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const result = await this.jobService.resolveAiAssistRow(dto, user.userId, selectedOrganizationId);
+    return new BaseResponseDto(result, 'AI Assist row resolved successfully');
   }
 
   @Patch(':id')

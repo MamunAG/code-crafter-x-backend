@@ -40,11 +40,14 @@ export class JobDetails extends BaseEntity {
     @Column({ name: 'fob', type: 'numeric', precision: 18, scale: 4, default: 0 })
     fob: number;
 
-    @Column({ name: 'cm', type: 'numeric', precision: 18, scale: 4, default: 0 })
+    @Column({ name: 'cm_per_dzn', type: 'numeric', precision: 18, scale: 4, default: 0 })
     cm: number;
 
     @Column({ name: 'delivery_date', type: 'date', nullable: true })
     deliveryDate?: Date;
+
+    @Column({ name: 'cutting_limit_percentage', type: 'numeric', precision: 18, scale: 4, default: 0 })
+    cuttingLimitPercentage: number;
 
     @Column({ name: 'remarks', type: 'text', nullable: true })
     remarks?: string;

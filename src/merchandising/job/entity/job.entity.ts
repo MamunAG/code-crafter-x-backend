@@ -24,6 +24,12 @@ export class Job extends BaseEntity {
     @PrimaryGeneratedColumn('uuid', { name: 'id' })
     id: string;
 
+    @Column({ name: 'job_no', type: 'varchar', length: 50, nullable: false })
+    jobNo: string;
+
+    @Column({ name: 'job_serial', type: 'integer', nullable: false })
+    jobSerial: number;
+
     @Column({ name: 'factory_id', type: 'uuid', nullable: false })
     factoryId: string;
 

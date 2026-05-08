@@ -2,19 +2,23 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import axios from 'axios';
 import { PDFParse } from 'pdf-parse';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { Factory } from 'src/app-configuration/factory/entity/factory.entity';
+import { Currency } from 'src/app-configuration/currency/entity/currency.entity';
 import { PaginatedResponseDto } from 'src/common/dto/paginated-response.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { Buyer } from 'src/merchandising/buyer/entity/buyer.entity';
 import { Color } from 'src/merchandising/master-data/color/entity/color.entity';
 import { Size } from 'src/merchandising/master-data/size/entity/size.entity';
 import { Style } from 'src/merchandising/style/entity/style.entity';
+import { StyleToColorMap } from 'src/merchandising/style/entity/style-to-color-map.entity';
+import { StyleToSizeMap } from 'src/merchandising/style/entity/style-to-size-map.entity';
 import { Employee } from 'src/hr-payroll/employee/entity/employee.entity';
-import { Repository } from 'typeorm';
 import * as XLSX from 'xlsx';
 import { CreateJobDetailDto } from './dto/create-job-detail.dto';
 import { CreateJobDto } from './dto/create-job.dto';
 import { FilterJobDto } from './dto/filter-job.dto';
+import { ResolveAiAssistRowDto } from './dto/resolve-ai-assist-row.dto';
 import { UpdateJobDto } from './dto/update-job.dto';
 import { JobDetails } from './entity/job-details.entity';
 import { Job } from './entity/job.entity';
@@ -45,9 +49,22 @@ type OpenRouterChatResponse = {
 const AI_ASSIST_TEXT_LIMIT = 30000;
 const AI_ASSIST_ALLOWED_EXTENSIONS = new Set(['pdf', 'xls', 'xlsx', 'csv']);
 
+type AiAssistResolvedOption = {
+  value: string;
+  label: string;
+};
+
+type AiAssistResolvedMasterData = {
+  styleOption: AiAssistResolvedOption | null;
+  sizeOption: AiAssistResolvedOption | null;
+  colorOption: AiAssistResolvedOption | null;
+};
+
 @Injectable()
 export class JobService {
   constructor(
+    private dataSource: DataSource,
+
     @InjectRepository(Job)
     private jobRepository: Repository<Job>,
 
@@ -66,11 +83,20 @@ export class JobService {
     @InjectRepository(Style)
     private styleRepository: Repository<Style>,
 
+    @InjectRepository(StyleToColorMap)
+    private styleToColorMapRepository: Repository<StyleToColorMap>,
+
+    @InjectRepository(StyleToSizeMap)
+    private styleToSizeMapRepository: Repository<StyleToSizeMap>,
+
     @InjectRepository(Size)
     private sizeRepository: Repository<Size>,
 
     @InjectRepository(Color)
     private colorRepository: Repository<Color>,
+
+    @InjectRepository(Currency)
+    private currencyRepository: Repository<Currency>,
 
     @InjectRepository(Employee)
     private employeeRepository: Repository<Employee>,
@@ -86,23 +112,36 @@ export class JobService {
     const details = dto.jobDetails ?? [];
     await this.validateDetails(details, organizationId);
 
-    const job = this.jobRepository.create({
-      factoryId: dto.factoryId,
-      buyerId: dto.buyerId,
-      merchandiserId: dto.merchandiserId ?? undefined,
-      ordertype: dto.ordertype ?? undefined,
-      totalPoQty: details.length ? this.sumDetailQuantity(details) : this.numberOrDefault(dto.totalPoQty, 0),
-      poReceiveDate: this.parseOptionalDate(dto.poReceiveDate) ?? undefined,
-      isActive: dto.isActive === undefined ? true : dto.isActive,
-      created_by_id: userId,
-      updated_by_id: null as unknown as string,
-      updated_at: null as unknown as Date,
+    const savedJobId = await this.dataSource.transaction(async (manager) => {
+      await this.lockJobSerialForOrganization(manager, organizationId);
+      const nextJobNumber = await this.getNextJobNumber(manager, organizationId);
+
+      const job = manager.getRepository(Job).create({
+        jobNo: nextJobNumber.jobNo,
+        jobSerial: nextJobNumber.jobSerial,
+        factoryId: dto.factoryId,
+        buyerId: dto.buyerId,
+        merchandiserId: dto.merchandiserId ?? undefined,
+        ordertype: dto.ordertype ?? undefined,
+        totalPoQty: details.length ? this.sumDetailQuantity(details) : this.numberOrDefault(dto.totalPoQty, 0),
+        poReceiveDate: this.parseOptionalDate(dto.poReceiveDate) ?? undefined,
+        isActive: dto.isActive === undefined ? true : dto.isActive,
+        created_by_id: userId,
+        updated_by_id: null as unknown as string,
+        updated_at: null as unknown as Date,
+      });
+
+      const savedJob = await manager.getRepository(Job).save(job);
+      await this.syncJobDetails(savedJob.id, details, userId, manager);
+
+      return savedJob.id;
     });
 
-    const savedJob = await this.jobRepository.save(job);
-    await this.syncJobDetails(savedJob.id, details, userId);
+    return this.findOne(savedJobId, organizationId);
+  }
 
-    return this.findOne(savedJob.id, organizationId);
+  async getNextJobNumberPreview(organizationId: string) {
+    return this.getNextJobNumber(this.dataSource.manager, organizationId);
   }
 
   async findAll(
@@ -305,8 +344,46 @@ export class JobService {
     return { rows };
   }
 
-  private async syncJobDetails(jobId: string, details: CreateJobDetailDto[], userId: string) {
-    await this.jobDetailsRepository.delete({ jobId });
+  async resolveAiAssistRow(dto: ResolveAiAssistRowDto, userId: string, organizationId: string): Promise<AiAssistResolvedMasterData> {
+    const row = this.normalizeResolveAiAssistRow(dto);
+
+    return this.dataSource.transaction(async (manager) => {
+      const color = await this.findOrCreateAiAssistColor(manager, row.color, userId, organizationId);
+      const size = await this.findOrCreateAiAssistSize(manager, row.size, userId, organizationId);
+      const style = await this.findOrCreateAiAssistStyle(manager, row, color, size, userId, organizationId);
+
+      return {
+        styleOption: style ? this.toAiAssistStyleOption(style) : null,
+        sizeOption: size ? this.toAiAssistSizeOption(size) : null,
+        colorOption: color ? this.toAiAssistColorOption(color) : null,
+      };
+    });
+  }
+
+  private async getNextJobNumber(manager: EntityManager, organizationId: string) {
+    const result = await manager
+      .getRepository(Job)
+      .createQueryBuilder('job')
+      .withDeleted()
+      .innerJoin('job.factory', 'factory')
+      .select('COALESCE(MAX(job.jobSerial), 0)', 'maxSerial')
+      .where('factory.organization_id = :organizationId', { organizationId })
+      .getRawOne<{ maxSerial: string | number | null }>();
+
+    const jobSerial = Number(result?.maxSerial ?? 0) + 1;
+    return {
+      jobNo: `JOB-${jobSerial}`,
+      jobSerial,
+    };
+  }
+
+  private async lockJobSerialForOrganization(manager: EntityManager, organizationId: string) {
+    await manager.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [`job-serial:${organizationId}`]);
+  }
+
+  private async syncJobDetails(jobId: string, details: CreateJobDetailDto[], userId: string, manager: EntityManager = this.dataSource.manager) {
+    const jobDetailsRepository = manager.getRepository(JobDetails);
+    await jobDetailsRepository.delete({ jobId });
 
     if (!details.length) {
       return;
@@ -314,9 +391,9 @@ export class JobService {
 
     const entities = await Promise.all(
       details.map(async (detail) => {
-        const purchaseOrder = await this.findOrCreatePurchaseOrder(detail.pono, userId);
+        const purchaseOrder = await this.findOrCreatePurchaseOrder(detail.pono, userId, manager);
 
-        return this.jobDetailsRepository.create({
+        return jobDetailsRepository.create({
           jobId,
           poId: purchaseOrder.id,
           styleId: detail.styleId,
@@ -326,6 +403,7 @@ export class JobService {
           fob: this.numberOrDefault(detail.fob, 0),
           cm: this.numberOrDefault(detail.cm, 0),
           deliveryDate: this.parseOptionalDate(detail.deliveryDate) ?? undefined,
+          cuttingLimitPercentage: this.numberOrDefault(detail.cuttingLimitPercentage, 0),
           remarks: this.nullableString(detail.remarks) ?? undefined,
           created_by_id: userId,
           updated_by_id: null as unknown as string,
@@ -334,17 +412,18 @@ export class JobService {
       }),
     );
 
-    await this.jobDetailsRepository.save(entities);
+    await jobDetailsRepository.save(entities);
   }
 
-  private async findOrCreatePurchaseOrder(pono: string, userId: string) {
+  private async findOrCreatePurchaseOrder(pono: string, userId: string, manager: EntityManager = this.dataSource.manager) {
     const normalizedPono = pono.trim();
+    const purchaseOrderRepository = manager.getRepository(PurchaseOrder);
 
     if (!normalizedPono) {
       throw new BadRequestException('PO number is required for each job detail row.');
     }
 
-    const existing = await this.purchaseOrderRepository
+    const existing = await purchaseOrderRepository
       .createQueryBuilder('purchaseOrder')
       .where('LOWER(TRIM(purchaseOrder.pono)) = :pono', { pono: normalizedPono.toLowerCase() })
       .getOne();
@@ -354,8 +433,8 @@ export class JobService {
     }
 
     try {
-      return await this.purchaseOrderRepository.save(
-        this.purchaseOrderRepository.create({
+      return await purchaseOrderRepository.save(
+        purchaseOrderRepository.create({
           pono: normalizedPono,
           created_by_id: userId,
           updated_by_id: null as unknown as string,
@@ -363,7 +442,7 @@ export class JobService {
         }),
       );
     } catch {
-      const purchaseOrder = await this.purchaseOrderRepository
+      const purchaseOrder = await purchaseOrderRepository
         .createQueryBuilder('purchaseOrder')
         .where('LOWER(TRIM(purchaseOrder.pono)) = :pono', { pono: normalizedPono.toLowerCase() })
         .getOne();
@@ -384,6 +463,268 @@ export class JobService {
         this.findColorOrFail(detail.colorId, organizationId),
       ]);
     }
+  }
+
+  private normalizeResolveAiAssistRow(dto: ResolveAiAssistRowDto) {
+    return {
+      poNumber: this.nullableString(dto.poNumber) ?? '',
+      styleNo: this.nullableString(dto.styleNo) ?? '',
+      styleName: this.nullableString(dto.styleName),
+      color: this.nullableString(dto.color) ?? '',
+      size: this.nullableString(dto.size) ?? '',
+      quantity: this.numberOrDefault(dto.quantity, 0),
+      deliveryDate: this.nullableString(dto.deliveryDate),
+      fob: this.nullableNumber(dto.fob),
+      buyerId: this.nullableString(dto.buyerId) ?? '',
+    };
+  }
+
+  private async findOrCreateAiAssistColor(manager: EntityManager, colorName: string, userId: string, organizationId: string) {
+    const normalizedColorName = colorName.trim();
+
+    if (!normalizedColorName) {
+      return null;
+    }
+
+    const existing = await manager
+      .getRepository(Color)
+      .createQueryBuilder('color')
+      .where('LOWER(TRIM(color.colorName)) = :colorName', { colorName: normalizedColorName.toLowerCase() })
+      .andWhere('color.organization_id = :organizationId', { organizationId })
+      .andWhere('color.deleted_at IS NULL')
+      .getOne();
+
+    if (existing) {
+      return existing;
+    }
+
+    return manager.getRepository(Color).save(
+      manager.getRepository(Color).create({
+        colorName: normalizedColorName,
+        colorDisplayName: normalizedColorName,
+        colorDescription: 'Created from Job Entry AI Assist.',
+        organizationId,
+        colorHexCode: null,
+        isActive: true,
+        created_by_id: userId,
+        updated_by_id: null as unknown as string,
+        updated_at: null as unknown as Date,
+      }),
+    );
+  }
+
+  private async findOrCreateAiAssistSize(manager: EntityManager, sizeName: string, userId: string, organizationId: string) {
+    const normalizedSizeName = sizeName.trim();
+
+    if (!normalizedSizeName) {
+      return null;
+    }
+
+    const existing = await manager
+      .getRepository(Size)
+      .createQueryBuilder('size')
+      .where('LOWER(TRIM(size.sizeName)) = :sizeName', { sizeName: normalizedSizeName.toLowerCase() })
+      .andWhere('size.organization_id = :organizationId', { organizationId })
+      .andWhere('size.deleted_at IS NULL')
+      .getOne();
+
+    if (existing) {
+      return existing;
+    }
+
+    return manager.getRepository(Size).save(
+      manager.getRepository(Size).create({
+        sizeName: normalizedSizeName,
+        organizationId,
+        isActive: true,
+        created_by_id: userId,
+        updated_by_id: null as unknown as string,
+        updated_at: null as unknown as Date,
+      }),
+    );
+  }
+
+  private async findOrCreateAiAssistStyle(
+    manager: EntityManager,
+    row: {
+      styleNo: string;
+      styleName: string | null;
+      buyerId: string;
+    },
+    color: Color | null,
+    size: Size | null,
+    userId: string,
+    organizationId: string,
+  ) {
+    if (!row.styleNo.trim()) {
+      return null;
+    }
+
+    const existing = await manager
+      .getRepository(Style)
+      .createQueryBuilder('style')
+      .where('LOWER(TRIM(style.styleNo)) = :styleNo', { styleNo: row.styleNo.trim().toLowerCase() })
+      .andWhere('style.organization_id = :organizationId', { organizationId })
+      .andWhere('style.deleted_at IS NULL')
+      .getOne();
+
+    if (existing) {
+      await this.ensureAiAssistStyleMap(manager, existing.id, color, size, userId);
+      return existing;
+    }
+
+    const buyerId = row.buyerId.trim();
+    if (!buyerId) {
+      throw new BadRequestException('Please select a buyer before adding a new style from AI Assist.');
+    }
+
+    const buyer = await this.findBuyerOrFailWithManager(manager, buyerId, organizationId);
+    const currency = await this.findDefaultCurrencyOrFail(manager, organizationId);
+
+    const style = await manager.getRepository(Style).save(
+      manager.getRepository(Style).create({
+        buyerId: buyer.id,
+        buyer,
+        organizationId,
+        styleNo: row.styleNo.trim(),
+        styleName: row.styleName ?? undefined,
+        itemType: '',
+        productType: '',
+        productDepartment: '',
+        cmSewing: 0,
+        currencyId: currency.id,
+        currency,
+        smvSewing: 0,
+        smvSewingSideSeam: 0,
+        smvCutting: 0,
+        smvCuttingSideSeam: 0,
+        smvFinishing: 0,
+        imageId: undefined,
+        remarks: 'Created from Job Entry AI Assist.',
+        isActive: true,
+        itemUom: 'Pcs',
+        productFamily: '',
+        created_by_id: userId,
+        updated_by_id: null as unknown as string,
+        updated_at: null as unknown as Date,
+      }),
+    );
+
+    await this.ensureAiAssistStyleMap(manager, style.id, color, size, userId);
+    return style;
+  }
+
+  private toAiAssistStyleOption(style: Style): AiAssistResolvedOption {
+    const styleNo = style.styleNo.trim();
+    const styleName = style.styleName?.trim() ?? '';
+
+    return {
+      value: style.id,
+      label: styleNo && styleName ? `${styleNo} - ${styleName}` : styleNo || styleName || style.id,
+    };
+  }
+
+  private toAiAssistSizeOption(size: Size): AiAssistResolvedOption {
+    return {
+      value: String(size.id),
+      label: size.sizeName.trim() || String(size.id),
+    };
+  }
+
+  private toAiAssistColorOption(color: Color): AiAssistResolvedOption {
+    const label = color.colorDisplayName?.trim() || color.colorName?.trim() || String(color.id);
+    return {
+      value: String(color.id),
+      label,
+    };
+  }
+
+  private async ensureAiAssistStyleMap(manager: EntityManager, styleId: string, color: Color | null, size: Size | null, userId: string) {
+    if (color) {
+      await this.ensureAiAssistStyleToColorMap(manager, styleId, color.id, userId);
+    }
+
+    if (size) {
+      await this.ensureAiAssistStyleToSizeMap(manager, styleId, size.id, userId);
+    }
+  }
+
+  private async ensureAiAssistStyleToColorMap(manager: EntityManager, styleId: string, colorId: number, userId: string) {
+    const repository = manager.getRepository(StyleToColorMap);
+    const existing = await repository
+      .createQueryBuilder('styleToColorMap')
+      .where('styleToColorMap.style_id = :styleId', { styleId })
+      .andWhere('styleToColorMap.color_id = :colorId', { colorId })
+      .andWhere('styleToColorMap.deleted_at IS NULL')
+      .getOne();
+
+    if (existing) {
+      return existing;
+    }
+
+    return repository.save(
+      repository.create({
+        styleId,
+        colorId,
+        created_by_id: userId,
+        updated_by_id: null as unknown as string,
+        updated_at: null as unknown as Date,
+      }),
+    );
+  }
+
+  private async ensureAiAssistStyleToSizeMap(manager: EntityManager, styleId: string, sizeId: number, userId: string) {
+    const repository = manager.getRepository(StyleToSizeMap);
+    const existing = await repository
+      .createQueryBuilder('styleToSizeMap')
+      .where('styleToSizeMap.style_id = :styleId', { styleId })
+      .andWhere('styleToSizeMap.size_id = :sizeId', { sizeId })
+      .andWhere('styleToSizeMap.deleted_at IS NULL')
+      .getOne();
+
+    if (existing) {
+      return existing;
+    }
+
+    return repository.save(
+      repository.create({
+        styleId,
+        sizeId,
+        created_by_id: userId,
+        updated_by_id: null as unknown as string,
+        updated_at: null as unknown as Date,
+      }),
+    );
+  }
+
+  private async findBuyerOrFailWithManager(manager: EntityManager, buyerId: string, organizationId: string) {
+    const buyer = await manager.getRepository(Buyer).findOne({
+      where: { id: buyerId, organizationId },
+    });
+
+    if (!buyer) {
+      throw new BadRequestException('Buyer not found in the selected organization.');
+    }
+
+    return buyer;
+  }
+
+  private async findDefaultCurrencyOrFail(manager: EntityManager, organizationId: string) {
+    const currency = await manager
+      .getRepository(Currency)
+      .createQueryBuilder('currency')
+      .where('currency.organization_id = :organizationId', { organizationId })
+      .andWhere('currency.deleted_at IS NULL')
+      .andWhere('currency.is_active = true')
+      .orderBy('currency.is_default', 'DESC')
+      .addOrderBy('currency.created_at', 'ASC')
+      .getOne();
+
+    if (!currency) {
+      throw new BadRequestException('Please create an active currency before adding a new style from AI Assist.');
+    }
+
+    return currency;
   }
 
   private async ensureJobExists(id: string, organizationId: string, withDeleted = false) {
@@ -574,7 +915,7 @@ export class JobService {
       '7. FOB must be a number without currency symbols or commas when present; otherwise null.',
       '8. Preserve PO number, style no, color, size, and deliveryDate exactly as written except trim extra whitespace.',
       '9. Never use order header Date, document Date, revision date, issue date, or amendment date as deliveryDate.',
-      '10. Ignore totals, subtotals, grand totals, CM, buyer names, addresses, descriptions, and remarks.',
+      '10. Ignore totals, subtotals, grand totals, CM/Dzn, buyer names, addresses, descriptions, and remarks.',
       '11. If there are no valid detail rows, return {"rows":[]}.',
     ].join('\n');
     const userPrompt = [

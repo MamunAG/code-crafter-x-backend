@@ -34,7 +34,7 @@ export class CreateJobDetailDto {
   @Min(0)
   fob: number;
 
-  @ApiProperty({ description: 'CM', example: 1.25 })
+  @ApiProperty({ description: 'CM/Dzn', example: 1.25 })
   @Type(() => Number)
   @IsNumber()
   @Min(0)
@@ -44,6 +44,13 @@ export class CreateJobDetailDto {
   @IsOptional()
   @IsDateString()
   deliveryDate?: string | null;
+
+  @ApiPropertyOptional({ description: 'Cutting limit percentage', example: 3 })
+  @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  cuttingLimitPercentage?: number | null;
 
   @ApiPropertyOptional({ description: 'Remarks', example: 'First shipment' })
   @IsOptional()
