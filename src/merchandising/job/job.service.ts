@@ -27,6 +27,7 @@ type JobListFilters = Partial<FilterJobDto> & {
 type JobAiAssistRow = {
   poNumber: string;
   styleNo: string;
+  styleName: string;
   color: string;
   size: string;
   quantity: number;
@@ -563,23 +564,23 @@ export class JobService {
       'You are a careful garment merchandising purchase-order data extraction engine.',
       'Extract only line-level PO detail rows from document text, tables, or CSV-like sheet data.',
       'Return strict JSON only. Do not include markdown, comments, explanations, or extra keys.',
-      'Output shape must be exactly: {"rows":[{"poNumber":"","styleNo":"","color":"","size":"","quantity":0,"deliveryDate":null,"fob":null}]}',
+      'Output shape must be exactly: {"rows":[{"poNumber":"","styleNo":"","styleName":"","color":"","size":"","quantity":0,"deliveryDate":null,"fob":null}]}',
       'Rules:',
-      '1. Create one row per PO/style/color/size/quantity/deliveryDate/fob combination.',
+      '1. Create one row per PO/style/style name/color/size/quantity/deliveryDate/fob combination.',
       '2. If sizes are shown as columns (for example XS,S,M,L) with quantities under them, expand each non-zero size quantity into a separate row.',
-      '3. If PO number, style no, color, delivery date, ship date, or FOB appears once above multiple rows, carry that value forward until a new value is shown.',
+      '3. If PO number, style no, style name, color, delivery date, ship date, or FOB appears once above multiple rows, carry that value forward until a new value is shown.',
       '4. Use deliveryDate from these labels only, in this priority: Delivery Date, Shipping Date, Shipment Date, Ship Date. If several are present, prefer the first available by this priority.',
       '5. Do not guess missing values. Use an empty string for missing text fields, null for missing deliveryDate and fob, and 0 only when quantity is unreadable.',
       '6. Quantity must be a number, not text. Remove commas from quantity values.',
       '7. FOB must be a number without currency symbols or commas when present; otherwise null.',
-      '8. Preserve PO number, style no, color, size, and deliveryDate exactly as written except trim extra whitespace.',
+      '8. Preserve PO number, style no, style name, color, size, and deliveryDate exactly as written except trim extra whitespace.',
       '9. Never use order header Date, document Date, revision date, issue date, or amendment date as deliveryDate.',
       '10. Ignore totals, subtotals, grand totals, CM, buyer names, addresses, descriptions, and remarks.',
       '11. If there are no valid detail rows, return {"rows":[]}.',
     ].join('\n');
     const userPrompt = [
       'Extract PO detail rows from the document text below.',
-      'Required fields: poNumber, styleNo, color, size, quantity, deliveryDate, fob.',
+      'Required fields: poNumber, styleNo, styleName, color, size, quantity, deliveryDate, fob.',
       '',
       'DOCUMENT TEXT:',
       '```',
@@ -668,6 +669,7 @@ export class JobService {
     const normalizedRow = {
       poNumber: this.pickAiAssistString(record, ['poNumber', 'po_number', 'poNo', 'po_no', 'pono', 'PO Number']),
       styleNo: this.pickAiAssistString(record, ['styleNo', 'style_no', 'style', 'styleNumber', 'Style No', 'Style']),
+      styleName: this.pickAiAssistString(record, ['styleName', 'style_name', 'styleDescription', 'style_description', 'description', 'Style Name', 'Style Description', 'Description']),
       color: this.pickAiAssistString(record, ['color', 'colour', 'Color', 'Colour']),
       size: this.pickAiAssistString(record, ['size', 'Size']),
       quantity: this.pickAiAssistNumber(record, ['quantity', 'qty', 'Quantity', 'Qty']),
@@ -694,6 +696,7 @@ export class JobService {
     const hasAnyData =
       normalizedRow.poNumber ||
       normalizedRow.styleNo ||
+      normalizedRow.styleName ||
       normalizedRow.color ||
       normalizedRow.size ||
       normalizedRow.quantity > 0 ||
