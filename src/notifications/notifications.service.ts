@@ -117,31 +117,23 @@ export class NotificationsService {
 
   async registerFirebaseToken(userId: string, dto: RegisterFirebaseTokenDto) {
     const normalizedToken = dto.token.trim();
+    const now = new Date();
 
-    let tokenRecord = await this.firebaseTokenRepository.findOne({
-      where: {
-        token: normalizedToken,
-      },
-    });
-
-    if (!tokenRecord) {
-      tokenRecord = this.firebaseTokenRepository.create({
+    await this.firebaseTokenRepository
+      .createQueryBuilder()
+      .insert()
+      .into(UserFirebaseToken)
+      .values({
         userId,
         token: normalizedToken,
-      });
-    }
-
-    tokenRecord.userId = userId;
-    tokenRecord.platform = dto.platform?.trim() || 'web';
-    tokenRecord.userAgent = dto.userAgent?.trim() || null;
-    tokenRecord.lastSeenAt = new Date();
-    tokenRecord.updated_by_id = userId;
-
-    if (!tokenRecord.created_by_id) {
-      tokenRecord.created_by_id = userId;
-    }
-
-    await this.firebaseTokenRepository.save(tokenRecord);
+        platform: dto.platform?.trim() || 'web',
+        userAgent: dto.userAgent?.trim() || null,
+        lastSeenAt: now,
+        created_by_id: userId,
+        updated_by_id: userId,
+      })
+      .orUpdate(['user_id', 'platform', 'user_agent', 'last_seen_at', 'updated_by_id'], ['token'])
+      .execute();
 
     return {
       registered: true,
