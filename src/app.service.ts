@@ -31,6 +31,7 @@ import { StyleToSizeMap } from './merchandising/style/entity/style-to-size-map.e
 import { Notification } from './notifications/entity/notification.entity';
 import { UserFirebaseToken } from './notifications/entity/user-firebase-token.entity';
 import { Factory } from './app-configuration/factory/entity/factory.entity';
+import { Supplier } from './app-configuration/supplier/entity/supplier.entity';
 import { Designation } from './hr-payroll/master-data/designation/entity/designation.entity';
 import { Department } from './hr-payroll/master-data/department/entity/department.entity';
 import { Employee } from './hr-payroll/employee/entity/employee.entity';
@@ -91,6 +92,7 @@ export function createTypeOrmOptions(
       StyleToEmbellishmentMap,
       StyleToSizeMap,
       Factory,
+      Supplier,
       Designation,
       Department,
       Employee,

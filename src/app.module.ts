@@ -32,6 +32,7 @@ import { StyleModule } from './merchandising/style/style.module';
 import { CommonController } from './common/common.controller';
 import { NotificationsModule } from './notifications/notifications.module';
 import { FactoryModule } from './app-configuration/factory/factory.module';
+import { SupplierModule } from './app-configuration/supplier/supplier.module';
 import { DepartmentModule } from './hr-payroll/master-data/department/department.module';
 import { DesignationModule } from './hr-payroll/master-data/designation/designation.module';
 import { EmployeeModule } from './hr-payroll/employee/employee.module';
@@ -72,6 +73,7 @@ import { JobModule } from './merchandising/job/job.module';
     BuyerModule,
     StyleModule,
     FactoryModule,
+    SupplierModule,
     DepartmentModule,
     DesignationModule,
     EmployeeModule,
