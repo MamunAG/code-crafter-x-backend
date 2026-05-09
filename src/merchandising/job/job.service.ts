@@ -232,7 +232,7 @@ export class JobService {
     ].join('\n');
   }
 
-  async validatePoDetailsTemplate(file: Express.Multer.File | undefined, organizationId: string) {
+  async validatePoDetailsTemplate(file: Express.Multer.File | undefined, organizationId: string, userId: string, buyerId?: string) {
     if (!file?.buffer?.length) {
       throw new BadRequestException('Please upload a PO details template file.');
     }
@@ -247,71 +247,48 @@ export class JobService {
       };
     }
 
-    const [styles, sizes, colors] = await Promise.all([
-      this.styleRepository
-        .createQueryBuilder('style')
-        .where('style.organization_id = :organizationId', { organizationId })
-        .andWhere('style.deleted_at IS NULL')
-        .andWhere('style.is_active = :isActive', { isActive: true })
-        .getMany(),
-      this.sizeRepository
-        .createQueryBuilder('size')
-        .where('size.organization_id = :organizationId', { organizationId })
-        .andWhere('size.deleted_at IS NULL')
-        .andWhere('size.is_active = :isActive', { isActive: true })
-        .getMany(),
-      this.colorRepository
-        .createQueryBuilder('color')
-        .where('color.organization_id = :organizationId', { organizationId })
-        .andWhere('color.deleted_at IS NULL')
-        .andWhere('color.is_active = :isActive', { isActive: true })
-        .getMany(),
-    ]);
+    const resolvedRows = await this.dataSource.transaction(async (manager) => {
+      const nextRows: ResolvedPoDetailsTemplateRow[] = [];
 
-    const styleByNo = new Map(styles.map((style) => [style.styleNo?.trim().toLowerCase(), style] as const).filter((entry): entry is readonly [string, Style] => Boolean(entry[0])));
-    const sizeByName = new Map(sizes.map((size) => [size.sizeName?.trim().toLowerCase(), size] as const).filter((entry): entry is readonly [string, Size] => Boolean(entry[0])));
-    const colorByName = new Map<string, Color>();
-    for (const color of colors) {
-      const colorName = color.colorName?.trim().toLowerCase();
-      const displayName = color.colorDisplayName?.trim().toLowerCase();
-      if (colorName) colorByName.set(colorName, color);
-      if (displayName) colorByName.set(displayName, color);
-    }
+      for (const row of rows) {
+        const color = await this.findOrCreateAiAssistColor(manager, row.color, userId, organizationId);
+        const size = await this.findOrCreateAiAssistSize(manager, row.size, userId, organizationId);
+        const style = await this.findOrCreateAiAssistStyle(
+          manager,
+          {
+            styleNo: row.styleNo,
+            styleName: row.styleName,
+            buyerId: buyerId ?? '',
+          },
+          color,
+          size,
+          userId,
+          organizationId,
+        );
 
-    const missingStyles = new Set<string>();
-    const missingSizes = new Set<string>();
-    const missingColors = new Set<string>();
-    const resolvedRows: ResolvedPoDetailsTemplateRow[] = [];
+        if (!style || !size || !color) {
+          continue;
+        }
 
-    for (const row of rows) {
-      const style = styleByNo.get(row.styleNo.trim().toLowerCase());
-      const size = sizeByName.get(row.size.trim().toLowerCase());
-      const color = colorByName.get(row.color.trim().toLowerCase());
+        nextRows.push({
+          pono: row.poNumber,
+          styleId: style.id,
+          styleLabel: this.formatStyleLabel(style.styleNo, style.styleName),
+          sizeId: String(size.id),
+          sizeLabel: size.sizeName,
+          colorId: String(color.id),
+          colorLabel: color.colorDisplayName?.trim() || color.colorName,
+          quantity: this.formatTemplateNumber(row.quantity),
+          fob: this.formatTemplateNumber(row.fob),
+          cm: this.formatTemplateNumber(row.cm),
+          deliveryDate: row.deliveryDate ?? '',
+          cuttingLimitPercentage: this.formatTemplateNumber(row.cuttingLimitPercentage),
+          remarks: row.remarks ?? '',
+        });
+      }
 
-      if (!style) missingStyles.add(row.styleNo);
-      if (!size) missingSizes.add(row.size);
-      if (!color) missingColors.add(row.color);
-
-      if (!style || !size || !color) continue;
-
-      resolvedRows.push({
-        pono: row.poNumber,
-        styleId: style.id,
-        styleLabel: this.formatStyleLabel(style.styleNo, style.styleName),
-        sizeId: String(size.id),
-        sizeLabel: size.sizeName,
-        colorId: String(color.id),
-        colorLabel: color.colorDisplayName?.trim() || color.colorName,
-        quantity: this.formatTemplateNumber(row.quantity),
-        fob: this.formatTemplateNumber(row.fob),
-        cm: this.formatTemplateNumber(row.cm),
-        deliveryDate: row.deliveryDate ?? '',
-        cuttingLimitPercentage: this.formatTemplateNumber(row.cuttingLimitPercentage),
-        remarks: row.remarks ?? '',
-      });
-    }
-
-    this.throwPoDetailsMissingSetupError(missingStyles, missingSizes, missingColors, rows.length);
+      return nextRows;
+    });
 
     return {
       inserted: resolvedRows.length,
