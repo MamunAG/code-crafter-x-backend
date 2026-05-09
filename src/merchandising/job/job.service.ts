@@ -432,7 +432,7 @@ export class JobService {
     const normalized = value.trim();
 
     if (!normalized) {
-      throw new BadRequestException('Job number cannot be empty.');
+      return undefined;
     }
 
     if (normalized.length > 50) {
@@ -446,7 +446,10 @@ export class JobService {
     const existing = await this.findExistingJobNo(jobNo, organizationId, manager, excludeJobId);
 
     if (existing) {
-      throw new BadRequestException(`Job number "${jobNo}" already exists in this organization.`);
+      const nextJobNumber = await this.getNextAvailableJobNumber(manager, organizationId);
+      throw new BadRequestException(
+        `Job number "${jobNo}" already exists in the system. The next available job number is ${nextJobNumber.jobNo}. You can continue with ${nextJobNumber.jobNo} or enter another job number.`,
+      );
     }
   }
 
