@@ -29,6 +29,8 @@ import { UserToOranizationMapModule } from './app-configuration/user-to-oranizat
 import { OrganizationAccessRequestModule } from './app-configuration/organization-access-request/organization-access-request.module';
 import { BuyerModule } from './merchandising/buyer/buyer.module';
 import { StyleModule } from './merchandising/style/style.module';
+import { TnaTaskModule } from './merchandising/master-data/tna-task/tna-task.module';
+import { TnaModule } from './merchandising/tna/tna.module';
 import { CommonController } from './common/common.controller';
 import { NotificationsModule } from './notifications/notifications.module';
 import { FactoryModule } from './app-configuration/factory/factory.module';
@@ -72,6 +74,8 @@ import { JobModule } from './merchandising/job/job.module';
     OrganizationAccessRequestModule,
     BuyerModule,
     StyleModule,
+    TnaTaskModule,
+    TnaModule,
     FactoryModule,
     SupplierModule,
     DepartmentModule,

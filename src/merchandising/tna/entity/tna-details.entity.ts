@@ -1,0 +1,48 @@
+import { ApiProperty } from '@nestjs/swagger';
+import { BaseEntity } from 'src/common/entities/base.entity';
+import { TnaTask } from 'src/merchandising/master-data/tna-task/entity/tna-task.entity';
+import {
+  Column,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { Tna } from './tna.entity';
+
+@Entity('tna_details')
+export class TnaDetail extends BaseEntity {
+  @ApiProperty({ description: 'Primary ID' })
+  @PrimaryGeneratedColumn('uuid', { name: 'id' })
+  id: string;
+
+  @ApiProperty({ description: 'TNA ID', example: '8bf7d37e-4a62-47b1-b1e5-ded54c3cfb1f' })
+  @Column({ name: 'tna_id', type: 'uuid', nullable: false })
+  tnaId: string;
+
+  @ApiProperty({ description: 'TNA task ID', example: '8bf7d37e-4a62-47b1-b1e5-ded54c3cfb1f' })
+  @Column({ name: 'task_id', type: 'uuid', nullable: false })
+  taskId: string;
+
+  @ApiProperty({ description: 'Execution date', example: '2026-05-05' })
+  @Column({ name: 'execution_date', type: 'date', nullable: false })
+  executionDate: Date;
+
+  @ApiProperty({ description: 'Days', example: 7 })
+  @Column({ name: 'days', type: 'integer', nullable: false })
+  days: number;
+
+  @ApiProperty({ description: 'Relation formula', example: 'lead_time - 7' })
+  @Column({ name: 'relation_formula', type: 'text', nullable: false })
+  relationFormula: string;
+
+  @ApiProperty({ description: 'TNA object', type: () => Tna })
+  @ManyToOne(() => Tna, (tna) => tna.tnaDetails, { nullable: false, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'tna_id' })
+  tna: Tna;
+
+  @ApiProperty({ description: 'TNA task object', type: () => TnaTask })
+  @ManyToOne(() => TnaTask, { nullable: false })
+  @JoinColumn({ name: 'task_id' })
+  task: TnaTask;
+}

@@ -13,6 +13,7 @@ import { UserLocation } from './user-location/entities/user-location.entity';
 import { Color } from './merchandising/master-data/color/entity/color.entity';
 import { Size } from './merchandising/master-data/size/entity/size.entity';
 import { Embellishment } from './merchandising/master-data/embellishment/entity/embellishment.entity';
+import { TnaTask } from './merchandising/master-data/tna-task/entity/tna-task.entity';
 import { Currency } from './app-configuration/currency/entity/currency.entity';
 import { Unit } from './app-configuration/unit/entity/unit.entity';
 import { Country } from './app-configuration/country/entity/country.entity';
@@ -38,6 +39,8 @@ import { Employee } from './hr-payroll/employee/entity/employee.entity';
 import { PurchaseOrder } from './merchandising/job/entity/purchase-order.entity';
 import { Job } from './merchandising/job/entity/job.entity';
 import { JobDetails } from './merchandising/job/entity/job-details.entity';
+import { Tna } from './merchandising/tna/entity/tna.entity';
+import { TnaDetail } from './merchandising/tna/entity/tna-details.entity';
 import { getDatabasePoolConfig } from './config/database-pool.config';
 
 const databaseLogger = new Logger('Database');
@@ -74,6 +77,7 @@ export function createTypeOrmOptions(
       Color,
       Size,
       Embellishment,
+      TnaTask,
       Currency,
       Unit,
       Country,
@@ -99,6 +103,8 @@ export function createTypeOrmOptions(
       PurchaseOrder,
       Job,
       JobDetails,
+      Tna,
+      TnaDetail,
     ],
     synchronize: false, // Never use synchronize in production
     logging: isDevelopment,
