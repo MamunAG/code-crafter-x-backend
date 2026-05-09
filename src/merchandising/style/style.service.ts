@@ -10,6 +10,7 @@ import { Currency } from 'src/app-configuration/currency/entity/currency.entity'
 import { Files } from 'src/files/entities/file.entity';
 import { PaginatedResponseDto } from 'src/common/dto/paginated-response.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
+import { JobDetails } from 'src/merchandising/job/entity/job-details.entity';
 import { Style } from './entity/style.entity';
 import { StyleToColorMap } from './entity/style-to-color-map.entity';
 import { StyleToEmbellishmentMap } from './entity/style-to-embellishment-map.entity';
@@ -50,6 +51,9 @@ export class StyleService {
 
     @InjectRepository(StyleToEmbellishmentMap)
     private styleToEmbellishmentMapRepository: Repository<StyleToEmbellishmentMap>,
+
+    @InjectRepository(JobDetails)
+    private jobDetailsRepository: Repository<JobDetails>,
   ) { }
 
   async create(styleDto: CreateStyleDto, organizationId: string) {
@@ -211,6 +215,7 @@ export class StyleService {
     }
 
     if (dto.buyerId !== undefined) {
+      await this.ensureBuyerChangeAllowedForMappedJobs(style.id, style.buyerId, dto.buyerId, organizationId);
       style.buyer = await this.findBuyerOrFail(dto.buyerId, organizationId);
     }
 
@@ -276,6 +281,36 @@ export class StyleService {
     if (existingStyle) {
       throw new BadRequestException('Style already exists');
     }
+  }
+
+  private async ensureBuyerChangeAllowedForMappedJobs(styleId: string, currentBuyerId: string, nextBuyerId: string, organizationId: string) {
+    if (!nextBuyerId || currentBuyerId === nextBuyerId) {
+      return;
+    }
+
+    const rows = await this.jobDetailsRepository
+      .createQueryBuilder('jobDetails')
+      .innerJoin('jobDetails.job', 'job')
+      .innerJoin('jobDetails.style', 'style')
+      .select('job.jobNo', 'jobNo')
+      .where('jobDetails.style_id = :styleId', { styleId })
+      .andWhere('style.organization_id = :organizationId', { organizationId })
+      .andWhere('style.buyer_id = :currentBuyerId', { currentBuyerId })
+      .andWhere('job.buyer_id != :nextBuyerId', { nextBuyerId })
+      .andWhere('job.deleted_at IS NULL')
+      .groupBy('job.jobNo')
+      .orderBy('job.jobNo', 'ASC')
+      .getRawMany<{ jobNo: string }>();
+
+    const jobNumbers = rows.map((row) => row.jobNo).filter(Boolean);
+
+    if (!jobNumbers.length) {
+      return;
+    }
+
+    throw new BadRequestException(
+      `This style buyer can not be change because already job entry mapped with previous buyer. Job numbers: ${jobNumbers.join(', ')}.`,
+    );
   }
 
   private async findBuyerOrFail(buyerId: string, organizationId: string) {

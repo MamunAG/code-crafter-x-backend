@@ -7,6 +7,7 @@ import { Country } from 'src/app-configuration/country/entity/country.entity';
 import { Currency } from 'src/app-configuration/currency/entity/currency.entity';
 import { Files } from 'src/files/entities/file.entity';
 import { Buyer } from 'src/merchandising/buyer/entity/buyer.entity';
+import { JobDetails } from 'src/merchandising/job/entity/job-details.entity';
 import { StyleToEmbellishmentMap } from './entity/style-to-embellishment-map.entity';
 import { StyleToColorMap } from './entity/style-to-color-map.entity';
 import { StyleToSizeMap } from './entity/style-to-size-map.entity';
@@ -15,7 +16,7 @@ import { StyleController } from './style.controller';
 import { StyleService } from './style.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Style, StyleToColorMap, StyleToSizeMap, StyleToEmbellishmentMap, Buyer, Currency, Files, Color, Size, Embellishment, Country])],
+  imports: [TypeOrmModule.forFeature([Style, StyleToColorMap, StyleToSizeMap, StyleToEmbellishmentMap, Buyer, Currency, Files, Color, Size, Embellishment, Country, JobDetails])],
   controllers: [StyleController],
   providers: [StyleService],
 })
