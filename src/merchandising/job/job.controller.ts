@@ -77,13 +77,11 @@ export class JobController {
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Validate and map PO details upload template' })
   async uploadPoDetailsTemplate(
-    @CurrentUser() user: AuthUser,
     @UploadedFile() file: Express.Multer.File,
-    @Body('buyerId') buyerId?: string,
     @Headers('x-organization-id') organizationId?: string,
   ) {
     const selectedOrganizationId = this.requireOrganizationId(organizationId);
-    const result = await this.jobService.validatePoDetailsTemplate(file, selectedOrganizationId, user.userId, buyerId);
+    const result = await this.jobService.validatePoDetailsTemplate(file, selectedOrganizationId);
     return new BaseResponseDto(result, 'PO details template validated successfully');
   }
 
