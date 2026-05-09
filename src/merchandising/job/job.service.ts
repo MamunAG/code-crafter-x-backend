@@ -616,28 +616,43 @@ export class JobService {
       return;
     }
 
-    const entities = await Promise.all(
-      details.map(async (detail) => {
-        const purchaseOrder = await this.findOrCreatePurchaseOrder(detail.pono, userId, manager);
+    const existingPos: Record<string, PurchaseOrder> = {};
 
-        return jobDetailsRepository.create({
-          jobId,
-          poId: purchaseOrder.id,
-          styleId: detail.styleId,
-          sizeId: detail.sizeId,
-          colorId: detail.colorId,
-          quantity: this.numberOrDefault(detail.quantity, 0),
-          fob: this.numberOrDefault(detail.fob, 0),
-          cm: this.numberOrDefault(detail.cm, 0),
-          deliveryDate: this.parseOptionalDate(detail.deliveryDate) ?? undefined,
-          cuttingLimitPercentage: this.numberOrDefault(detail.cuttingLimitPercentage, 0),
-          remarks: this.nullableString(detail.remarks) ?? undefined,
-          created_by_id: userId,
-          updated_by_id: null as unknown as string,
-          updated_at: null as unknown as Date,
-        });
-      }),
-    );
+    for (const detail of details) {
+      if (!existingPos[detail.pono]) {
+        const res = await this.findOrCreatePurchaseOrder(
+          detail.pono,
+          userId,
+          manager,
+        );
+
+        existingPos[detail.pono] = res;
+      }
+    }
+
+    console.log('existingPos:', existingPos)
+
+
+    const entities = details.map((detail) => {
+      const purchaseOrder = existingPos[detail.pono];
+
+      return jobDetailsRepository.create({
+        jobId,
+        poId: purchaseOrder.id,
+        styleId: detail.styleId,
+        sizeId: detail.sizeId,
+        colorId: detail.colorId,
+        quantity: this.numberOrDefault(detail.quantity, 0),
+        fob: this.numberOrDefault(detail.fob, 0),
+        cm: this.numberOrDefault(detail.cm, 0),
+        deliveryDate: this.parseOptionalDate(detail.deliveryDate) ?? undefined,
+        cuttingLimitPercentage: this.numberOrDefault(detail.cuttingLimitPercentage, 0),
+        remarks: this.nullableString(detail.remarks) ?? undefined,
+        created_by_id: userId,
+        updated_by_id: null as unknown as string,
+        updated_at: null as unknown as Date,
+      });
+    })
 
     await jobDetailsRepository.save(entities);
   }
