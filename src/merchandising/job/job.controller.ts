@@ -51,6 +51,16 @@ export class JobController {
     return new BaseResponseDto(result, 'Next job number retrieved successfully');
   }
 
+  @Get('po-summary')
+  @MenuAccess(MENU_NAME, 'canView')
+  @ApiOperation({ summary: 'Search saved PO details by PO number' })
+  @ApiResponse({ status: 200, description: 'PO summary retrieved successfully', type: BaseResponseDto })
+  async getPoSummary(@Query('pono') pono?: string, @Headers('x-organization-id') organizationId?: string) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const result = await this.jobService.getPoSummary(pono, selectedOrganizationId);
+    return new BaseResponseDto(result, 'PO summary retrieved successfully');
+  }
+
   @Get(':id')
   @MenuAccess(MENU_NAME, 'canView')
   @ApiOperation({ summary: 'Get job by id', description: 'Retrieve specific job' })

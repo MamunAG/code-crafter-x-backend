@@ -61,6 +61,49 @@ type AiAssistResolvedMasterData = {
   colorOption: AiAssistResolvedOption | null;
 };
 
+type JobPoSummaryRow = {
+  id: string;
+  jobId: string;
+  jobNo: string;
+  poNumber: string;
+  styleNo: string;
+  styleName: string | null;
+  sizeName: string;
+  colorName: string;
+  quantity: number;
+  fob: number;
+  totalFob: number;
+  cmPerDzn: number;
+  totalCm: number;
+  deliveryDate: string | null;
+  cuttingLimitPercentage: number;
+  remarks: string | null;
+  factoryName: string;
+  buyerName: string;
+  isActive: boolean;
+};
+
+type JobPoSummaryGroup = {
+  poNumber: string;
+  jobCount: number;
+  rowCount: number;
+  totalQuantity: number;
+  totalFob: number;
+  totalCm: number;
+  rows: JobPoSummaryRow[];
+};
+
+type JobPoSummaryResult = {
+  search: string;
+  totalPoCount: number;
+  totalJobCount: number;
+  totalRowCount: number;
+  totalQuantity: number;
+  totalFob: number;
+  totalCm: number;
+  groups: JobPoSummaryGroup[];
+};
+
 @Injectable()
 export class JobService {
   constructor(
@@ -254,6 +297,102 @@ export class JobService {
     }
 
     return job;
+  }
+
+  async getPoSummary(pono: string | undefined, organizationId: string): Promise<JobPoSummaryResult> {
+    const search = pono?.trim();
+
+    if (!search) {
+      throw new BadRequestException('Please enter a PO number to view the PO summary.');
+    }
+
+    const details = await this.jobDetailsRepository
+      .createQueryBuilder('detail')
+      .innerJoinAndSelect('detail.job', 'job')
+      .innerJoinAndSelect('job.factory', 'factory')
+      .innerJoinAndSelect('job.buyer', 'buyer')
+      .innerJoinAndSelect('detail.purchaseOrder', 'purchaseOrder')
+      .innerJoinAndSelect('detail.style', 'style')
+      .innerJoinAndSelect('detail.size', 'size')
+      .innerJoinAndSelect('detail.color', 'color')
+      .where('factory.organization_id = :organizationId', { organizationId })
+      .andWhere('job.deleted_at IS NULL')
+      .andWhere('detail.deleted_at IS NULL')
+      .andWhere('purchaseOrder.pono ILIKE :pono', { pono: `%${search}%` })
+      .orderBy('purchaseOrder.pono', 'ASC')
+      .addOrderBy('job.job_no', 'ASC')
+      .addOrderBy('detail.created_at', 'ASC')
+      .getMany();
+
+    const groups = new Map<string, JobPoSummaryGroup>();
+    const groupJobIds = new Map<string, Set<string>>();
+    const totalJobIds = new Set<string>();
+
+    for (const detail of details) {
+      const poNumber = detail.purchaseOrder?.pono ?? '';
+      const quantity = this.numberOrDefault(detail.quantity, 0);
+      const fob = this.numberOrDefault(detail.fob, 0);
+      const cmPerDzn = this.numberOrDefault(detail.cm, 0);
+      const totalFob = quantity * fob;
+      const totalCm = quantity * (cmPerDzn / 12);
+      const group = groups.get(poNumber) ?? {
+        poNumber,
+        jobCount: 0,
+        rowCount: 0,
+        totalQuantity: 0,
+        totalFob: 0,
+        totalCm: 0,
+        rows: [],
+      };
+
+      group.rowCount += 1;
+      group.totalQuantity += quantity;
+      group.totalFob += totalFob;
+      group.totalCm += totalCm;
+      totalJobIds.add(detail.jobId);
+
+      const jobIdsForGroup = groupJobIds.get(poNumber) ?? new Set<string>();
+      jobIdsForGroup.add(detail.jobId);
+      groupJobIds.set(poNumber, jobIdsForGroup);
+      group.jobCount = jobIdsForGroup.size;
+
+      group.rows.push({
+        id: detail.id,
+        jobId: detail.jobId,
+        jobNo: detail.job?.jobNo ?? '',
+        poNumber,
+        styleNo: detail.style?.styleNo ?? '',
+        styleName: detail.style?.styleName ?? null,
+        sizeName: detail.size?.sizeName ?? '',
+        colorName: detail.color?.colorDisplayName || detail.color?.colorName || '',
+        quantity,
+        fob,
+        totalFob,
+        cmPerDzn,
+        totalCm,
+        deliveryDate: this.formatDateForResponse(detail.deliveryDate),
+        cuttingLimitPercentage: this.numberOrDefault(detail.cuttingLimitPercentage, 0),
+        remarks: detail.remarks ?? null,
+        factoryName: detail.job?.factory?.displayName || detail.job?.factory?.name || '',
+        buyerName: detail.job?.buyer?.displayName || detail.job?.buyer?.name || '',
+        isActive: detail.job?.isActive ?? false,
+      });
+
+      groups.set(poNumber, group);
+    }
+
+    const summaryGroups = Array.from(groups.values());
+
+    return {
+      search,
+      totalPoCount: summaryGroups.length,
+      totalJobCount: totalJobIds.size,
+      totalRowCount: summaryGroups.reduce((total, group) => total + group.rowCount, 0),
+      totalQuantity: summaryGroups.reduce((total, group) => total + group.totalQuantity, 0),
+      totalFob: summaryGroups.reduce((total, group) => total + group.totalFob, 0),
+      totalCm: summaryGroups.reduce((total, group) => total + group.totalCm, 0),
+      groups: summaryGroups,
+    };
   }
 
   async update(id: string, dto: UpdateJobDto, userId: string, organizationId: string) {
@@ -940,6 +1079,24 @@ export class JobService {
 
     const date = new Date(trimmedValue);
     return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  private formatDateForResponse(value: string | Date | null | undefined) {
+    if (!value) {
+      return null;
+    }
+
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? null : value.toISOString().slice(0, 10);
+    }
+
+    const trimmedValue = value.trim();
+    if (!trimmedValue) {
+      return null;
+    }
+
+    const date = new Date(trimmedValue);
+    return Number.isNaN(date.getTime()) ? trimmedValue : date.toISOString().slice(0, 10);
   }
 
   private parseBoolean(value: boolean | string | null | undefined) {
