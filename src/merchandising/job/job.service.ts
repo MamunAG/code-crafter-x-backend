@@ -630,9 +630,6 @@ export class JobService {
       }
     }
 
-    console.log('existingPos:', existingPos)
-
-
     const entities = details.map((detail) => {
       const purchaseOrder = existingPos[detail.pono];
 
