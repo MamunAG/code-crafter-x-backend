@@ -1,10 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsDateString, IsEnum, IsNumber, IsOptional, IsUUID, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsEnum, IsNumber, IsOptional, IsString, IsUUID, MaxLength, ValidateNested } from 'class-validator';
 import { OrderType } from '../entity/job.entity';
 import { CreateJobDetailDto } from './create-job-detail.dto';
 
 export class CreateJobDto {
+  @ApiPropertyOptional({ description: 'Custom job number. When omitted, the backend generates the next number.', example: 'JOB-CUSTOM-001' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  jobNo?: string | null;
+
   @ApiProperty({ description: 'Factory ID', example: '8bf7d37e-4a62-47b1-b1e5-ded54c3cfb1f' })
   @IsUUID()
   factoryId: string;

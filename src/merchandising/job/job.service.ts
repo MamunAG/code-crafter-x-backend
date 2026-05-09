@@ -112,13 +112,20 @@ export class JobService {
 
     const details = dto.jobDetails ?? [];
     await this.validateDetails(details, organizationId);
+    const customJobNo = this.normalizeCustomJobNo(dto.jobNo);
 
     const savedJobId = await this.dataSource.transaction(async (manager) => {
       await this.lockJobSerialForOrganization(manager, organizationId);
-      const nextJobNumber = await this.getNextJobNumber(manager, organizationId);
+      const nextJobNumber = customJobNo
+        ? await this.getNextJobNumber(manager, organizationId)
+        : await this.getNextAvailableJobNumber(manager, organizationId);
+
+      if (customJobNo) {
+        await this.ensureJobNoAvailable(customJobNo, organizationId, manager);
+      }
 
       const job = manager.getRepository(Job).create({
-        jobNo: nextJobNumber.jobNo,
+        jobNo: customJobNo ?? nextJobNumber.jobNo,
         jobSerial: nextJobNumber.jobSerial,
         factoryId: dto.factoryId,
         buyerId: dto.buyerId,
@@ -250,62 +257,84 @@ export class JobService {
   }
 
   async update(id: string, dto: UpdateJobDto, userId: string, organizationId: string) {
-    const job = await this.jobRepository
-      .createQueryBuilder('job')
-      .leftJoinAndSelect('job.factory', 'factory')
-      .leftJoinAndSelect('job.merchandiser', 'merchandiser')
-      .where('job.id = :id', { id })
-      .andWhere('factory.organization_id = :organizationId', { organizationId })
-      .andWhere('job.deleted_at IS NULL')
-      .getOne();
-
-    if (!job) {
-      throw new NotFoundException('Job not found in the selected organization.');
-    }
-
     if (dto.factoryId !== undefined) {
       await this.findFactoryOrFail(dto.factoryId, organizationId);
-      job.factoryId = dto.factoryId;
     }
 
     if (dto.buyerId !== undefined) {
       await this.findBuyerOrFail(dto.buyerId, organizationId);
-      job.buyerId = dto.buyerId;
     }
 
     if (dto.merchandiserId != null) {
       await this.findEmployeeOrFail(dto.merchandiserId, organizationId);
-      job.merchandiserId = dto.merchandiserId;
-    } else if (dto.merchandiserId === null) {
-      job.merchandiserId = null;
-    }
-
-    if (dto.ordertype !== undefined) {
-      job.ordertype = dto.ordertype ?? undefined;
-    }
-
-    if (dto.poReceiveDate !== undefined) {
-      job.poReceiveDate = this.parseOptionalDate(dto.poReceiveDate) ?? undefined;
-    }
-
-    if (dto.isActive !== undefined) {
-      job.isActive = dto.isActive;
     }
 
     if (dto.jobDetails !== undefined) {
       await this.validateDetails(dto.jobDetails, organizationId);
-      job.totalPoQty = this.sumDetailQuantity(dto.jobDetails);
-    } else if (dto.totalPoQty !== undefined) {
-      job.totalPoQty = this.numberOrDefault(dto.totalPoQty, 0);
     }
+    const customJobNo = this.normalizeCustomJobNo(dto.jobNo);
 
-    job.updated_by_id = userId;
-    job.updated_at = new Date();
-    await this.jobRepository.save(job);
+    await this.dataSource.transaction(async (manager) => {
+      await this.lockJobSerialForOrganization(manager, organizationId);
+      const job = await manager
+        .getRepository(Job)
+        .createQueryBuilder('job')
+        .leftJoinAndSelect('job.factory', 'factory')
+        .leftJoinAndSelect('job.merchandiser', 'merchandiser')
+        .where('job.id = :id', { id })
+        .andWhere('factory.organization_id = :organizationId', { organizationId })
+        .andWhere('job.deleted_at IS NULL')
+        .getOne();
 
-    if (dto.jobDetails !== undefined) {
-      await this.syncJobDetails(id, dto.jobDetails, userId);
-    }
+      if (!job) {
+        throw new NotFoundException('Job not found in the selected organization.');
+      }
+
+      if (customJobNo) {
+        await this.ensureJobNoAvailable(customJobNo, organizationId, manager, id);
+        job.jobNo = customJobNo;
+      }
+
+      if (dto.factoryId !== undefined) {
+        job.factoryId = dto.factoryId;
+      }
+
+      if (dto.buyerId !== undefined) {
+        job.buyerId = dto.buyerId;
+      }
+
+      if (dto.merchandiserId != null) {
+        job.merchandiserId = dto.merchandiserId;
+      } else if (dto.merchandiserId === null) {
+        job.merchandiserId = null;
+      }
+
+      if (dto.ordertype !== undefined) {
+        job.ordertype = dto.ordertype ?? undefined;
+      }
+
+      if (dto.poReceiveDate !== undefined) {
+        job.poReceiveDate = this.parseOptionalDate(dto.poReceiveDate) ?? undefined;
+      }
+
+      if (dto.isActive !== undefined) {
+        job.isActive = dto.isActive;
+      }
+
+      if (dto.jobDetails !== undefined) {
+        job.totalPoQty = this.sumDetailQuantity(dto.jobDetails);
+      } else if (dto.totalPoQty !== undefined) {
+        job.totalPoQty = this.numberOrDefault(dto.totalPoQty, 0);
+      }
+
+      job.updated_by_id = userId;
+      job.updated_at = new Date();
+      await manager.getRepository(Job).save(job);
+
+      if (dto.jobDetails !== undefined) {
+        await this.syncJobDetails(id, dto.jobDetails, userId, manager);
+      }
+    });
 
     return this.findOne(id, organizationId);
   }
@@ -378,8 +407,63 @@ export class JobService {
     };
   }
 
+  private async getNextAvailableJobNumber(manager: EntityManager, organizationId: string) {
+    let nextJobNumber = await this.getNextJobNumber(manager, organizationId);
+
+    while (await this.findExistingJobNo(nextJobNumber.jobNo, organizationId, manager)) {
+      nextJobNumber = {
+        jobNo: `JOB-${nextJobNumber.jobSerial + 1}`,
+        jobSerial: nextJobNumber.jobSerial + 1,
+      };
+    }
+
+    return nextJobNumber;
+  }
+
   private async lockJobSerialForOrganization(manager: EntityManager, organizationId: string) {
     await manager.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [`job-serial:${organizationId}`]);
+  }
+
+  private normalizeCustomJobNo(value?: string | null) {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+
+    const normalized = value.trim();
+
+    if (!normalized) {
+      throw new BadRequestException('Job number cannot be empty.');
+    }
+
+    if (normalized.length > 50) {
+      throw new BadRequestException('Job number cannot be longer than 50 characters.');
+    }
+
+    return normalized;
+  }
+
+  private async ensureJobNoAvailable(jobNo: string, organizationId: string, manager: EntityManager, excludeJobId?: string) {
+    const existing = await this.findExistingJobNo(jobNo, organizationId, manager, excludeJobId);
+
+    if (existing) {
+      throw new BadRequestException(`Job number "${jobNo}" already exists in this organization.`);
+    }
+  }
+
+  private async findExistingJobNo(jobNo: string, organizationId: string, manager: EntityManager, excludeJobId?: string) {
+    const queryBuilder = manager
+      .getRepository(Job)
+      .createQueryBuilder('job')
+      .withDeleted()
+      .innerJoin('job.factory', 'factory')
+      .where('factory.organization_id = :organizationId', { organizationId })
+      .andWhere('LOWER(TRIM(job.jobNo)) = :jobNo', { jobNo: jobNo.trim().toLowerCase() });
+
+    if (excludeJobId) {
+      queryBuilder.andWhere('job.id <> :excludeJobId', { excludeJobId });
+    }
+
+    return queryBuilder.getOne();
   }
 
   private async syncJobDetails(jobId: string, details: CreateJobDetailDto[], userId: string, manager: EntityManager = this.dataSource.manager) {
