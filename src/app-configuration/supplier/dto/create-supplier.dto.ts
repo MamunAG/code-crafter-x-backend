@@ -14,14 +14,6 @@ export class CreateSupplierDto extends PartialType(Supplier) {
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({
-    description: 'Supplier display name',
-    example: 'ABC Suppliers',
-  })
-  @IsString()
-  @IsNotEmpty()
-  displayName: string;
-
   @ApiPropertyOptional({ description: 'Supplier code', example: 'SUP-001' })
   @IsOptional()
   @IsString()

@@ -20,13 +20,6 @@ export class Supplier extends BaseEntity {
   name: string;
 
   @ApiProperty({
-    description: 'Supplier display name',
-    example: 'ABC Suppliers',
-  })
-  @Column({ name: 'display_name', nullable: false })
-  displayName: string;
-
-  @ApiProperty({
     description: 'Supplier code',
     example: 'SUP-001',
     required: false,

@@ -57,8 +57,8 @@ export class SupplierService {
 
   buildUploadTemplate() {
     return [
-      'name,displayName,code,contact,email,address,remarks,isActive',
-      'ABC Suppliers Ltd.,ABC Suppliers,SUP-001,+8801712345678,supplier@example.com,"Dhaka, Bangladesh",Primary fabric supplier.,true',
+      'name,code,contact,email,address,remarks,isActive',
+      'ABC Suppliers Ltd.,SUP-001,+8801712345678,supplier@example.com,"Dhaka, Bangladesh",Primary fabric supplier.,true',
     ].join('\n');
   }
 
@@ -136,7 +136,7 @@ export class SupplierService {
         const normalizedCode = row.code?.trim().toLowerCase() || '';
         const identityKey = normalizedCode || normalizedName;
 
-        if (!normalizedName || !row.displayName.trim()) {
+        if (!normalizedName) {
           return false;
         }
 
@@ -158,7 +158,6 @@ export class SupplierService {
       .map((row) =>
         this.supplierRepository.create({
           name: row.name.trim(),
-          displayName: row.displayName.trim(),
           code: row.code?.trim() || null,
           contact: row.contact?.trim() || null,
           email: row.email?.trim() || null,
@@ -226,12 +225,6 @@ export class SupplierService {
     if (filters?.name) {
       queryBuilder.andWhere('supplier.name ILIKE :name', {
         name: `%${filters.name}%`,
-      });
-    }
-
-    if (filters?.displayName) {
-      queryBuilder.andWhere('supplier.displayName ILIKE :displayName', {
-        displayName: `%${filters.displayName}%`,
       });
     }
 
@@ -315,7 +308,6 @@ export class SupplierService {
 
   async update(id: string, dto: UpdateSupplierDto, organizationId: string) {
     const normalizedSupplier = this.normalizeSupplierPayload(dto);
-
     if (normalizedSupplier.name || normalizedSupplier.code) {
       await this.ensureSupplierIsUnique(
         normalizedSupplier.name,
@@ -414,8 +406,6 @@ export class SupplierService {
     const payload: Partial<Supplier> = {};
 
     if (dto.name !== undefined) payload.name = dto.name.trim();
-    if (dto.displayName !== undefined)
-      payload.displayName = dto.displayName.trim();
     if ('code' in dto) payload.code = this.nullableString(dto.code);
     if ('contact' in dto) payload.contact = this.nullableString(dto.contact);
     if ('email' in dto)
@@ -448,7 +438,6 @@ export class SupplierService {
       header.trim().toLowerCase(),
     );
     const nameIndex = headers.indexOf('name');
-    const displayNameIndex = headers.indexOf('displayname');
     const codeIndex = headers.indexOf('code');
     const contactIndex = headers.indexOf('contact');
     const emailIndex = headers.indexOf('email');
@@ -456,25 +445,23 @@ export class SupplierService {
     const remarksIndex = headers.indexOf('remarks');
     const activeIndex = headers.indexOf('isactive');
 
-    if (nameIndex === -1 || displayNameIndex === -1) {
+    if (nameIndex === -1) {
       throw new BadRequestException(
-        'The uploaded template must include name and displayName columns.',
+        'The uploaded template must include a name column.',
       );
     }
 
     return lines.slice(1).flatMap((line) => {
       const columns = this.parseCsvLine(line);
       const name = columns[nameIndex]?.trim() ?? '';
-      const displayName = columns[displayNameIndex]?.trim() ?? '';
 
-      if (!name || !displayName) {
+      if (!name) {
         return [];
       }
 
       return [
         {
           name,
-          displayName,
           code: codeIndex === -1 ? '' : columns[codeIndex]?.trim() ?? '',
           contact: contactIndex === -1 ? '' : columns[contactIndex]?.trim() ?? '',
           email: emailIndex === -1 ? '' : columns[emailIndex]?.trim() ?? '',

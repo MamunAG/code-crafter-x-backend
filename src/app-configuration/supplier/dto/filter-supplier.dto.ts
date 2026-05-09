@@ -13,15 +13,6 @@ export class FilterSupplierDto extends PaginationDto {
   name: string;
 
   @ApiProperty({
-    description: 'Supplier display name',
-    example: 'ABC Suppliers',
-    required: false,
-  })
-  @IsOptional()
-  @IsString()
-  displayName: string;
-
-  @ApiProperty({
     description: 'Supplier code',
     example: 'SUP-001',
     required: false,
