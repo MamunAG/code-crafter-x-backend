@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, ParseUUIDPipe, Patch, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Header, Headers, Param, ParseUUIDPipe, Patch, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type AuthUser from 'src/auth/dto/auth-user';
@@ -59,6 +59,27 @@ export class JobController {
     const selectedOrganizationId = this.requireOrganizationId(organizationId);
     const result = await this.jobService.getPoSummary(pono, selectedOrganizationId);
     return new BaseResponseDto(result, 'PO summary retrieved successfully');
+  }
+
+  @Get('po-details/template/upload')
+  @MenuAccess(MENU_NAME, 'canCreate')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="job-po-details-template.csv"')
+  @ApiOperation({ summary: 'Download PO details upload template' })
+  downloadPoDetailsUploadTemplate(@Headers('x-organization-id') organizationId?: string) {
+    this.requireOrganizationId(organizationId);
+    return this.jobService.buildPoDetailsUploadTemplate();
+  }
+
+  @Post('po-details/upload')
+  @MenuAccess(MENU_NAME, 'canCreate')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Validate and map PO details upload template' })
+  async uploadPoDetailsTemplate(@UploadedFile() file: Express.Multer.File, @Headers('x-organization-id') organizationId?: string) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const result = await this.jobService.validatePoDetailsTemplate(file, selectedOrganizationId);
+    return new BaseResponseDto(result, 'PO details template validated successfully');
   }
 
   @Get(':id')

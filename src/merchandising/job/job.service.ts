@@ -104,6 +104,36 @@ type JobPoSummaryResult = {
   groups: JobPoSummaryGroup[];
 };
 
+type PoDetailsTemplateRow = {
+  poNumber: string;
+  styleNo: string;
+  styleName: string | null;
+  color: string;
+  size: string;
+  quantity: number;
+  fob: number;
+  cm: number;
+  deliveryDate: string | null;
+  cuttingLimitPercentage: number;
+  remarks: string | null;
+};
+
+type ResolvedPoDetailsTemplateRow = {
+  pono: string;
+  styleId: string;
+  styleLabel: string;
+  sizeId: string;
+  sizeLabel: string;
+  colorId: string;
+  colorLabel: string;
+  quantity: string;
+  fob: string;
+  cm: string;
+  deliveryDate: string;
+  cuttingLimitPercentage: string;
+  remarks: string;
+};
+
 @Injectable()
 export class JobService {
   constructor(
@@ -193,6 +223,101 @@ export class JobService {
 
   async getNextJobNumberPreview(organizationId: string) {
     return this.getNextJobNumber(this.dataSource.manager, organizationId);
+  }
+
+  buildPoDetailsUploadTemplate() {
+    return [
+      'poNumber,styleNo,styleName,color,size,quantity,fob,cm,deliveryDate,cuttingLimitPercentage,remarks',
+      'PO-001,ST-001,Summer Shirt,Blue,M,120,4.5,18,2026-06-30,5,Sample row',
+    ].join('\n');
+  }
+
+  async validatePoDetailsTemplate(file: Express.Multer.File | undefined, organizationId: string) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('Please upload a PO details template file.');
+    }
+
+    const rows = this.parsePoDetailsTemplate(file);
+
+    if (!rows.length) {
+      return {
+        inserted: 0,
+        skipped: 0,
+        rows: [] as ResolvedPoDetailsTemplateRow[],
+      };
+    }
+
+    const [styles, sizes, colors] = await Promise.all([
+      this.styleRepository
+        .createQueryBuilder('style')
+        .where('style.organization_id = :organizationId', { organizationId })
+        .andWhere('style.deleted_at IS NULL')
+        .andWhere('style.is_active = :isActive', { isActive: true })
+        .getMany(),
+      this.sizeRepository
+        .createQueryBuilder('size')
+        .where('size.organization_id = :organizationId', { organizationId })
+        .andWhere('size.deleted_at IS NULL')
+        .andWhere('size.is_active = :isActive', { isActive: true })
+        .getMany(),
+      this.colorRepository
+        .createQueryBuilder('color')
+        .where('color.organization_id = :organizationId', { organizationId })
+        .andWhere('color.deleted_at IS NULL')
+        .andWhere('color.is_active = :isActive', { isActive: true })
+        .getMany(),
+    ]);
+
+    const styleByNo = new Map(styles.map((style) => [style.styleNo?.trim().toLowerCase(), style] as const).filter((entry): entry is readonly [string, Style] => Boolean(entry[0])));
+    const sizeByName = new Map(sizes.map((size) => [size.sizeName?.trim().toLowerCase(), size] as const).filter((entry): entry is readonly [string, Size] => Boolean(entry[0])));
+    const colorByName = new Map<string, Color>();
+    for (const color of colors) {
+      const colorName = color.colorName?.trim().toLowerCase();
+      const displayName = color.colorDisplayName?.trim().toLowerCase();
+      if (colorName) colorByName.set(colorName, color);
+      if (displayName) colorByName.set(displayName, color);
+    }
+
+    const missingStyles = new Set<string>();
+    const missingSizes = new Set<string>();
+    const missingColors = new Set<string>();
+    const resolvedRows: ResolvedPoDetailsTemplateRow[] = [];
+
+    for (const row of rows) {
+      const style = styleByNo.get(row.styleNo.trim().toLowerCase());
+      const size = sizeByName.get(row.size.trim().toLowerCase());
+      const color = colorByName.get(row.color.trim().toLowerCase());
+
+      if (!style) missingStyles.add(row.styleNo);
+      if (!size) missingSizes.add(row.size);
+      if (!color) missingColors.add(row.color);
+
+      if (!style || !size || !color) continue;
+
+      resolvedRows.push({
+        pono: row.poNumber,
+        styleId: style.id,
+        styleLabel: this.formatStyleLabel(style.styleNo, style.styleName),
+        sizeId: String(size.id),
+        sizeLabel: size.sizeName,
+        colorId: String(color.id),
+        colorLabel: color.colorDisplayName?.trim() || color.colorName,
+        quantity: this.formatTemplateNumber(row.quantity),
+        fob: this.formatTemplateNumber(row.fob),
+        cm: this.formatTemplateNumber(row.cm),
+        deliveryDate: row.deliveryDate ?? '',
+        cuttingLimitPercentage: this.formatTemplateNumber(row.cuttingLimitPercentage),
+        remarks: row.remarks ?? '',
+      });
+    }
+
+    this.throwPoDetailsMissingSetupError(missingStyles, missingSizes, missingColors, rows.length);
+
+    return {
+      inserted: resolvedRows.length,
+      skipped: rows.length - resolvedRows.length,
+      rows: resolvedRows,
+    };
   }
 
   async findAll(
@@ -1117,6 +1242,100 @@ export class JobService {
     }
 
     return ['true', 'yes', 'y', '1', 'active'].includes(value?.trim().toLowerCase() ?? '');
+  }
+
+  private parsePoDetailsTemplate(file: Express.Multer.File) {
+    const extension = this.getFileExtension(file.originalname);
+    let sheetRows: Record<string, unknown>[] = [];
+
+    if (['xls', 'xlsx', 'csv'].includes(extension)) {
+      const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      sheetRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { defval: '' });
+    } else {
+      throw new BadRequestException('Please upload a CSV, XLS, or XLSX PO details template file.');
+    }
+
+    if (!sheetRows.length) {
+      throw new BadRequestException('The uploaded template does not contain any PO detail rows.');
+    }
+
+    return sheetRows.flatMap((rawRow) => {
+      const row = this.normalizeTemplateRow(rawRow);
+      const poNumber = this.getTemplateValue(row, 'ponumber', 'pono', 'po');
+      const styleNo = this.getTemplateValue(row, 'styleno', 'style');
+      const styleName = this.getTemplateValue(row, 'stylename');
+      const color = this.getTemplateValue(row, 'color', 'colorname');
+      const size = this.getTemplateValue(row, 'size', 'sizename');
+
+      if (!poNumber && !styleNo && !color && !size) {
+        return [];
+      }
+
+      if (!poNumber || !styleNo || !color || !size) {
+        throw new BadRequestException('Each PO detail row must include poNumber, styleNo, color, and size.');
+      }
+
+      return [{
+        poNumber,
+        styleNo,
+        styleName: styleName || null,
+        color,
+        size,
+        quantity: this.numberOrDefault(this.getTemplateValue(row, 'quantity', 'qty'), 0),
+        fob: this.numberOrDefault(this.getTemplateValue(row, 'fob'), 0),
+        cm: this.numberOrDefault(this.getTemplateValue(row, 'cm'), 0),
+        deliveryDate: this.formatDateForResponse(this.getTemplateValue(row, 'deliverydate', 'delivery')),
+        cuttingLimitPercentage: this.numberOrDefault(this.getTemplateValue(row, 'cuttinglimitpercentage', 'cuttinglimit'), 0),
+        remarks: this.nullableString(this.getTemplateValue(row, 'remarks')),
+      }];
+    });
+  }
+
+  private normalizeTemplateRow(row: Record<string, unknown>) {
+    return Object.entries(row).reduce<Record<string, string>>((normalized, [key, value]) => {
+      const normalizedKey = key.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      normalized[normalizedKey] = value == null ? '' : String(value).trim();
+      return normalized;
+    }, {});
+  }
+
+  private getTemplateValue(row: Record<string, string>, ...keys: string[]) {
+    for (const key of keys) {
+      const value = row[key.toLowerCase()]?.trim();
+      if (value) return value;
+    }
+    return '';
+  }
+
+  private throwPoDetailsMissingSetupError(styles: Set<string>, sizes: Set<string>, colors: Set<string>, totalRows: number) {
+    const missing = {
+      styles: [...styles],
+      sizes: [...sizes],
+      colors: [...colors],
+    };
+
+    if (!missing.styles.length && !missing.sizes.length && !missing.colors.length) {
+      return;
+    }
+
+    throw new BadRequestException({
+      message: 'PO details upload could not be completed because required setup data is missing. Please add the missing setup records, then upload the template again.',
+      uploadReport: {
+        inserted: 0,
+        skipped: totalRows,
+        missing,
+        rows: [],
+      },
+    });
+  }
+
+  private formatStyleLabel(styleNo?: string | null, styleName?: string | null) {
+    return [styleNo?.trim(), styleName?.trim()].filter(Boolean).join(' - ') || '';
+  }
+
+  private formatTemplateNumber(value: number) {
+    return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '');
   }
 
   private getFileExtension(fileName?: string) {
