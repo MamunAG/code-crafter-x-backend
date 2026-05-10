@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, Header, Headers, Param, ParseUUIDPipe, Patch, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type AuthUser from 'src/auth/dto/auth-user';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { MenuAccess } from 'src/common/decorators/menu-access.decorator';
@@ -49,6 +49,20 @@ export class JobController {
     const selectedOrganizationId = this.requireOrganizationId(organizationId);
     const result = await this.jobService.getNextJobNumberPreview(selectedOrganizationId);
     return new BaseResponseDto(result, 'Next job number retrieved successfully');
+  }
+
+  @Get('numbers-by-buyer')
+  @MenuAccess(MENU_NAME, 'canView')
+  @ApiOperation({ summary: 'Get active job numbers by buyer' })
+  @ApiQuery({ name: 'buyerId', description: 'Buyer ID', required: true })
+  @ApiResponse({ status: 200, description: 'Job numbers retrieved successfully', type: BaseResponseDto })
+  async getJobNumbersByBuyer(
+    @Query('buyerId', new ParseUUIDPipe()) buyerId: string,
+    @Headers('x-organization-id') organizationId?: string,
+  ) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const result = await this.jobService.findJobNumbersByBuyer(buyerId, selectedOrganizationId);
+    return new BaseResponseDto(result, 'Job numbers retrieved successfully');
   }
 
   @Get('po-summary')

@@ -28,6 +28,11 @@ type JobListFilters = Partial<FilterJobDto> & {
   deletedOnly?: string | boolean;
 };
 
+type JobNumberListItem = {
+  id: string;
+  jobNo: string;
+};
+
 type JobAiAssistRow = {
   poNumber: string;
   styleNo: string;
@@ -223,6 +228,22 @@ export class JobService {
 
   async getNextJobNumberPreview(organizationId: string) {
     return this.getNextJobNumber(this.dataSource.manager, organizationId);
+  }
+
+  async findJobNumbersByBuyer(buyerId: string, organizationId: string): Promise<JobNumberListItem[]> {
+    await this.findBuyerOrFail(buyerId, organizationId);
+
+    return this.jobRepository
+      .createQueryBuilder('job')
+      .innerJoin('job.factory', 'factory')
+      .select('job.id', 'id')
+      .addSelect('job.jobNo', 'jobNo')
+      .where('factory.organization_id = :organizationId', { organizationId })
+      .andWhere('job.buyer_id = :buyerId', { buyerId })
+      .andWhere('job.deleted_at IS NULL')
+      .andWhere('job.is_active = :isActive', { isActive: true })
+      .orderBy('job.job_no', 'ASC')
+      .getRawMany<JobNumberListItem>();
   }
 
   buildPoDetailsUploadTemplate() {
