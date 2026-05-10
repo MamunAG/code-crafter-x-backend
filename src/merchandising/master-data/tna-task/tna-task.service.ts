@@ -46,9 +46,11 @@ export class TnaTaskService {
       .leftJoinAndSelect('tna_task.created_by_user', 'created_by_user')
       .leftJoinAndSelect('tna_task.updated_by_user', 'updated_by_user')
       .leftJoinAndSelect('tna_task.deleted_by_user', 'deleted_by_user')
+      .addSelect('LOWER(tna_task.name)', 'tna_task_name_sort')
       .skip(skip)
       .take(limit)
-      .orderBy(deletedOnly ? 'tna_task.deleted_at' : 'tna_task.created_at', 'DESC');
+      .orderBy('tna_task_name_sort', 'ASC')
+      .addOrderBy(deletedOnly ? 'tna_task.deleted_at' : 'tna_task.created_at', 'DESC');
 
     if (deletedOnly) {
       queryBuilder.withDeleted();

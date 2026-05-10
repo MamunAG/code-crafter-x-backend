@@ -1,6 +1,6 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDateString, IsNotEmpty, IsNumber, IsString, IsUUID, Min } from 'class-validator';
+import { IsDateString, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 
 export class CreateTnaDetailDto {
   @ApiProperty({ description: 'TNA task ID', example: '8bf7d37e-4a62-47b1-b1e5-ded54c3cfb1f' })
@@ -17,8 +17,8 @@ export class CreateTnaDetailDto {
   @Min(0)
   days: number;
 
-  @ApiProperty({ description: 'Relation formula', example: 'lead_time - 7' })
+  @ApiPropertyOptional({ description: 'Relation formula', example: 'lead_time - 7' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  relationFormula: string;
+  relationFormula?: string;
 }

@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BaseEntity } from 'src/common/entities/base.entity';
 import { TnaTask } from 'src/merchandising/master-data/tna-task/entity/tna-task.entity';
 import {
@@ -32,9 +32,9 @@ export class TnaDetail extends BaseEntity {
   @Column({ name: 'days', type: 'integer', nullable: false })
   days: number;
 
-  @ApiProperty({ description: 'Relation formula', example: 'lead_time - 7' })
-  @Column({ name: 'relation_formula', type: 'text', nullable: false })
-  relationFormula: string;
+  @ApiPropertyOptional({ description: 'Relation formula', example: 'lead_time - 7' })
+  @Column({ name: 'relation_formula', type: 'text', nullable: true })
+  relationFormula?: string | null;
 
   @ApiProperty({ description: 'TNA object', type: () => Tna })
   @ManyToOne(() => Tna, (tna) => tna.tnaDetails, { nullable: false, onDelete: 'CASCADE' })

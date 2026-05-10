@@ -215,7 +215,7 @@ export class TnaService {
         taskId: detail.taskId,
         executionDate: this.parseRequiredDate(detail.executionDate),
         days: this.numberOrDefault(detail.days, 0),
-        relationFormula: this.normalizeString(detail.relationFormula) ?? '',
+        relationFormula: this.normalizeString(detail.relationFormula),
         created_by_id: userId,
         updated_by_id: null as unknown as string,
         updated_at: null as unknown as Date,
