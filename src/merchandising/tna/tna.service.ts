@@ -78,7 +78,8 @@ export class TnaService {
       .where('factory.organization_id = :organizationId', { organizationId })
       .skip(skip)
       .take(limit)
-      .orderBy(deletedOnly ? 'tna.deleted_at' : 'tna.created_at', 'DESC');
+      .orderBy(deletedOnly ? 'tna.deleted_at' : 'tna.created_at', 'DESC')
+      .addOrderBy('tnaDetails.sortOrder', 'ASC');
 
     if (deletedOnly) {
       queryBuilder.withDeleted().andWhere('tna.deleted_at IS NOT NULL');
@@ -95,6 +96,7 @@ export class TnaService {
     }
 
     const [items, total] = await queryBuilder.getManyAndCount();
+    items.forEach((item) => this.sortDetailsBySortOrder(item));
     const totalPages = Math.ceil(total / limit);
 
     return {
@@ -124,13 +126,14 @@ export class TnaService {
       .where('tna.id = :id', { id })
       .andWhere('factory.organization_id = :organizationId', { organizationId })
       .andWhere('tna.deleted_at IS NULL')
+      .orderBy('tnaDetails.sortOrder', 'ASC')
       .getOne();
 
     if (!tna) {
       throw new NotFoundException('TNA record not found in the selected organization.');
     }
 
-    return tna;
+    return this.sortDetailsBySortOrder(tna);
   }
 
   async update(id: string, dto: UpdateTnaDto, userId: string, organizationId: string) {
@@ -209,12 +212,13 @@ export class TnaService {
       return;
     }
 
-    const entities = details.map((detail) =>
+    const entities = details.map((detail, index) =>
       tnaDetailRepository.create({
         tnaId,
         taskId: detail.taskId,
         executionDate: this.parseRequiredDate(detail.executionDate),
         days: this.numberOrDefault(detail.days, 0),
+        sortOrder: this.numberOrDefault(detail.sortOrder, index + 1),
         relationFormula: this.normalizeString(detail.relationFormula),
         created_by_id: userId,
         updated_by_id: null as unknown as string,
@@ -229,6 +233,20 @@ export class TnaService {
     for (const detail of details) {
       await this.findTnaTaskOrFail(detail.taskId);
     }
+  }
+
+  private sortDetailsBySortOrder(tna: Tna) {
+    tna.tnaDetails = [...(tna.tnaDetails ?? [])].sort((left, right) => {
+      const sortDifference = this.numberOrDefault(left.sortOrder, 0) - this.numberOrDefault(right.sortOrder, 0);
+
+      if (sortDifference !== 0) {
+        return sortDifference;
+      }
+
+      return left.id.localeCompare(right.id);
+    });
+
+    return tna;
   }
 
   private async findBuyerOrFail(buyerId: string, organizationId: string) {

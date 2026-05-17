@@ -32,6 +32,10 @@ export class TnaDetail extends BaseEntity {
   @Column({ name: 'days', type: 'integer', nullable: false })
   days: number;
 
+  @ApiProperty({ description: 'Saved row sort order', example: 1 })
+  @Column({ name: 'sort_order', type: 'integer', nullable: false, default: 0 })
+  sortOrder: number;
+
   @ApiPropertyOptional({ description: 'Relation formula', example: 'lead_time - 7' })
   @Column({ name: 'relation_formula', type: 'text', nullable: true })
   relationFormula?: string | null;
