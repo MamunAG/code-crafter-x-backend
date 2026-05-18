@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { Buyer } from 'src/merchandising/buyer/entity/buyer.entity';
 import { Job } from 'src/merchandising/job/entity/job.entity';
 import { TnaTask } from 'src/merchandising/master-data/tna-task/entity/tna-task.entity';
@@ -10,6 +10,7 @@ import { CreateTnaDto } from './dto/create-tna.dto';
 import { CreateTnaDetailDto } from './dto/create-tna-detail.dto';
 import { FilterTnaDto } from './dto/filter-tna.dto';
 import { UpdateTnaDto } from './dto/update-tna.dto';
+import { TnaDetailRevision } from './entity/tna-detail-revision.entity';
 import { TnaDetail } from './entity/tna-details.entity';
 import { Tna } from './entity/tna.entity';
 
@@ -29,6 +30,8 @@ export class TnaService {
     private jobRepository: Repository<Job>,
     @InjectRepository(TnaTask)
     private tnaTaskRepository: Repository<TnaTask>,
+    @InjectRepository(TnaDetailRevision)
+    private tnaDetailRevisionRepository: Repository<TnaDetailRevision>,
   ) {}
 
   async create(dto: CreateTnaDto, userId: string, organizationId: string) {
@@ -194,6 +197,33 @@ export class TnaService {
     return this.tnaRepository.softDelete({ id });
   }
 
+  async findDetailRevisions(tnaId: string, detailId: string, organizationId: string) {
+    const detail = await this.dataSource
+      .getRepository(TnaDetail)
+      .createQueryBuilder('detail')
+      .innerJoin('detail.tna', 'tna')
+      .innerJoin('tna.job', 'job')
+      .innerJoin('job.factory', 'factory')
+      .where('detail.id = :detailId', { detailId })
+      .andWhere('detail.tna_id = :tnaId', { tnaId })
+      .andWhere('factory.organization_id = :organizationId', { organizationId })
+      .andWhere('tna.deleted_at IS NULL')
+      .getOne();
+
+    if (!detail) {
+      throw new NotFoundException('TNA detail not found in the selected organization.');
+    }
+
+    return this.tnaDetailRevisionRepository
+      .createQueryBuilder('revision')
+      .leftJoinAndSelect('revision.created_by_user', 'created_by_user')
+      .leftJoinAndSelect('revision.updated_by_user', 'updated_by_user')
+      .where('revision.tna_detail_id = :detailId', { detailId })
+      .orderBy('revision.created_at', 'DESC')
+      .addOrderBy('revision.id', 'DESC')
+      .getMany();
+  }
+
   async permanentRemove(id: string, organizationId: string) {
     await this.ensureTnaExists(id, organizationId, true);
     return this.tnaRepository.delete({ id });
@@ -206,27 +236,63 @@ export class TnaService {
 
   private async syncDetails(tnaId: string, details: CreateTnaDetailDto[], userId: string, manager: EntityManager = this.dataSource.manager) {
     const tnaDetailRepository = manager.getRepository(TnaDetail);
-    await tnaDetailRepository.delete({ tnaId });
+    const tnaDetailRevisionRepository = manager.getRepository(TnaDetailRevision);
+    const existingDetails = await tnaDetailRepository.find({ where: { tnaId } });
+    const existingById = new Map(existingDetails.map((detail) => [detail.id, detail]));
+    const incomingExistingIds = new Set(
+      details
+        .map((detail) => detail.id)
+        .filter((detailId): detailId is string => Boolean(detailId && existingById.has(detailId))),
+    );
+    const removedDetailIds = existingDetails
+      .filter((detail) => !incomingExistingIds.has(detail.id))
+      .map((detail) => detail.id);
+
+    if (removedDetailIds.length) {
+      await tnaDetailRepository.delete({ id: In(removedDetailIds) });
+    }
 
     if (!details.length) {
       return;
     }
 
-    const entities = details.map((detail, index) =>
-      tnaDetailRepository.create({
-        tnaId,
-        taskId: detail.taskId,
-        executionDate: this.parseRequiredDate(detail.executionDate),
-        days: this.numberOrDefault(detail.days, 0),
-        sortOrder: this.numberOrDefault(detail.sortOrder, index + 1),
-        relationFormula: this.normalizeString(detail.relationFormula),
-        created_by_id: userId,
-        updated_by_id: null as unknown as string,
-        updated_at: null as unknown as Date,
-      }),
-    );
+    for (const [index, detail] of details.entries()) {
+      const existingDetail = detail.id ? existingById.get(detail.id) : undefined;
+      const entity = existingDetail ?? tnaDetailRepository.create({ tnaId, created_by_id: userId });
+      const stagedRevisions = detail.revisions ?? [];
+      const latestRevision = stagedRevisions[stagedRevisions.length - 1];
 
-    await tnaDetailRepository.save(entities);
+      entity.tnaId = tnaId;
+      entity.taskId = detail.taskId;
+      entity.executionDate = this.parseRequiredDate(latestRevision?.newExecutionDate ?? detail.executionDate);
+      entity.days = this.numberOrDefault(detail.days, 0);
+      entity.sortOrder = this.numberOrDefault(detail.sortOrder, index + 1);
+      entity.relationFormula = this.normalizeString(detail.relationFormula);
+
+      if (existingDetail) {
+        entity.updated_by_id = userId;
+      } else {
+        entity.updated_by_id = null as unknown as string;
+        entity.updated_at = null as unknown as Date;
+      }
+
+      const savedDetail = await tnaDetailRepository.save(entity);
+      const revisionEntities = stagedRevisions.map((revision) =>
+        tnaDetailRevisionRepository.create({
+          tnaDetailId: savedDetail.id,
+          previousExecutionDate: this.parseRequiredDate(revision.previousExecutionDate),
+          newExecutionDate: this.parseRequiredDate(revision.newExecutionDate),
+          note: this.normalizeString(revision.note),
+          created_by_id: userId,
+          updated_by_id: null as unknown as string,
+          updated_at: null as unknown as Date,
+        }),
+      );
+
+      if (revisionEntities.length) {
+        await tnaDetailRevisionRepository.save(revisionEntities);
+      }
+    }
   }
 
   private async validateDetails(details: CreateTnaDetailDto[]) {

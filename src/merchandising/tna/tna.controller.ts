@@ -49,6 +49,20 @@ export class TnaController {
     return new BaseResponseDto(record, 'TNA record retrieved successfully');
   }
 
+  @Get(':id/details/:detailId/revisions')
+  @MenuAccess(MENU_NAME, 'canView')
+  @ApiOperation({ summary: 'Get TNA detail revision history', description: 'Retrieve execution-date revision history for a TNA detail row' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
+  async findDetailRevisions(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('detailId', new ParseUUIDPipe()) detailId: string,
+    @Headers('x-organization-id') organizationId?: string,
+  ) {
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const records = await this.tnaService.findDetailRevisions(id, detailId, selectedOrganizationId);
+    return new BaseResponseDto(records, 'TNA detail revisions retrieved successfully');
+  }
+
   @Post()
   @MenuAccess(MENU_NAME, 'canCreate')
   @ApiOperation({ summary: 'Save TNA' })

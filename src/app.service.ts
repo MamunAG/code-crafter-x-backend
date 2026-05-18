@@ -41,6 +41,7 @@ import { Job } from './merchandising/job/entity/job.entity';
 import { JobDetails } from './merchandising/job/entity/job-details.entity';
 import { Tna } from './merchandising/tna/entity/tna.entity';
 import { TnaDetail } from './merchandising/tna/entity/tna-details.entity';
+import { TnaDetailRevision } from './merchandising/tna/entity/tna-detail-revision.entity';
 import { getDatabasePoolConfig } from './config/database-pool.config';
 
 const databaseLogger = new Logger('Database');
@@ -105,6 +106,7 @@ export function createTypeOrmOptions(
       JobDetails,
       Tna,
       TnaDetail,
+      TnaDetailRevision,
     ],
     synchronize: false, // Never use synchronize in production
     logging: isDevelopment,

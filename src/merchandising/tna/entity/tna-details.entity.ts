@@ -6,8 +6,10 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { TnaDetailRevision } from './tna-detail-revision.entity';
 import { Tna } from './tna.entity';
 
 @Entity('tna_details')
@@ -49,4 +51,8 @@ export class TnaDetail extends BaseEntity {
   @ManyToOne(() => TnaTask, { nullable: false })
   @JoinColumn({ name: 'task_id' })
   task: TnaTask;
+
+  @ApiProperty({ description: 'TNA detail revisions', type: () => [TnaDetailRevision], required: false })
+  @OneToMany(() => TnaDetailRevision, (revision) => revision.tnaDetail)
+  revisions?: TnaDetailRevision[];
 }
