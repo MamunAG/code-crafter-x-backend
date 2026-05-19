@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import PDFDocument from 'pdfkit';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import { Organization } from 'src/app-configuration/organization/entity/organization.entity';
 import { Buyer } from 'src/merchandising/buyer/entity/buyer.entity';
 import { Job } from 'src/merchandising/job/entity/job.entity';
 import { TnaTask } from 'src/merchandising/master-data/tna-task/entity/tna-task.entity';
@@ -17,6 +19,27 @@ import { Tna } from './entity/tna.entity';
 type TnaListFilters = Partial<FilterTnaDto> & {
   deletedOnly?: string | boolean;
 };
+
+type PdfColumn = {
+  label: string;
+  width: number;
+};
+
+type PdfOrganizationHeader = {
+  name: string;
+  address?: string | null;
+};
+
+const PDF_MARGIN = 20;
+const PDF_PAGE_HEIGHT = 595.28;
+const PDF_FIXED_COLUMN_WIDTHS = {
+  buyer: 58,
+  job: 58,
+  lead: 46,
+};
+const PDF_TASK_COLUMN_MIN_WIDTH = 86;
+const PDF_TASK_COLUMN_MAX_WIDTH = 150;
+const PDF_MIN_CONTENT_WIDTH = 680;
 
 @Injectable()
 export class TnaService {
@@ -155,6 +178,12 @@ export class TnaService {
     items.forEach((item) => this.sortDetailsBySortOrder(item));
 
     return items;
+  }
+
+  async buildReportPdf(filters?: TnaListFilters, organizationId?: string) {
+    const organization = await this.findOrganizationHeaderOrFail(organizationId);
+    const records = await this.findReport(filters, organizationId);
+    return this.renderReportPdf(records, organization);
   }
 
   async findOne(id: string, organizationId: string) {
@@ -450,5 +479,299 @@ export class TnaService {
   private normalizeString(value: string | null | undefined) {
     const trimmed = value?.trim() ?? '';
     return trimmed || null;
+  }
+
+  private renderReportPdf(records: Tna[], organization: PdfOrganizationHeader) {
+    return new Promise<Buffer>((resolve, reject) => {
+      const pageWidth = this.getReportPdfPageWidth(records);
+      const doc = new PDFDocument({
+        size: [pageWidth, PDF_PAGE_HEIGHT],
+        margin: PDF_MARGIN,
+        info: {
+          Title: 'TNA Report',
+          Creator: 'Code Crafter X',
+        },
+      });
+      const chunks: Buffer[] = [];
+
+      doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      this.writeReportPdf(doc, records, organization);
+      doc.end();
+    });
+  }
+
+  private writeReportPdf(doc: PDFKit.PDFDocument, records: Tna[], organization: PdfOrganizationHeader) {
+    this.writeReportHeader(doc, organization);
+
+    if (!records.length) {
+      doc.font('Helvetica').fontSize(10).fillColor('#475569').text('No TNA records are available for this report.');
+      return;
+    }
+
+    for (const record of records) {
+      this.writeRecordPdfTable(doc, record);
+    }
+  }
+
+  private writeReportHeader(doc: PDFKit.PDFDocument, organization: PdfOrganizationHeader) {
+    const contentWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const address = organization.address?.trim();
+
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(14)
+      .fillColor('#000000')
+      .text(organization.name, doc.page.margins.left, doc.y, {
+        width: contentWidth,
+        align: 'center',
+      });
+
+    if (address) {
+      doc
+        .moveDown(0.2)
+        .font('Helvetica')
+        .fontSize(8)
+        .fillColor('#334155')
+        .text(address, doc.page.margins.left, doc.y, {
+          width: contentWidth,
+          align: 'center',
+        });
+    }
+
+    doc
+      .moveDown(0.45)
+      .font('Helvetica-Bold')
+      .fontSize(10)
+      .fillColor('#000000')
+      .text('TNA Report', doc.page.margins.left, doc.y, {
+        width: contentWidth,
+        align: 'center',
+      });
+
+    doc.moveDown(0.45);
+  }
+
+  private writeRecordPdfTable(doc: PDFKit.PDFDocument, record: Tna) {
+    const details = [...(record.tnaDetails ?? [])].sort((left, right) => {
+      const sortDifference = this.numberOrDefault(left.sortOrder, 0) - this.numberOrDefault(right.sortOrder, 0);
+      return sortDifference || left.id.localeCompare(right.id);
+    });
+    const columns = this.getRecordPdfColumns(details);
+    const values = [
+      this.getBuyerLabel(record),
+      this.getJobLabel(record),
+      String(Number(record.leadTime ?? 0)),
+      ...details.map((detail) => this.getTaskPdfLines(detail)),
+    ];
+    const rowHeight = this.getPdfRowHeight(doc, columns, values);
+
+    this.ensurePdfSpace(doc, 26 + rowHeight + 12);
+    this.writePdfTable(doc, columns, values, rowHeight);
+    doc.y += 12;
+  }
+
+  private writePdfTable(doc: PDFKit.PDFDocument, columns: PdfColumn[], values: Array<string | string[]>, rowHeight: number) {
+    const startX = doc.page.margins.left;
+    const headerY = doc.y;
+    const headerHeight = 24;
+    let currentX = startX;
+
+    doc.lineWidth(0.5);
+
+    for (const column of columns) {
+      doc.rect(currentX, headerY, column.width, headerHeight).fillAndStroke('#e2e8f0', '#94a3b8');
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(8)
+        .fillColor('#000000')
+        .text(column.label, currentX + 4, headerY + 5, { width: column.width - 8, align: 'center' });
+      currentX += column.width;
+    }
+
+    currentX = startX;
+    const bodyY = headerY + headerHeight;
+
+    for (const [index, column] of columns.entries()) {
+      doc.rect(currentX, bodyY, column.width, rowHeight).fillAndStroke('#ffffff', '#94a3b8');
+      this.writePdfCellValue(doc, values[index] || '-', currentX, bodyY, column.width, rowHeight, index < 3);
+      currentX += column.width;
+    }
+
+    doc.y = bodyY + rowHeight;
+  }
+
+  private writePdfCellValue(
+    doc: PDFKit.PDFDocument,
+    value: string | string[],
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    verticallyCenter: boolean,
+  ) {
+    const cellPadding = 6;
+
+    if (Array.isArray(value)) {
+      const lineHeight = 15;
+      let lineY = y + 7;
+
+      value.forEach((line, index) => {
+        if (index > 0) {
+          doc
+            .moveTo(x + cellPadding, lineY - 3)
+            .lineTo(x + width - cellPadding, lineY - 3)
+            .strokeColor('#d5dee8')
+            .stroke();
+        }
+
+        doc
+          .font('Helvetica')
+          .fontSize(8)
+          .fillColor('#000000')
+          .text(line || '-', x + cellPadding, lineY, {
+            width: width - cellPadding * 2,
+            align: 'left',
+          });
+        lineY += Math.max(lineHeight, doc.heightOfString(line || '-', { width: width - cellPadding * 2, align: 'left' }) + 4);
+      });
+      return;
+    }
+
+    doc.font('Helvetica').fontSize(8).fillColor('#000000');
+
+    const textHeight = doc.heightOfString(value || '-', { width: width - cellPadding * 2, align: 'center' });
+    const textY = verticallyCenter ? y + Math.max(7, (height - textHeight) / 2) : y + 7;
+
+    doc.text(value || '-', x + cellPadding, textY, {
+      width: width - cellPadding * 2,
+      align: 'center',
+    });
+  }
+
+  private getPdfRowHeight(doc: PDFKit.PDFDocument, columns: PdfColumn[], values: Array<string | string[]>) {
+    const heights = values.map((value, index) => {
+      if (Array.isArray(value)) {
+        doc.font('Helvetica').fontSize(8);
+        const lineHeights = value.map((line) => doc.heightOfString(line || '-', { width: columns[index].width - 12, align: 'left' }) + 4);
+        return Math.max(30, lineHeights.reduce((total, height) => total + Math.max(15, height), 14));
+      }
+
+      doc.font('Helvetica').fontSize(8);
+      return doc.heightOfString(value || '-', { width: columns[index].width - 12, align: 'center' }) + 14;
+    });
+
+    return Math.max(32, ...heights);
+  }
+
+  private ensurePdfSpace(doc: PDFKit.PDFDocument, requiredHeight: number) {
+    if (doc.y + requiredHeight > doc.page.height - doc.page.margins.bottom) {
+      doc.addPage();
+    }
+  }
+
+  private getTaskPdfLines(detail: TnaDetail) {
+    const revisions = [...(detail.revisions ?? [])].sort((left, right) => {
+      const leftTime = left.created_at ? new Date(left.created_at).getTime() : 0;
+      const rightTime = right.created_at ? new Date(right.created_at).getTime() : 0;
+      return leftTime - rightTime;
+    });
+    const lines = [this.formatReportDate(detail.executionDate)];
+
+    if (revisions.length) {
+      lines.push(`${this.formatReportDate(revisions[0]?.previousExecutionDate)}: (Initial Date)`);
+      lines.push(
+        ...revisions.map((revision) => `${this.formatReportDate(revision.newExecutionDate)}: (${revision.note?.trim() || 'Revised Date'})`),
+      );
+    }
+
+    return lines;
+  }
+
+  private getRecordPdfColumns(details: TnaDetail[]) {
+    return [
+      { label: 'Buyer', width: PDF_FIXED_COLUMN_WIDTHS.buyer },
+      { label: 'Job', width: PDF_FIXED_COLUMN_WIDTHS.job },
+      { label: 'Lead', width: PDF_FIXED_COLUMN_WIDTHS.lead },
+      ...details.map((detail) => ({
+        label: detail.task?.name?.trim() || detail.taskId || '-',
+        width: this.getTaskColumnWidth(detail),
+      })),
+    ];
+  }
+
+  private getReportPdfPageWidth(records: Tna[]) {
+    const fixedWidth = PDF_FIXED_COLUMN_WIDTHS.buyer + PDF_FIXED_COLUMN_WIDTHS.job + PDF_FIXED_COLUMN_WIDTHS.lead;
+    const maxRecordWidth = records.reduce((currentMax, record) => {
+      const details = [...(record.tnaDetails ?? [])].sort((left, right) => {
+        const sortDifference = this.numberOrDefault(left.sortOrder, 0) - this.numberOrDefault(right.sortOrder, 0);
+        return sortDifference || left.id.localeCompare(right.id);
+      });
+      const recordWidth = fixedWidth + details.reduce((total, detail) => total + this.getTaskColumnWidth(detail), 0);
+      return Math.max(currentMax, recordWidth);
+    }, fixedWidth + PDF_TASK_COLUMN_MIN_WIDTH);
+    const contentWidth = Math.max(PDF_MIN_CONTENT_WIDTH, maxRecordWidth);
+
+    return contentWidth + PDF_MARGIN * 2;
+  }
+
+  private getTaskColumnWidth(detail: TnaDetail) {
+    const label = detail.task?.name?.trim() || detail.taskId || '-';
+    const contentLines = this.getTaskPdfLines(detail);
+    const longestContentLineLength = contentLines.reduce((maxLength, line) => Math.max(maxLength, line.length), 0);
+    const estimatedWidth = Math.max(label.length * 5.2, longestContentLineLength * 3.9) + 18;
+
+    return Math.max(PDF_TASK_COLUMN_MIN_WIDTH, Math.min(PDF_TASK_COLUMN_MAX_WIDTH, estimatedWidth));
+  }
+
+  private formatReportDate(value?: Date | string | null) {
+    if (!value) {
+      return '-';
+    }
+
+    const parsed = value instanceof Date ? value : new Date(value);
+
+    if (Number.isNaN(parsed.getTime())) {
+      return '-';
+    }
+
+    const day = parsed.getDate();
+    const month = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(parsed);
+    const year = String(parsed.getFullYear()).slice(-2);
+    return `${day}-${month}-${year}`;
+  }
+
+  private getBuyerLabel(record: Tna) {
+    return record.buyer?.displayName?.trim() || record.buyer?.name?.trim() || record.buyerId || '-';
+  }
+
+  private getJobLabel(record: Tna) {
+    return record.job?.jobNo?.trim() || record.jobId || '-';
+  }
+
+  private async findOrganizationHeaderOrFail(organizationId?: string) {
+    if (!organizationId?.trim()) {
+      throw new BadRequestException('An organization is required to export the TNA report.');
+    }
+
+    const organization = await this.dataSource.getRepository(Organization).findOne({
+      where: { id: organizationId.trim() },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+      },
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found.');
+    }
+
+    return {
+      name: organization.name?.trim() || 'Organization',
+      address: organization.address,
+    };
   }
 }

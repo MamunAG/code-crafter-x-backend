@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, ParseUUIDPipe, Patch, Post, Query, StreamableFile } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type AuthUser from 'src/auth/dto/auth-user';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
@@ -51,6 +51,29 @@ export class TnaController {
     const selectedOrganizationId = this.requireOrganizationId(organizationId);
     const records = await this.tnaService.findReport(tnaFilters, selectedOrganizationId);
     return new BaseResponseDto(records, 'TNA report retrieved successfully');
+  }
+
+  @Get('report/pdf')
+  @MenuAccess(MENU_NAME, 'canView')
+  @ApiOperation({ summary: 'Export TNA report PDF', description: 'Download TNA report as a PDF file' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
+  async reportPdf(
+    @Query() filters: FilterTnaDto,
+    @Headers('x-organization-id') organizationId: string | undefined,
+  ) {
+    const { page, limit, deletedOnly, ...tnaFilters } = filters;
+    void page;
+    void limit;
+    void deletedOnly;
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const pdf = await this.tnaService.buildReportPdf(tnaFilters, selectedOrganizationId);
+    const filename = `tna-report-${new Date().toISOString().slice(0, 10)}.pdf`;
+
+    return new StreamableFile(pdf, {
+      type: 'application/pdf',
+      disposition: `attachment; filename="${filename}"`,
+      length: pdf.length,
+    });
   }
 
   @Get(':id')
