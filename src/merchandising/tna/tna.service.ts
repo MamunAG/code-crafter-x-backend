@@ -98,6 +98,10 @@ export class TnaService {
       queryBuilder.andWhere('tna.job_id = :jobId', { jobId: filters.jobId });
     }
 
+    if (filters?.leadTime !== undefined) {
+      queryBuilder.andWhere('tna.lead_time = :leadTime', { leadTime: filters.leadTime });
+    }
+
     const [items, total] = await queryBuilder.getManyAndCount();
     items.forEach((item) => this.sortDetailsBySortOrder(item));
     const totalPages = Math.ceil(total / limit);
@@ -113,6 +117,44 @@ export class TnaService {
         hasPreviousPage: page > 1,
       },
     };
+  }
+
+  async findReport(filters?: TnaListFilters, organizationId?: string) {
+    const queryBuilder = this.tnaRepository
+      .createQueryBuilder('tna')
+      .distinct(true)
+      .leftJoinAndSelect('tna.buyer', 'buyer')
+      .leftJoinAndSelect('tna.job', 'job')
+      .leftJoinAndSelect('job.factory', 'factory')
+      .leftJoinAndSelect('tna.tnaDetails', 'tnaDetails')
+      .leftJoinAndSelect('tnaDetails.task', 'task')
+      .leftJoinAndSelect('tnaDetails.revisions', 'revisions')
+      .leftJoinAndSelect('tna.created_by_user', 'created_by_user')
+      .where('factory.organization_id = :organizationId', { organizationId })
+      .andWhere('tna.deleted_at IS NULL')
+      .orderBy('buyer.displayName', 'ASC')
+      .addOrderBy('buyer.name', 'ASC')
+      .addOrderBy('job.jobNo', 'ASC')
+      .addOrderBy('tna.created_at', 'DESC')
+      .addOrderBy('tnaDetails.sortOrder', 'ASC')
+      .addOrderBy('revisions.created_at', 'ASC');
+
+    if (filters?.buyerId) {
+      queryBuilder.andWhere('tna.buyer_id = :buyerId', { buyerId: filters.buyerId });
+    }
+
+    if (filters?.jobId) {
+      queryBuilder.andWhere('tna.job_id = :jobId', { jobId: filters.jobId });
+    }
+
+    if (filters?.leadTime !== undefined) {
+      queryBuilder.andWhere('tna.lead_time = :leadTime', { leadTime: filters.leadTime });
+    }
+
+    const items = await queryBuilder.getMany();
+    items.forEach((item) => this.sortDetailsBySortOrder(item));
+
+    return items;
   }
 
   async findOne(id: string, organizationId: string) {

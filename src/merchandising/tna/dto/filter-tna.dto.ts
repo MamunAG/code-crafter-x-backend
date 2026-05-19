@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform, type TransformFnParams } from 'class-transformer';
-import { IsBoolean, IsOptional, IsUUID } from 'class-validator';
+import { Transform, Type, type TransformFnParams } from 'class-transformer';
+import { IsBoolean, IsInt, IsOptional, IsUUID, Min } from 'class-validator';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 
 export class FilterTnaDto extends PaginationDto {
@@ -13,6 +13,13 @@ export class FilterTnaDto extends PaginationDto {
   @IsOptional()
   @IsUUID()
   jobId?: string;
+
+  @ApiProperty({ description: 'Lead time', required: false })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  leadTime?: number;
 
   @ApiProperty({ description: 'Whether to fetch deleted items only', required: false, default: false })
   @Transform(({ value }: TransformFnParams): boolean | string => {

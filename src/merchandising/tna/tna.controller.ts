@@ -39,6 +39,20 @@ export class TnaController {
     return new BaseResponseDto(records, 'TNA records retrieved successfully');
   }
 
+  @Get('report')
+  @MenuAccess(MENU_NAME, 'canView')
+  @ApiOperation({ summary: 'Get TNA report', description: 'Retrieve TNA records formatted for report views' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
+  async report(@Query() filters: FilterTnaDto, @Headers('x-organization-id') organizationId?: string) {
+    const { page, limit, deletedOnly, ...tnaFilters } = filters;
+    void page;
+    void limit;
+    void deletedOnly;
+    const selectedOrganizationId = this.requireOrganizationId(organizationId);
+    const records = await this.tnaService.findReport(tnaFilters, selectedOrganizationId);
+    return new BaseResponseDto(records, 'TNA report retrieved successfully');
+  }
+
   @Get(':id')
   @MenuAccess(MENU_NAME, 'canView')
   @ApiOperation({ summary: 'Get TNA by id', description: 'Retrieve a specific TNA record' })
