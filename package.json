@@ -39,6 +39,7 @@
     "@nestjs/swagger": "^11.4.1",
     "@nestjs/typeorm": "^11.0.1",
     "@nestjs/websockets": "^11.1.19",
+    "@napi-rs/canvas": "0.1.80",
     "@types/multer": "^2.1.0",
     "@types/nodemailer": "^8.0.0",
     "@types/pdfkit": "^0.17.6",

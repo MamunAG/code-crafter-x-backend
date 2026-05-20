@@ -1,7 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import axios from 'axios';
-import { PDFParse } from 'pdf-parse';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { Factory } from 'src/app-configuration/factory/entity/factory.entity';
 import { Currency } from 'src/app-configuration/currency/entity/currency.entity';
@@ -50,6 +49,13 @@ type OpenRouterChatResponse = {
       content?: string;
     };
   }>;
+};
+
+type PdfParseConstructor = new (params: {
+  data: Buffer | Uint8Array;
+}) => {
+  getText(): Promise<{ text?: string }>;
+  destroy(): Promise<void>;
 };
 
 const AI_ASSIST_TEXT_LIMIT = 30000;
@@ -1391,8 +1397,21 @@ export class JobService {
     return parts.length > 1 ? parts[parts.length - 1] : '';
   }
 
+  private async loadPdfParse() {
+    const canvas = await import('@napi-rs/canvas');
+    const globalScope = globalThis as Record<string, unknown>;
+
+    globalScope.DOMMatrix ??= canvas.DOMMatrix;
+    globalScope.ImageData ??= canvas.ImageData;
+    globalScope.Path2D ??= canvas.Path2D;
+
+    const { PDFParse } = await import('pdf-parse');
+    return PDFParse as PdfParseConstructor;
+  }
+
   private async extractAiAssistText(file: Express.Multer.File, extension: string) {
     if (extension === 'pdf') {
+      const PDFParse = await this.loadPdfParse();
       const parser = new PDFParse({ data: file.buffer });
 
       try {
