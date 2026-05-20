@@ -53,6 +53,33 @@ export class CurrencyController {
     return this.currencyService.buildUploadTemplate();
   }
 
+  @Post('exchange-rates/update')
+  @MenuAccess(MENU_NAME, 'canUpdate')
+  @ApiOperation({ summary: 'Manually update latest currency exchange rates' })
+  async updateExchangeRates() {
+    const rates = await this.currencyService.updateCurrencyRate();
+    return new BaseResponseDto(rates, 'Currency exchange rates updated successfully');
+  }
+
+  @Get('exchange-rates/latest/:currencyCode')
+  @MenuAccess(MENU_NAME, 'canView')
+  @ApiOperation({ summary: 'Get latest exchange rate by currency code' })
+  async getLatestExchangeRate(@Param('currencyCode') currencyCode: string) {
+    const rate = await this.currencyService.getLatestExchangeRateByCurrencyCode(currencyCode);
+    return new BaseResponseDto(rate, 'Latest currency exchange rate retrieved successfully');
+  }
+
+  @Get('exchange-rates/:currencyCode/:currencyDate')
+  @MenuAccess(MENU_NAME, 'canView')
+  @ApiOperation({ summary: 'Get exchange rate by currency code and date' })
+  async getExchangeRateByDate(
+    @Param('currencyCode') currencyCode: string,
+    @Param('currencyDate') currencyDate: string,
+  ) {
+    const rate = await this.currencyService.getExchangeRateByCurrencyCodeAndDate(currencyCode, currencyDate);
+    return new BaseResponseDto(rate, 'Currency exchange rate retrieved successfully');
+  }
+
   @Get(':id')
   @MenuAccess(MENU_NAME, 'canView')
   @ApiOperation({ summary: 'Get by id', description: 'Retrieve specific currency' })

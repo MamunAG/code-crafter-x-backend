@@ -43,6 +43,7 @@ import { Tna } from './merchandising/tna/entity/tna.entity';
 import { TnaDetail } from './merchandising/tna/entity/tna-details.entity';
 import { TnaDetailRevision } from './merchandising/tna/entity/tna-detail-revision.entity';
 import { getDatabasePoolConfig } from './config/database-pool.config';
+import { CurrencyExchangeRate } from './app-configuration/currency/entity/currency-exchange-rate.entity';
 
 const databaseLogger = new Logger('Database');
 
@@ -107,6 +108,7 @@ export function createTypeOrmOptions(
       Tna,
       TnaDetail,
       TnaDetailRevision,
+      CurrencyExchangeRate
     ],
     synchronize: false, // Never use synchronize in production
     logging: isDevelopment,
@@ -122,8 +124,8 @@ export function createTypeOrmOptions(
     ssl:
       configService.get('DB_SSL_ENABLED') === 'true'
         ? {
-            rejectUnauthorized: false,
-          }
+          rejectUnauthorized: false,
+        }
         : false,
     // Retry configuration
     retryAttempts: 10,
@@ -133,7 +135,7 @@ export function createTypeOrmOptions(
 
 @Injectable()
 export class AppService implements TypeOrmOptionsFactory {
-  constructor(private configService: ConfigService) {}
+  constructor(private configService: ConfigService) { }
 
   createTypeOrmOptions(): TypeOrmModuleOptions {
     return createTypeOrmOptions(this.configService);

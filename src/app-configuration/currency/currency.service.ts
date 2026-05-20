@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -8,12 +8,27 @@ import { Currency } from './entity/currency.entity';
 import { CreateCurrencyDto } from './dto/create-currency.dto';
 import { FilterCurrencyDto } from './dto/filter-currency.dto';
 import { UpdateCurrencyDto } from './dto/update-currency.dto';
+import { Cron } from '@nestjs/schedule';
+import { ExchangeRateApiResponseDto } from './dto/exchangerate-api-response.dto';
+import { firstValueFrom } from 'rxjs';
+import { HttpService } from '@nestjs/axios';
+import { CurrencyExchangeRate } from './entity/currency-exchange-rate.entity';
+
+const SELECTED_EXCHANGE_RATE_CURRENCIES = ['USD', 'EUR', 'GBP'] as const;
+type SelectedExchangeRateCurrency = (typeof SELECTED_EXCHANGE_RATE_CURRENCIES)[number];
 
 @Injectable()
 export class CurrencyService {
+  private readonly logger = new Logger(CurrencyService.name);
+
   constructor(
+    private readonly httpService: HttpService,
+
     @InjectRepository(Currency)
     private currencyRepository: Repository<Currency>,
+
+    @InjectRepository(CurrencyExchangeRate)
+    private currencyExchangeRateRepository: Repository<CurrencyExchangeRate>,
   ) { }
 
   async create(currencyDto: CreateCurrencyDto, organizationId: string) {
@@ -393,4 +408,161 @@ export class CurrencyService {
     const parsed = Number(normalizedValue);
     return Number.isFinite(parsed) ? parsed : null;
   }
+
+  async getLatestCurrencyFromExchangerate(): Promise<ExchangeRateApiResponseDto> {
+    const baseUrl = process.env.EXCHANGERATE_BASE_URL?.replace(/\/+$/, '');
+
+    if (!baseUrl) {
+      throw new Error('EXCHANGERATE_BASE_URL is not configured.');
+    }
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get<ExchangeRateApiResponseDto>(`${baseUrl}/latest/USD`),
+      );
+      return response.data;
+    } catch (error) {
+      this.logger.error('Failed to fetch latest exchange rates.', error instanceof Error ? error.stack : String(error));
+      throw error;
+    }
+  }
+
+  @Cron('0 0 0 * * *') // Runs every day at 12:00 AM
+  async updateCurrencyRate() {
+    try {
+      const res = await this.getLatestCurrencyFromExchangerate();
+      const currencyDate = new Date(res.time_last_update_utc);
+
+      if (res.result !== 'success') {
+        throw new Error(`Exchange rate provider returned result "${res.result}".`);
+      }
+
+      if (res.base_code !== 'USD') {
+        throw new Error(`Exchange rate provider returned base_code "${res.base_code}" instead of "USD".`);
+      }
+
+      if (Number.isNaN(currencyDate.getTime())) {
+        throw new Error(`Exchange rate provider returned an invalid update date: ${res.time_last_update_utc}`);
+      }
+
+      const rates = this.buildBdtExchangeRates(res.conversion_rates);
+      const exchangeRates = SELECTED_EXCHANGE_RATE_CURRENCIES.map((currencyCode) =>
+        this.currencyExchangeRateRepository.create({
+          currency_date: currencyDate,
+          currency_code: currencyCode,
+          rate_in_bdt: rates[currencyCode],
+        }),
+      );
+
+      await this.currencyExchangeRateRepository.upsert(exchangeRates, ['currency_code', 'currency_date']);
+
+      this.logger.log(
+        `Currency rates updated for ${currencyDate.toISOString()}: ${SELECTED_EXCHANGE_RATE_CURRENCIES.join(', ')}`,
+      );
+
+      return this.currencyExchangeRateRepository.find({
+        where: SELECTED_EXCHANGE_RATE_CURRENCIES.map((currencyCode) => ({
+          currency_code: currencyCode,
+          currency_date: currencyDate,
+        })),
+        order: {
+          currency_code: 'ASC',
+        },
+      });
+    } catch (error) {
+      this.logger.error('Currency rate update failed.', error instanceof Error ? error.stack : String(error));
+      throw error;
+    }
+  }
+
+  async getLatestExchangeRateByCurrencyCode(currencyCode: string) {
+    const normalizedCurrencyCode = this.normalizeExchangeRateCurrencyCode(currencyCode);
+    const exchangeRate = await this.currencyExchangeRateRepository.findOne({
+      where: {
+        currency_code: normalizedCurrencyCode,
+      },
+      order: {
+        currency_date: 'DESC',
+      },
+    });
+
+    if (!exchangeRate) {
+      throw new NotFoundException(`No exchange rate found for currency ${normalizedCurrencyCode}.`);
+    }
+
+    return exchangeRate;
+  }
+
+  async getExchangeRateByCurrencyCodeAndDate(currencyCode: string, currencyDate: string) {
+    const normalizedCurrencyCode = this.normalizeExchangeRateCurrencyCode(currencyCode);
+    const { startDate, endDate } = this.parseExchangeRateDateRange(currencyDate);
+
+    const exchangeRate = await this.currencyExchangeRateRepository
+      .createQueryBuilder('exchangeRate')
+      .where('exchangeRate.currency_code = :currencyCode', {
+        currencyCode: normalizedCurrencyCode,
+      })
+      .andWhere('exchangeRate.currency_date >= :startDate', { startDate })
+      .andWhere('exchangeRate.currency_date < :endDate', { endDate })
+      .orderBy('exchangeRate.currency_date', 'DESC')
+      .getOne();
+
+    if (!exchangeRate) {
+      throw new NotFoundException(`No exchange rate found for ${normalizedCurrencyCode} on ${currencyDate}.`);
+    }
+
+    return exchangeRate;
+  }
+
+  private buildBdtExchangeRates(conversionRates: Record<string, number>) {
+    const usdToBdt = this.getProviderRate(conversionRates, 'BDT');
+
+    return {
+      USD: this.roundExchangeRate(usdToBdt),
+      EUR: this.roundExchangeRate(usdToBdt / this.getProviderRate(conversionRates, 'EUR')),
+      GBP: this.roundExchangeRate(usdToBdt / this.getProviderRate(conversionRates, 'GBP')),
+    } satisfies Record<SelectedExchangeRateCurrency, number>;
+  }
+
+  private getProviderRate(conversionRates: Record<string, number>, currencyCode: string) {
+    const rate = conversionRates[currencyCode];
+
+    if (!Number.isFinite(rate) || rate <= 0) {
+      throw new Error(`Exchange rate provider response is missing a valid ${currencyCode} rate.`);
+    }
+
+    return rate;
+  }
+
+  private roundExchangeRate(rate: number) {
+    return Number(rate.toFixed(4));
+  }
+
+  private normalizeExchangeRateCurrencyCode(currencyCode: string) {
+    const normalizedCurrencyCode = currencyCode.trim().toUpperCase();
+
+    if (!normalizedCurrencyCode) {
+      throw new BadRequestException('Currency code is required.');
+    }
+
+    return normalizedCurrencyCode;
+  }
+
+  private parseExchangeRateDateRange(currencyDate: string) {
+    const normalizedCurrencyDate = currencyDate.trim();
+    const startDate = /^\d{4}-\d{2}-\d{2}$/.test(normalizedCurrencyDate)
+      ? new Date(`${normalizedCurrencyDate}T00:00:00.000Z`)
+      : new Date(normalizedCurrencyDate);
+
+    if (Number.isNaN(startDate.getTime())) {
+      throw new BadRequestException('Currency date must be a valid date. Use YYYY-MM-DD.');
+    }
+
+    const endDate = new Date(startDate);
+    endDate.setUTCDate(endDate.getUTCDate() + 1);
+
+    return { startDate, endDate };
+  }
+
+
 }
