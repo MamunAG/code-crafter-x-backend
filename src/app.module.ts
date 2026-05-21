@@ -39,6 +39,7 @@ import { DepartmentModule } from './hr-payroll/master-data/department/department
 import { DesignationModule } from './hr-payroll/master-data/designation/designation.module';
 import { EmployeeModule } from './hr-payroll/employee/employee.module';
 import { JobModule } from './merchandising/job/job.module';
+import { OrderPlacementModule } from './merchandising/order-placement/order-placement.module';
 
 @Module({
   imports: [
@@ -82,6 +83,7 @@ import { JobModule } from './merchandising/job/job.module';
     DesignationModule,
     EmployeeModule,
     JobModule,
+    OrderPlacementModule,
   ],
   controllers: [AppController, CommonController],
   providers: [

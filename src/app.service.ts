@@ -44,6 +44,8 @@ import { TnaDetail } from './merchandising/tna/entity/tna-details.entity';
 import { TnaDetailRevision } from './merchandising/tna/entity/tna-detail-revision.entity';
 import { getDatabasePoolConfig } from './config/database-pool.config';
 import { CurrencyExchangeRate } from './app-configuration/currency/entity/currency-exchange-rate.entity';
+import { OrderPlacement } from './merchandising/order-placement/entity/order-placement.entity';
+import { OrderPlacementDetails } from './merchandising/order-placement/entity/order-placement-details.entity';
 
 const databaseLogger = new Logger('Database');
 
@@ -108,7 +110,9 @@ export function createTypeOrmOptions(
       Tna,
       TnaDetail,
       TnaDetailRevision,
-      CurrencyExchangeRate
+      CurrencyExchangeRate,
+      OrderPlacement,
+      OrderPlacementDetails,
     ],
     synchronize: false, // Never use synchronize in production
     logging: isDevelopment,
