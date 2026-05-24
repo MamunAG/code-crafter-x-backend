@@ -83,7 +83,7 @@ export class CreateOrderPlacementDetailDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
-  factoryCm?: number | null;
+  factoryCmPerDzn?: number | null;
 
   @ApiPropertyOptional({ description: 'Factory FOB', example: 5 })
   @Type(() => Number)

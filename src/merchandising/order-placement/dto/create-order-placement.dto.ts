@@ -21,6 +21,12 @@ export class CreateOrderPlacementDto {
   @IsDateString()
   placementDate: string;
 
+  @ApiPropertyOptional({ description: 'Exchange rate BDT', example: 120.5 })
+  @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  exchangeRateBDT?: number | null;
+
   @ApiProperty({ description: 'Factory supplier ID', example: '8bf7d37e-4a62-47b1-b1e5-ded54c3cfb1f' })
   @IsUUID()
   factoryId: string;

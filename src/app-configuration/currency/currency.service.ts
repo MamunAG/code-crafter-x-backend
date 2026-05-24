@@ -16,6 +16,7 @@ import { CurrencyExchangeRate } from './entity/currency-exchange-rate.entity';
 
 const SELECTED_EXCHANGE_RATE_CURRENCIES = ['USD', 'EUR', 'GBP'] as const;
 type SelectedExchangeRateCurrency = (typeof SELECTED_EXCHANGE_RATE_CURRENCIES)[number];
+const CURRENCY_RATE_CRON_TIMEZONE = 'Asia/Dhaka';
 
 @Injectable()
 export class CurrencyService {
@@ -427,7 +428,10 @@ export class CurrencyService {
     }
   }
 
-  @Cron('0 0 0 * * *') // Runs every day at 12:00 AM
+  @Cron('0 0 3 * * *', {
+    name: 'currency-rate-daily-update',
+    timeZone: CURRENCY_RATE_CRON_TIMEZONE,
+  })
   async updateCurrencyRate() {
     try {
       const res = await this.getLatestCurrencyFromExchangerate();
@@ -495,14 +499,13 @@ export class CurrencyService {
 
   async getExchangeRateByCurrencyCodeAndDate(currencyCode: string, currencyDate: string) {
     const normalizedCurrencyCode = this.normalizeExchangeRateCurrencyCode(currencyCode);
-    const { startDate, endDate } = this.parseExchangeRateDateRange(currencyDate);
+    const { endDate } = this.parseExchangeRateDateRange(currencyDate);
 
     const exchangeRate = await this.currencyExchangeRateRepository
       .createQueryBuilder('exchangeRate')
       .where('exchangeRate.currency_code = :currencyCode', {
         currencyCode: normalizedCurrencyCode,
       })
-      .andWhere('exchangeRate.currency_date >= :startDate', { startDate })
       .andWhere('exchangeRate.currency_date < :endDate', { endDate })
       .orderBy('exchangeRate.currency_date', 'DESC')
       .getOne();

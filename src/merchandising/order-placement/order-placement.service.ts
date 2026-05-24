@@ -76,6 +76,7 @@ export class OrderPlacementService {
         jobId: dto.jobId,
         currencyId: dto.currencyId,
         placementDate: this.parseRequiredDate(dto.placementDate, 'Placement date'),
+        exchangeRateBDT: this.positiveNumberOrDefault(dto.exchangeRateBDT, 1),
         factoryId: dto.factoryId,
         isPlaced: dto.isPlaced ?? false,
         created_by_id: userId,
@@ -256,6 +257,10 @@ export class OrderPlacementService {
         orderPlacement.placementDate = this.parseRequiredDate(dto.placementDate, 'Placement date');
       }
 
+      if (dto.exchangeRateBDT !== undefined) {
+        orderPlacement.exchangeRateBDT = this.positiveNumberOrDefault(dto.exchangeRateBDT, 1);
+      }
+
       if (dto.factoryId !== undefined) {
         orderPlacement.factoryId = dto.factoryId;
       }
@@ -323,7 +328,7 @@ export class OrderPlacementService {
       const entity = existingDetail ?? repository.create({ orderPlacementId, created_by_id: userId });
       const resolved = this.resolveDetailPayload(detail, sourceDetail, orderPlacementJobId);
       const quantity = this.numberOrDefault(resolved.quantity, 0);
-      const factoryCm = this.numberOrDefault(detail.factoryCm, 0);
+      const factoryCmPerDzn = this.numberOrDefault(detail.factoryCmPerDzn, 0);
       const factoryFob = this.numberOrDefault(detail.factoryFob, 0);
 
       entity.orderPlacementId = orderPlacementId;
@@ -339,10 +344,10 @@ export class OrderPlacementService {
       entity.deliveryDate = this.parseOptionalDate(resolved.deliveryDate);
       entity.cuttingLimitPercentage = this.numberOrDefault(resolved.cuttingLimitPercentage, 0);
       entity.remarks = this.normalizeString(resolved.remarks);
-      entity.factoryCm = factoryCm;
+      entity.factoryCmPerDzn = factoryCmPerDzn;
       entity.factoryFob = factoryFob;
       entity.factoryShipmentDate = this.parseOptionalDate(detail.factoryShipmentDate);
-      entity.totalFactoryCm = this.numberOrDefault(detail.totalFactoryCm, quantity * (factoryCm / 12));
+      entity.totalFactoryCm = this.numberOrDefault(detail.totalFactoryCm, quantity * (factoryCmPerDzn / 12));
       entity.totalFactoryFob = this.numberOrDefault(detail.totalFactoryFob, quantity * factoryFob);
 
       if (existingDetail) {
@@ -614,6 +619,11 @@ export class OrderPlacementService {
   private numberOrDefault(value: number | string | null | undefined, fallback: number) {
     const numberValue = Number(value);
     return Number.isFinite(numberValue) ? numberValue : fallback;
+  }
+
+  private positiveNumberOrDefault(value: number | string | null | undefined, fallback: number) {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : fallback;
   }
 
   private normalizeString(value: string | null | undefined) {
