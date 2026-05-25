@@ -2,12 +2,13 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MaterialGroup } from '../material-group/entity/material-group.entity';
 import { Unit } from '../unit/entity/unit.entity';
+import { Files } from 'src/files/entities/file.entity';
 import { Material } from './entity/material.entity';
 import { MaterialController } from './material.controller';
 import { MaterialService } from './material.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Material, MaterialGroup, Unit])],
+  imports: [TypeOrmModule.forFeature([Material, MaterialGroup, Unit, Files])],
   controllers: [MaterialController],
   providers: [MaterialService],
 })

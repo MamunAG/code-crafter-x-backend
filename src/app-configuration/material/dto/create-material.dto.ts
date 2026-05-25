@@ -41,6 +41,11 @@ export class CreateMaterialDto extends PartialType(Material) {
   @IsUUID()
   materialGroupId?: string | null;
 
+  @ApiPropertyOptional({ description: 'Image ID', example: 1 })
+  @IsOptional()
+  @IsInt()
+  imageId?: number | null;
+
   @ApiProperty({ description: 'Active status', example: true, default: true })
   @IsBoolean()
   isActive: boolean = true;

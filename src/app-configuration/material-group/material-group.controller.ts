@@ -52,7 +52,6 @@ export class MaterialGroupController {
   }
 
   @Get()
-  @MenuAccess(MENU_NAME, 'canView')
   @ApiOperation({
     summary: 'Get all',
     description: 'Retrieve all material groups',

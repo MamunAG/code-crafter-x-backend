@@ -176,10 +176,8 @@ export class MaterialGroupService {
       })
       .skip(skip)
       .take(limit)
-      .orderBy(
-        deletedOnly ? 'materialGroup.deleted_at' : 'materialGroup.created_at',
-        'DESC',
-      );
+      .orderBy('materialGroup.name', 'ASC')
+      .addOrderBy('materialGroup.created_at', 'DESC');
 
     if (deletedOnly) queryBuilder.withDeleted();
 

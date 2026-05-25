@@ -3,6 +3,7 @@ import { MaterialGroup } from 'src/app-configuration/material-group/entity/mater
 import { Organization } from 'src/app-configuration/organization/entity/organization.entity';
 import { Unit } from 'src/app-configuration/unit/entity/unit.entity';
 import { BaseEntity } from 'src/common/entities/base.entity';
+import { Files } from 'src/files/entities/file.entity';
 import {
   Column,
   Entity,
@@ -58,6 +59,15 @@ export class Material extends BaseEntity {
   materialGroupId?: string | null;
 
   @ApiProperty({
+    description: 'Image ID',
+    example: 1,
+    required: false,
+    nullable: true,
+  })
+  @Column({ name: 'image_id', type: 'integer', nullable: true })
+  imageId?: number | null;
+
+  @ApiProperty({
     description: 'Organization ID',
     example: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
   })
@@ -99,4 +109,13 @@ export class Material extends BaseEntity {
   @ManyToOne(() => MaterialGroup, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'material_group_id' })
   materialGroup?: MaterialGroup | null;
+
+  @ApiProperty({
+    description: 'Image',
+    type: () => Files,
+    required: false,
+  })
+  @ManyToOne(() => Files, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'image_id' })
+  image?: Files | null;
 }

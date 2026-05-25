@@ -8,6 +8,7 @@ import { Repository } from 'typeorm';
 
 import { PaginatedResponseDto } from 'src/common/dto/paginated-response.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
+import { Files } from 'src/files/entities/file.entity';
 import { CreateMaterialDto } from './dto/create-material.dto';
 import { FilterMaterialDto } from './dto/filter-material.dto';
 import { UpdateMaterialDto } from './dto/update-material.dto';
@@ -22,10 +23,15 @@ export class MaterialService {
   constructor(
     @InjectRepository(Material)
     private readonly materialRepository: Repository<Material>,
+    @InjectRepository(Files)
+    private readonly filesRepository: Repository<Files>,
   ) {}
 
   async create(materialDto: CreateMaterialDto, organizationId: string) {
     const normalizedMaterial = this.normalizeMaterialPayload(materialDto);
+    if (normalizedMaterial.imageId != null) {
+      await this.findFileOrFail(normalizedMaterial.imageId);
+    }
     await this.ensureMaterialIsUnique(
       normalizedMaterial.name,
       normalizedMaterial.code,
@@ -209,6 +215,7 @@ export class MaterialService {
       .createQueryBuilder('material')
       .leftJoinAndSelect('material.unit', 'unit')
       .leftJoinAndSelect('material.materialGroup', 'materialGroup')
+      .leftJoinAndSelect('material.image', 'image')
       .leftJoinAndSelect('material.created_by_user', 'created_by_user')
       .leftJoinAndSelect('material.updated_by_user', 'updated_by_user')
       .leftJoinAndSelect('material.deleted_by_user', 'deleted_by_user')
@@ -286,6 +293,7 @@ export class MaterialService {
       .createQueryBuilder('material')
       .leftJoinAndSelect('material.unit', 'unit')
       .leftJoinAndSelect('material.materialGroup', 'materialGroup')
+      .leftJoinAndSelect('material.image', 'image')
       .leftJoinAndSelect('material.created_by_user', 'created_by_user')
       .leftJoinAndSelect('material.updated_by_user', 'updated_by_user')
       .leftJoinAndSelect('material.deleted_by_user', 'deleted_by_user')
@@ -306,6 +314,9 @@ export class MaterialService {
 
   async update(id: string, dto: UpdateMaterialDto, organizationId: string) {
     const normalizedMaterial = this.normalizeMaterialPayload(dto);
+    if (normalizedMaterial.imageId != null) {
+      await this.findFileOrFail(normalizedMaterial.imageId);
+    }
     if (normalizedMaterial.name || normalizedMaterial.code) {
       await this.ensureMaterialIsUnique(
         normalizedMaterial.name,
@@ -412,6 +423,7 @@ export class MaterialService {
     if ('materialGroupId' in dto) {
       payload.materialGroupId = this.nullableString(dto.materialGroupId);
     }
+    if ('imageId' in dto) payload.imageId = this.nullableNumber(dto.imageId);
     if (dto.isActive !== undefined) payload.isActive = dto.isActive;
 
     return payload;
@@ -526,6 +538,16 @@ export class MaterialService {
     const numericValue =
       typeof value === 'number' ? value : Number.parseInt(value, 10);
     return Number.isNaN(numericValue) ? null : numericValue;
+  }
+
+  private async findFileOrFail(id: number) {
+    const file = await this.filesRepository.findOne({ where: { id } });
+
+    if (!file) {
+      throw new BadRequestException('Image not found');
+    }
+
+    return file;
   }
 
   private async ensureMaterialExists(
