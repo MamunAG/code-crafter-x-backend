@@ -1,5 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { MaterialGroup } from 'src/app-configuration/material-group/entity/material-group.entity';
 import { Organization } from 'src/app-configuration/organization/entity/organization.entity';
+import { Unit } from 'src/app-configuration/unit/entity/unit.entity';
 import { BaseEntity } from 'src/common/entities/base.entity';
 import {
   Column,
@@ -38,13 +40,22 @@ export class Material extends BaseEntity {
   description?: string | null;
 
   @ApiProperty({
-    description: 'Material remarks',
-    example: 'Preferred for summer programs.',
+    description: 'Unit ID',
+    example: 1,
     required: false,
     nullable: true,
   })
-  @Column({ name: 'remarks', type: 'text', nullable: true })
-  remarks?: string | null;
+  @Column({ name: 'unit_id', type: 'integer', nullable: true })
+  unitId?: number | null;
+
+  @ApiProperty({
+    description: 'Material group ID',
+    example: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+    required: false,
+    nullable: true,
+  })
+  @Column({ name: 'material_group_id', type: 'uuid', nullable: true })
+  materialGroupId?: string | null;
 
   @ApiProperty({
     description: 'Organization ID',
@@ -70,4 +81,22 @@ export class Material extends BaseEntity {
   @ManyToOne(() => Organization, { nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'organization_id' })
   organization?: Organization | null;
+
+  @ApiProperty({
+    description: 'Unit',
+    type: () => Unit,
+    required: false,
+  })
+  @ManyToOne(() => Unit, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'unit_id' })
+  unit?: Unit | null;
+
+  @ApiProperty({
+    description: 'Material group',
+    type: () => MaterialGroup,
+    required: false,
+  })
+  @ManyToOne(() => MaterialGroup, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'material_group_id' })
+  materialGroup?: MaterialGroup | null;
 }

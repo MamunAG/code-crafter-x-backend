@@ -31,6 +31,24 @@ export class FilterMaterialDto extends PaginationDto {
   description: string;
 
   @ApiProperty({
+    description: 'Unit ID',
+    example: '1',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  unitId: string;
+
+  @ApiProperty({
+    description: 'Material group ID',
+    example: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  materialGroupId: string;
+
+  @ApiProperty({
     description: 'Active status',
     example: 'true',
     required: false,
@@ -38,15 +56,6 @@ export class FilterMaterialDto extends PaginationDto {
   @IsOptional()
   @IsString()
   isActive: string;
-
-  @ApiProperty({
-    description: 'Material remarks',
-    example: 'Preferred',
-    required: false,
-  })
-  @IsOptional()
-  @IsString()
-  remarks: string;
 
   @ApiProperty({
     description: 'Return only soft deleted materials',

@@ -5,7 +5,7 @@ export class AddMaterialEntry1779800000000 implements MigrationInterface {
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `CREATE TABLE "material" ("created_by_id" uuid, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_by_id" uuid, "updated_at" TIMESTAMP DEFAULT now(), "deleted_at" TIMESTAMP, "deleted_by_id" uuid, "id" uuid NOT NULL DEFAULT uuid_generate_v4(), "name" character varying NOT NULL, "code" character varying, "description" text, "remarks" text, "organization_id" uuid, "is_active" boolean NOT NULL DEFAULT true, CONSTRAINT "PK_material_id" PRIMARY KEY ("id"))`,
+      `CREATE TABLE "material" ("created_by_id" uuid, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_by_id" uuid, "updated_at" TIMESTAMP DEFAULT now(), "deleted_at" TIMESTAMP, "deleted_by_id" uuid, "id" uuid NOT NULL DEFAULT uuid_generate_v4(), "name" character varying NOT NULL, "code" character varying, "description" text, "organization_id" uuid, "is_active" boolean NOT NULL DEFAULT true, CONSTRAINT "PK_material_id" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
       `ALTER TABLE "material" ADD CONSTRAINT "FK_material_created_by" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,

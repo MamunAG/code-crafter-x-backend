@@ -57,8 +57,8 @@ export class MaterialService {
 
   buildUploadTemplate() {
     return [
-      'name,code,description,remarks,isActive',
-      'Cotton Fabric,MAT-001,100% cotton single jersey fabric,Preferred for summer programs.,true',
+      'name,code,description,unitId,materialGroupId,isActive',
+      'Cotton Fabric,MAT-001,100% cotton single jersey fabric,1,,true',
     ].join('\n');
   }
 
@@ -158,7 +158,8 @@ export class MaterialService {
           name: row.name.trim(),
           code: row.code?.trim() || null,
           description: row.description?.trim() || null,
-          remarks: row.remarks?.trim() || null,
+          unitId: this.nullableNumber(row.unitId),
+          materialGroupId: row.materialGroupId?.trim() || null,
           isActive: row.isActive,
           organizationId,
           created_by_id: userId,
@@ -206,6 +207,8 @@ export class MaterialService {
 
     const queryBuilder = this.materialRepository
       .createQueryBuilder('material')
+      .leftJoinAndSelect('material.unit', 'unit')
+      .leftJoinAndSelect('material.materialGroup', 'materialGroup')
       .leftJoinAndSelect('material.created_by_user', 'created_by_user')
       .leftJoinAndSelect('material.updated_by_user', 'updated_by_user')
       .leftJoinAndSelect('material.deleted_by_user', 'deleted_by_user')
@@ -239,9 +242,15 @@ export class MaterialService {
       });
     }
 
-    if (filters?.remarks) {
-      queryBuilder.andWhere('material.remarks ILIKE :remarks', {
-        remarks: `%${filters.remarks}%`,
+    if (filters?.unitId) {
+      queryBuilder.andWhere('material.unitId = :unitId', {
+        unitId: this.nullableNumber(filters.unitId),
+      });
+    }
+
+    if (filters?.materialGroupId) {
+      queryBuilder.andWhere('material.materialGroupId = :materialGroupId', {
+        materialGroupId: filters.materialGroupId,
       });
     }
 
@@ -275,6 +284,8 @@ export class MaterialService {
   findOne(id: string, organizationId: string) {
     return this.materialRepository
       .createQueryBuilder('material')
+      .leftJoinAndSelect('material.unit', 'unit')
+      .leftJoinAndSelect('material.materialGroup', 'materialGroup')
       .leftJoinAndSelect('material.created_by_user', 'created_by_user')
       .leftJoinAndSelect('material.updated_by_user', 'updated_by_user')
       .leftJoinAndSelect('material.deleted_by_user', 'deleted_by_user')
@@ -397,7 +408,10 @@ export class MaterialService {
     if ('description' in dto) {
       payload.description = this.nullableString(dto.description);
     }
-    if ('remarks' in dto) payload.remarks = this.nullableString(dto.remarks);
+    if ('unitId' in dto) payload.unitId = this.nullableNumber(dto.unitId);
+    if ('materialGroupId' in dto) {
+      payload.materialGroupId = this.nullableString(dto.materialGroupId);
+    }
     if (dto.isActive !== undefined) payload.isActive = dto.isActive;
 
     return payload;
@@ -426,7 +440,8 @@ export class MaterialService {
     const nameIndex = headers.indexOf('name');
     const codeIndex = headers.indexOf('code');
     const descriptionIndex = headers.indexOf('description');
-    const remarksIndex = headers.indexOf('remarks');
+    const unitIndex = headers.indexOf('unitid');
+    const materialGroupIndex = headers.indexOf('materialgroupid');
     const activeIndex = headers.indexOf('isactive');
 
     if (nameIndex === -1) {
@@ -451,8 +466,11 @@ export class MaterialService {
             descriptionIndex === -1
               ? ''
               : columns[descriptionIndex]?.trim() ?? '',
-          remarks:
-            remarksIndex === -1 ? '' : columns[remarksIndex]?.trim() ?? '',
+          unitId: unitIndex === -1 ? '' : columns[unitIndex]?.trim() ?? '',
+          materialGroupId:
+            materialGroupIndex === -1
+              ? ''
+              : columns[materialGroupIndex]?.trim() ?? '',
           isActive:
             activeIndex === -1
               ? true
@@ -498,6 +516,16 @@ export class MaterialService {
   private nullableString(value: string | null | undefined) {
     const trimmedValue = value?.trim() ?? '';
     return trimmedValue || null;
+  }
+
+  private nullableNumber(value: string | number | null | undefined) {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    const numericValue =
+      typeof value === 'number' ? value : Number.parseInt(value, 10);
+    return Number.isNaN(numericValue) ? null : numericValue;
   }
 
   private async ensureMaterialExists(

@@ -1,5 +1,12 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  IsBoolean,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 import { Material } from '../entity/material.entity';
 
 export class CreateMaterialDto extends PartialType(Material) {
@@ -21,13 +28,18 @@ export class CreateMaterialDto extends PartialType(Material) {
   @IsString()
   description?: string | null;
 
+  @ApiPropertyOptional({ description: 'Unit ID', example: 1 })
+  @IsOptional()
+  @IsInt()
+  unitId?: number | null;
+
   @ApiPropertyOptional({
-    description: 'Material remarks',
-    example: 'Preferred for summer programs.',
+    description: 'Material group ID',
+    example: 'd290f1ee-6c54-4b01-90e6-d701748f0851',
   })
   @IsOptional()
-  @IsString()
-  remarks?: string | null;
+  @IsUUID()
+  materialGroupId?: string | null;
 
   @ApiProperty({ description: 'Active status', example: true, default: true })
   @IsBoolean()

@@ -34,6 +34,7 @@ import { UserFirebaseToken } from './notifications/entity/user-firebase-token.en
 import { Factory } from './app-configuration/factory/entity/factory.entity';
 import { Supplier } from './app-configuration/supplier/entity/supplier.entity';
 import { Material } from './app-configuration/material/entity/material.entity';
+import { MaterialGroup } from './app-configuration/material-group/entity/material-group.entity';
 import { Designation } from './hr-payroll/master-data/designation/entity/designation.entity';
 import { Department } from './hr-payroll/master-data/department/entity/department.entity';
 import { Employee } from './hr-payroll/employee/entity/employee.entity';
@@ -102,6 +103,7 @@ export function createTypeOrmOptions(
       StyleToSizeMap,
       Factory,
       Supplier,
+      MaterialGroup,
       Material,
       Designation,
       Department,
