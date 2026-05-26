@@ -16,6 +16,7 @@ import { FilesModule } from './files/files.module';
 import { UserLocationModule } from './user-location/user-location.module';
 import { ColorModule } from './merchandising/master-data/color/color.module';
 import { SizeModule } from './merchandising/master-data/size/size.module';
+import { FabricProcessModule } from './merchandising/master-data/fabric-process/fabric-process.module';
 import { EmbellishmentModule } from './merchandising/master-data/embellishment/embellishment.module';
 import { CurrencyModule } from './app-configuration/currency/currency.module';
 import { UnitModule } from './app-configuration/unit/unit.module';
@@ -42,6 +43,7 @@ import { DesignationModule } from './hr-payroll/master-data/designation/designat
 import { EmployeeModule } from './hr-payroll/employee/employee.module';
 import { JobModule } from './merchandising/job/job.module';
 import { OrderPlacementModule } from './merchandising/order-placement/order-placement.module';
+import { FabricCostingModule } from './merchandising/fabric-costing/fabric-costing.module';
 
 @Module({
   imports: [
@@ -63,6 +65,7 @@ import { OrderPlacementModule } from './merchandising/order-placement/order-plac
     UserLocationModule,
     ColorModule,
     SizeModule,
+    FabricProcessModule,
     EmbellishmentModule,
     CurrencyModule,
     UnitModule,
@@ -88,6 +91,7 @@ import { OrderPlacementModule } from './merchandising/order-placement/order-plac
     EmployeeModule,
     JobModule,
     OrderPlacementModule,
+    FabricCostingModule,
   ],
   controllers: [AppController, CommonController],
   providers: [

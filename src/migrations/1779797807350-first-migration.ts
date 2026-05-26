@@ -1,0 +1,124 @@
+import { MigrationInterface, QueryRunner } from "typeorm";
+
+export class FirstMigration1779797807350 implements MigrationInterface {
+    name = 'FirstMigration1779797807350'
+
+    public async up(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`ALTER TABLE "fabric_process" DROP CONSTRAINT "FK_fabric_process_created_by"`);
+        await queryRunner.query(`ALTER TABLE "fabric_process" DROP CONSTRAINT "FK_fabric_process_deleted_by"`);
+        await queryRunner.query(`ALTER TABLE "fabric_process" DROP CONSTRAINT "FK_fabric_process_organization"`);
+        await queryRunner.query(`ALTER TABLE "fabric_process" DROP CONSTRAINT "FK_fabric_process_updated_by"`);
+        await queryRunner.query(`ALTER TABLE "material" DROP CONSTRAINT "FK_material_image"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_common_process" DROP CONSTRAINT "FK_fabric_costing_common_process_created_by"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_common_process" DROP CONSTRAINT "FK_fabric_costing_common_process_deleted_by"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_common_process" DROP CONSTRAINT "FK_fabric_costing_common_process_parent"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_common_process" DROP CONSTRAINT "FK_fabric_costing_common_process_process"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_common_process" DROP CONSTRAINT "FK_fabric_costing_common_process_updated_by"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn_process" DROP CONSTRAINT "FK_fabric_costing_yarn_process_created_by"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn_process" DROP CONSTRAINT "FK_fabric_costing_yarn_process_deleted_by"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn_process" DROP CONSTRAINT "FK_fabric_costing_yarn_process_parent"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn_process" DROP CONSTRAINT "FK_fabric_costing_yarn_process_process"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn_process" DROP CONSTRAINT "FK_fabric_costing_yarn_process_updated_by"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn" DROP CONSTRAINT "FK_fabric_costing_yarn_created_by"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn" DROP CONSTRAINT "FK_fabric_costing_yarn_deleted_by"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn" DROP CONSTRAINT "FK_fabric_costing_yarn_material"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn" DROP CONSTRAINT "FK_fabric_costing_yarn_parent"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn" DROP CONSTRAINT "FK_fabric_costing_yarn_updated_by"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" DROP CONSTRAINT "FK_fabric_costing_created_by"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" DROP CONSTRAINT "FK_fabric_costing_currency"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" DROP CONSTRAINT "FK_fabric_costing_deleted_by"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" DROP CONSTRAINT "FK_fabric_costing_fabric"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" DROP CONSTRAINT "FK_fabric_costing_organization"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" DROP CONSTRAINT "FK_fabric_costing_style"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" DROP CONSTRAINT "FK_fabric_costing_unit"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" DROP CONSTRAINT "FK_fabric_costing_updated_by"`);
+        await queryRunner.query(`ALTER TABLE "fabric_process" ADD CONSTRAINT "FK_7a631aa5fde9c4292784b789e34" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_process" ADD CONSTRAINT "FK_17384379df02e5ca9738182495d" FOREIGN KEY ("updated_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_process" ADD CONSTRAINT "FK_b9ba2e3c4ee5e7b2e5032aaa42e" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_process" ADD CONSTRAINT "FK_cb7fbbead530e1be6a431b51822" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "material" ADD CONSTRAINT "FK_6c85d9fe705e8813a941e7c0b7b" FOREIGN KEY ("image_id") REFERENCES "files"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_common_process" ADD CONSTRAINT "FK_056504be3bc170b7e77bab61227" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_common_process" ADD CONSTRAINT "FK_d07309ffcbb10bd4749b8b67462" FOREIGN KEY ("updated_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_common_process" ADD CONSTRAINT "FK_58dcdd8cef855d073e1470f6b22" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_common_process" ADD CONSTRAINT "FK_c4a1c212ca2b477a9646c74a146" FOREIGN KEY ("fabric_costing_id") REFERENCES "fabric_costing"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_common_process" ADD CONSTRAINT "FK_41d1d9a49caae316a5891941407" FOREIGN KEY ("process_id") REFERENCES "fabric_process"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn_process" ADD CONSTRAINT "FK_1ecd28c00ac37441c8afb60ef80" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn_process" ADD CONSTRAINT "FK_54acd7cec64b96675ae03d5eeee" FOREIGN KEY ("updated_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn_process" ADD CONSTRAINT "FK_8973ac1edee05f0a761cadacef8" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn_process" ADD CONSTRAINT "FK_8bb9abdc65b2ea8dedcde2c0690" FOREIGN KEY ("fabric_costing_yarn_id") REFERENCES "fabric_costing_yarn"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn_process" ADD CONSTRAINT "FK_0fb23f54353fcc4e11070ab28c9" FOREIGN KEY ("process_id") REFERENCES "fabric_process"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn" ADD CONSTRAINT "FK_00ea399b98ce71a8c9b155ab364" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn" ADD CONSTRAINT "FK_04dbe34d4675f0fd498642b900d" FOREIGN KEY ("updated_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn" ADD CONSTRAINT "FK_8468e03f76166ce2ed02c720cd8" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn" ADD CONSTRAINT "FK_ae5b5f81e03b06249befea83ef3" FOREIGN KEY ("fabric_costing_id") REFERENCES "fabric_costing"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn" ADD CONSTRAINT "FK_8f45441a5c25d8eb7cc0f58e9ad" FOREIGN KEY ("yarn_id") REFERENCES "material"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" ADD CONSTRAINT "FK_5d9e6dedbabb611e5bfd03db699" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" ADD CONSTRAINT "FK_725d942037567739f21c3b8a200" FOREIGN KEY ("updated_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" ADD CONSTRAINT "FK_84cb545f751ed86d0ba55be02fb" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" ADD CONSTRAINT "FK_78fa99ba8a94492007075bee436" FOREIGN KEY ("style_id") REFERENCES "styles"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" ADD CONSTRAINT "FK_9fe86f4473771f8d7d884631f2b" FOREIGN KEY ("fabric_id") REFERENCES "material"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" ADD CONSTRAINT "FK_1c58e6b3f8289a10ce2a076f471" FOREIGN KEY ("unit_id") REFERENCES "uom"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" ADD CONSTRAINT "FK_968d59e342a2651f8741f30404b" FOREIGN KEY ("currency_id") REFERENCES "currency"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" ADD CONSTRAINT "FK_4d32578b154c562361323d2eb5c" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+    }
+
+    public async down(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`ALTER TABLE "fabric_costing" DROP CONSTRAINT "FK_4d32578b154c562361323d2eb5c"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" DROP CONSTRAINT "FK_968d59e342a2651f8741f30404b"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" DROP CONSTRAINT "FK_1c58e6b3f8289a10ce2a076f471"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" DROP CONSTRAINT "FK_9fe86f4473771f8d7d884631f2b"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" DROP CONSTRAINT "FK_78fa99ba8a94492007075bee436"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" DROP CONSTRAINT "FK_84cb545f751ed86d0ba55be02fb"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" DROP CONSTRAINT "FK_725d942037567739f21c3b8a200"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" DROP CONSTRAINT "FK_5d9e6dedbabb611e5bfd03db699"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn" DROP CONSTRAINT "FK_8f45441a5c25d8eb7cc0f58e9ad"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn" DROP CONSTRAINT "FK_ae5b5f81e03b06249befea83ef3"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn" DROP CONSTRAINT "FK_8468e03f76166ce2ed02c720cd8"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn" DROP CONSTRAINT "FK_04dbe34d4675f0fd498642b900d"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn" DROP CONSTRAINT "FK_00ea399b98ce71a8c9b155ab364"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn_process" DROP CONSTRAINT "FK_0fb23f54353fcc4e11070ab28c9"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn_process" DROP CONSTRAINT "FK_8bb9abdc65b2ea8dedcde2c0690"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn_process" DROP CONSTRAINT "FK_8973ac1edee05f0a761cadacef8"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn_process" DROP CONSTRAINT "FK_54acd7cec64b96675ae03d5eeee"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn_process" DROP CONSTRAINT "FK_1ecd28c00ac37441c8afb60ef80"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_common_process" DROP CONSTRAINT "FK_41d1d9a49caae316a5891941407"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_common_process" DROP CONSTRAINT "FK_c4a1c212ca2b477a9646c74a146"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_common_process" DROP CONSTRAINT "FK_58dcdd8cef855d073e1470f6b22"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_common_process" DROP CONSTRAINT "FK_d07309ffcbb10bd4749b8b67462"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_common_process" DROP CONSTRAINT "FK_056504be3bc170b7e77bab61227"`);
+        await queryRunner.query(`ALTER TABLE "material" DROP CONSTRAINT "FK_6c85d9fe705e8813a941e7c0b7b"`);
+        await queryRunner.query(`ALTER TABLE "fabric_process" DROP CONSTRAINT "FK_cb7fbbead530e1be6a431b51822"`);
+        await queryRunner.query(`ALTER TABLE "fabric_process" DROP CONSTRAINT "FK_b9ba2e3c4ee5e7b2e5032aaa42e"`);
+        await queryRunner.query(`ALTER TABLE "fabric_process" DROP CONSTRAINT "FK_17384379df02e5ca9738182495d"`);
+        await queryRunner.query(`ALTER TABLE "fabric_process" DROP CONSTRAINT "FK_7a631aa5fde9c4292784b789e34"`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" ADD CONSTRAINT "FK_fabric_costing_updated_by" FOREIGN KEY ("updated_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" ADD CONSTRAINT "FK_fabric_costing_unit" FOREIGN KEY ("unit_id") REFERENCES "uom"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" ADD CONSTRAINT "FK_fabric_costing_style" FOREIGN KEY ("style_id") REFERENCES "styles"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" ADD CONSTRAINT "FK_fabric_costing_organization" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" ADD CONSTRAINT "FK_fabric_costing_fabric" FOREIGN KEY ("fabric_id") REFERENCES "material"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" ADD CONSTRAINT "FK_fabric_costing_deleted_by" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" ADD CONSTRAINT "FK_fabric_costing_currency" FOREIGN KEY ("currency_id") REFERENCES "currency"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing" ADD CONSTRAINT "FK_fabric_costing_created_by" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn" ADD CONSTRAINT "FK_fabric_costing_yarn_updated_by" FOREIGN KEY ("updated_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn" ADD CONSTRAINT "FK_fabric_costing_yarn_parent" FOREIGN KEY ("fabric_costing_id") REFERENCES "fabric_costing"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn" ADD CONSTRAINT "FK_fabric_costing_yarn_material" FOREIGN KEY ("yarn_id") REFERENCES "material"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn" ADD CONSTRAINT "FK_fabric_costing_yarn_deleted_by" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn" ADD CONSTRAINT "FK_fabric_costing_yarn_created_by" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn_process" ADD CONSTRAINT "FK_fabric_costing_yarn_process_updated_by" FOREIGN KEY ("updated_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn_process" ADD CONSTRAINT "FK_fabric_costing_yarn_process_process" FOREIGN KEY ("process_id") REFERENCES "fabric_process"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn_process" ADD CONSTRAINT "FK_fabric_costing_yarn_process_parent" FOREIGN KEY ("fabric_costing_yarn_id") REFERENCES "fabric_costing_yarn"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn_process" ADD CONSTRAINT "FK_fabric_costing_yarn_process_deleted_by" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_yarn_process" ADD CONSTRAINT "FK_fabric_costing_yarn_process_created_by" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_common_process" ADD CONSTRAINT "FK_fabric_costing_common_process_updated_by" FOREIGN KEY ("updated_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_common_process" ADD CONSTRAINT "FK_fabric_costing_common_process_process" FOREIGN KEY ("process_id") REFERENCES "fabric_process"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_common_process" ADD CONSTRAINT "FK_fabric_costing_common_process_parent" FOREIGN KEY ("fabric_costing_id") REFERENCES "fabric_costing"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_common_process" ADD CONSTRAINT "FK_fabric_costing_common_process_deleted_by" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_costing_common_process" ADD CONSTRAINT "FK_fabric_costing_common_process_created_by" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "material" ADD CONSTRAINT "FK_material_image" FOREIGN KEY ("image_id") REFERENCES "files"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_process" ADD CONSTRAINT "FK_fabric_process_updated_by" FOREIGN KEY ("updated_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_process" ADD CONSTRAINT "FK_fabric_process_organization" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_process" ADD CONSTRAINT "FK_fabric_process_deleted_by" FOREIGN KEY ("deleted_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "fabric_process" ADD CONSTRAINT "FK_fabric_process_created_by" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+    }
+
+}
