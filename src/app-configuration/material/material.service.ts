@@ -31,7 +31,7 @@ export class MaterialService {
     private readonly unitRepository: Repository<Unit>,
     @InjectRepository(Files)
     private readonly filesRepository: Repository<Files>,
-  ) {}
+  ) { }
 
   async create(materialDto: CreateMaterialDto, organizationId: string) {
     const normalizedMaterial = this.normalizeMaterialPayload(materialDto);
@@ -40,7 +40,6 @@ export class MaterialService {
     }
     await this.ensureMaterialIsUnique(
       normalizedMaterial.name,
-      normalizedMaterial.code,
       organizationId,
     );
 
@@ -69,8 +68,8 @@ export class MaterialService {
 
   buildUploadTemplate() {
     return [
-      'name,code,description,unit,materialGroup,isActive',
-      'Cotton Fabric,MAT-001,100% cotton single jersey fabric,Piece,Fabric,true',
+      'name,code,description,unit,materialGroup',
+      '100% cotton single jersey fabric,MAT-001,Some description,Piece,Fabric',
     ].join('\n');
   }
 
@@ -116,42 +115,42 @@ export class MaterialService {
 
     const existingMaterials = uniqueNames.length
       ? await this.materialRepository
-          .createQueryBuilder('material')
-          .withDeleted()
-          .select(['material.name'])
-          .where('material.organization_id = :organizationId', {
-            organizationId,
-          })
-          .andWhere('LOWER(TRIM(material.name)) IN (:...names)', {
-            names: uniqueNames,
-          })
-          .getMany()
+        .createQueryBuilder('material')
+        .withDeleted()
+        .select(['material.name'])
+        .where('material.organization_id = :organizationId', {
+          organizationId,
+        })
+        .andWhere('LOWER(TRIM(material.name)) IN (:...names)', {
+          names: uniqueNames,
+        })
+        .getMany()
       : [];
     const existingUnits = uniqueUnitNames.length
       ? await this.unitRepository
-          .createQueryBuilder('uom')
-          .select(['uom.id', 'uom.name'])
-          .where('uom.organization_id = :organizationId', {
-            organizationId,
-          })
-          .andWhere('uom.deleted_at IS NULL')
-          .andWhere('LOWER(TRIM(uom.name)) IN (:...names)', {
-            names: uniqueUnitNames,
-          })
-          .getMany()
+        .createQueryBuilder('uom')
+        .select(['uom.id', 'uom.name'])
+        .where('uom.organization_id = :organizationId', {
+          organizationId,
+        })
+        .andWhere('uom.deleted_at IS NULL')
+        .andWhere('LOWER(TRIM(uom.name)) IN (:...names)', {
+          names: uniqueUnitNames,
+        })
+        .getMany()
       : [];
     const existingMaterialGroups = uniqueMaterialGroupNames.length
       ? await this.materialGroupRepository
-          .createQueryBuilder('materialGroup')
-          .select(['materialGroup.id', 'materialGroup.name'])
-          .where('materialGroup.organization_id = :organizationId', {
-            organizationId,
-          })
-          .andWhere('materialGroup.deleted_at IS NULL')
-          .andWhere('LOWER(TRIM(materialGroup.name)) IN (:...names)', {
-            names: uniqueMaterialGroupNames,
-          })
-          .getMany()
+        .createQueryBuilder('materialGroup')
+        .select(['materialGroup.id', 'materialGroup.name'])
+        .where('materialGroup.organization_id = :organizationId', {
+          organizationId,
+        })
+        .andWhere('materialGroup.deleted_at IS NULL')
+        .andWhere('LOWER(TRIM(materialGroup.name)) IN (:...names)', {
+          names: uniqueMaterialGroupNames,
+        })
+        .getMany()
       : [];
 
     const existingIdentitySet = new Set(
@@ -373,7 +372,6 @@ export class MaterialService {
     if (normalizedMaterial.name || normalizedMaterial.code) {
       await this.ensureMaterialIsUnique(
         normalizedMaterial.name,
-        normalizedMaterial.code,
         organizationId,
         id,
       );
@@ -417,14 +415,12 @@ export class MaterialService {
 
   private async ensureMaterialIsUnique(
     name?: string | null,
-    code?: string | null,
     organizationId?: string,
     ignoreId?: string,
   ) {
     const normalizedName = name?.trim().toLowerCase();
-    const normalizedCode = code?.trim().toLowerCase();
 
-    if (!normalizedName && !normalizedCode) {
+    if (!normalizedName) {
       return;
     }
 
@@ -433,23 +429,9 @@ export class MaterialService {
       .where('material.organization_id = :organizationId', { organizationId })
       .andWhere('material.deleted_at IS NULL');
 
-    if (normalizedName && normalizedCode) {
-      queryBuilder.andWhere(
-        '(LOWER(TRIM(material.name)) = :name OR LOWER(TRIM(material.code)) = :code)',
-        {
-          name: normalizedName,
-          code: normalizedCode,
-        },
-      );
-    } else if (normalizedName) {
-      queryBuilder.andWhere('LOWER(TRIM(material.name)) = :name', {
-        name: normalizedName,
-      });
-    } else if (normalizedCode) {
-      queryBuilder.andWhere('LOWER(TRIM(material.code)) = :code', {
-        code: normalizedCode,
-      });
-    }
+    queryBuilder.andWhere('LOWER(TRIM(material.name)) = :name', {
+      name: normalizedName,
+    });
 
     if (ignoreId !== undefined) {
       queryBuilder.andWhere('material.id != :ignoreId', { ignoreId });
