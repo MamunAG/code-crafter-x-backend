@@ -25,12 +25,6 @@ export class CreateFabricCostingYarnDto {
   @Type(() => Number)
   @IsOptional()
   @IsNumber()
-  totalYarnConsumption?: number;
-
-  @ApiPropertyOptional({ example: 0 })
-  @Type(() => Number)
-  @IsOptional()
-  @IsNumber()
   totalYarnPrice?: number;
 
   @ApiPropertyOptional({ type: () => [CreateFabricCostingYarnProcessDto] })

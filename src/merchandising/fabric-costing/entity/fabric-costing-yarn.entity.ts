@@ -30,9 +30,6 @@ export class FabricCostingYarn extends BaseEntity {
   @Column({ name: 'yarn_price_unit', type: 'numeric', precision: 18, scale: 4, default: 0 })
   yarnPricePerUnit: number;
 
-  @Column({ name: 'total_yarn_consumption', type: 'numeric', precision: 18, scale: 4, default: 0 })
-  totalYarnConsumption: number;
-
   @Column({ name: 'total_yarn_price', type: 'numeric', precision: 18, scale: 4, default: 0 })
   totalYarnPrice: number;
 
