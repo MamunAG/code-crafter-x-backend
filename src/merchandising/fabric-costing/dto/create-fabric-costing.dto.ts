@@ -5,11 +5,6 @@ import { CreateFabricCostingCommonProcessDto } from './create-fabric-costing-com
 import { CreateFabricCostingYarnDto } from './create-fabric-costing-yarn.dto';
 
 export class CreateFabricCostingDto {
-  @ApiPropertyOptional({ example: 'style-uuid' })
-  @IsOptional()
-  @IsString()
-  styleId?: string | null;
-
   @ApiPropertyOptional({ example: 'material-uuid' })
   @IsOptional()
   @IsString()

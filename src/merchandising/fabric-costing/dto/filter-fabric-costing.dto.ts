@@ -7,11 +7,6 @@ export class FilterFabricCostingDto extends PaginationDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  styleId?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
   fabricId?: string;
 
   @ApiPropertyOptional()

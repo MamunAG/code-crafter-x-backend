@@ -6,7 +6,6 @@ import { Unit } from 'src/app-configuration/unit/entity/unit.entity';
 import { PaginatedResponseDto } from 'src/common/dto/paginated-response.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { FabricProcess } from 'src/merchandising/master-data/fabric-process/entity/fabric-process.entity';
-import { Style } from 'src/merchandising/style/entity/style.entity';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { CreateFabricCostingCommonProcessDto } from './dto/create-fabric-costing-common-process.dto';
 import { CreateFabricCostingDto } from './dto/create-fabric-costing.dto';
@@ -31,9 +30,6 @@ export class FabricCostingService {
     @InjectRepository(FabricCosting)
     private readonly fabricCostingRepository: Repository<FabricCosting>,
 
-    @InjectRepository(Style)
-    private readonly styleRepository: Repository<Style>,
-
     @InjectRepository(Material)
     private readonly materialRepository: Repository<Material>,
 
@@ -54,7 +50,6 @@ export class FabricCostingService {
     const id = await this.dataSource.transaction(async (manager) => {
       const repository = manager.getRepository(FabricCosting);
       const fabricCosting = repository.create({
-        styleId: this.optionalUuid(dto.styleId),
         fabricId: this.optionalUuid(dto.fabricId),
         qty: this.numberOrDefault(dto.qty, 1),
         unitId: dto.unitId ?? null,
@@ -86,7 +81,6 @@ export class FabricCostingService {
     const queryBuilder = this.fabricCostingRepository
       .createQueryBuilder('fabricCosting')
       .distinct(true)
-      .leftJoinAndSelect('fabricCosting.style', 'style')
       .leftJoinAndSelect('fabricCosting.fabric', 'fabric')
       .leftJoinAndSelect('fabricCosting.unit', 'unit')
       .leftJoinAndSelect('fabricCosting.currency', 'currency')
@@ -111,10 +105,6 @@ export class FabricCostingService {
       queryBuilder.withDeleted().andWhere('fabricCosting.deleted_at IS NOT NULL');
     } else {
       queryBuilder.andWhere('fabricCosting.deleted_at IS NULL');
-    }
-
-    if (filters?.styleId) {
-      queryBuilder.andWhere('fabricCosting.style_id = :styleId', { styleId: filters.styleId });
     }
 
     if (filters?.fabricId) {
@@ -154,7 +144,6 @@ export class FabricCostingService {
   async findOne(id: string, organizationId: string) {
     const fabricCosting = await this.fabricCostingRepository
       .createQueryBuilder('fabricCosting')
-      .leftJoinAndSelect('fabricCosting.style', 'style')
       .leftJoinAndSelect('fabricCosting.fabric', 'fabric')
       .leftJoinAndSelect('fabricCosting.unit', 'unit')
       .leftJoinAndSelect('fabricCosting.currency', 'currency')
@@ -199,7 +188,6 @@ export class FabricCostingService {
       }
 
       Object.assign(fabricCosting, {
-        ...(dto.styleId !== undefined ? { styleId: this.optionalUuid(dto.styleId) } : {}),
         ...(dto.fabricId !== undefined ? { fabricId: this.optionalUuid(dto.fabricId) } : {}),
         ...(dto.qty !== undefined ? { qty: this.numberOrDefault(dto.qty, 1) } : {}),
         ...(dto.unitId !== undefined ? { unitId: dto.unitId ?? null } : {}),
@@ -315,10 +303,6 @@ export class FabricCostingService {
   }
 
   private async validateHeader(dto: Partial<CreateFabricCostingDto>, organizationId: string) {
-    if (dto.styleId !== undefined && dto.styleId) {
-      await this.findStyleOrFail(dto.styleId, organizationId);
-    }
-
     if (dto.fabricId !== undefined && dto.fabricId) {
       await this.findMaterialOrFail(dto.fabricId, organizationId, 'Fabric');
     }
@@ -346,12 +330,6 @@ export class FabricCostingService {
     for (const process of dto.commonProcesses ?? []) {
       await this.findFabricProcessOrFail(process.processId, organizationId);
     }
-  }
-
-  private async findStyleOrFail(id: string, organizationId: string) {
-    const style = await this.styleRepository.findOne({ where: { id, organizationId } });
-    if (!style) throw new BadRequestException('Style not found in the selected organization.');
-    return style;
   }
 
   private async findMaterialOrFail(id: string, organizationId: string, label: string) {

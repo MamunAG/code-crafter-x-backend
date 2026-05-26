@@ -4,7 +4,6 @@ import { Material } from 'src/app-configuration/material/entity/material.entity'
 import { Organization } from 'src/app-configuration/organization/entity/organization.entity';
 import { Unit } from 'src/app-configuration/unit/entity/unit.entity';
 import { BaseEntity } from 'src/common/entities/base.entity';
-import { Style } from 'src/merchandising/style/entity/style.entity';
 import {
   Column,
   Entity,
@@ -21,10 +20,6 @@ export class FabricCosting extends BaseEntity {
   @ApiProperty()
   @PrimaryGeneratedColumn('uuid')
   id: string;
-
-  @ApiProperty({ required: false, nullable: true })
-  @Column({ name: 'style_id', type: 'uuid', nullable: true })
-  styleId?: string | null;
 
   @ApiProperty({ required: false, nullable: true })
   @Column({ name: 'fabric_id', type: 'uuid', nullable: true })
@@ -49,10 +44,6 @@ export class FabricCosting extends BaseEntity {
   @ApiProperty({ required: false, nullable: true })
   @Column({ name: 'organization_id', type: 'uuid', nullable: true })
   organizationId?: string | null;
-
-  @ManyToOne(() => Style, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'style_id' })
-  style?: Style | null;
 
   @ManyToOne(() => Material, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'fabric_id' })
