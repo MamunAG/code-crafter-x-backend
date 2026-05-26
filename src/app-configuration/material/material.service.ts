@@ -8,6 +8,8 @@ import { Repository } from 'typeorm';
 
 import { PaginatedResponseDto } from 'src/common/dto/paginated-response.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
+import { MaterialGroup } from '../material-group/entity/material-group.entity';
+import { Unit } from '../unit/entity/unit.entity';
 import { Files } from 'src/files/entities/file.entity';
 import { CreateMaterialDto } from './dto/create-material.dto';
 import { FilterMaterialDto } from './dto/filter-material.dto';
@@ -23,6 +25,10 @@ export class MaterialService {
   constructor(
     @InjectRepository(Material)
     private readonly materialRepository: Repository<Material>,
+    @InjectRepository(MaterialGroup)
+    private readonly materialGroupRepository: Repository<MaterialGroup>,
+    @InjectRepository(Unit)
+    private readonly unitRepository: Repository<Unit>,
     @InjectRepository(Files)
     private readonly filesRepository: Repository<Files>,
   ) {}
@@ -63,8 +69,8 @@ export class MaterialService {
 
   buildUploadTemplate() {
     return [
-      'name,code,description,unitId,materialGroupId,isActive',
-      'Cotton Fabric,MAT-001,100% cotton single jersey fabric,1,,true',
+      'name,code,description,unit,materialGroup,isActive',
+      'Cotton Fabric,MAT-001,100% cotton single jersey fabric,Piece,Fabric,true',
     ].join('\n');
   }
 
@@ -93,52 +99,100 @@ export class MaterialService {
           .filter((value): value is string => Boolean(value)),
       ),
     ];
-    const uniqueCodes = [
+    const uniqueMaterialGroupNames = [
       ...new Set(
         rows
-          .map((row) => row.code?.trim().toLowerCase())
+          .map((row) => this.normalizeLookupName(row.materialGroup))
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ];
+    const uniqueUnitNames = [
+      ...new Set(
+        rows
+          .map((row) => this.normalizeLookupName(row.unit))
           .filter((value): value is string => Boolean(value)),
       ),
     ];
 
-    const existingMaterials =
-      uniqueNames.length || uniqueCodes.length
-        ? await this.materialRepository
-            .createQueryBuilder('material')
-            .withDeleted()
-            .select(['material.name', 'material.code'])
-            .where('material.organization_id = :organizationId', {
-              organizationId,
-            })
-            .andWhere(
-              uniqueNames.length && uniqueCodes.length
-                ? '(LOWER(TRIM(material.name)) IN (:...names) OR LOWER(TRIM(material.code)) IN (:...codes))'
-                : uniqueNames.length
-                  ? 'LOWER(TRIM(material.name)) IN (:...names)'
-                  : 'LOWER(TRIM(material.code)) IN (:...codes)',
-              {
-                names: uniqueNames.length ? uniqueNames : [''],
-                codes: uniqueCodes.length ? uniqueCodes : [''],
-              },
-            )
-            .getMany()
-        : [];
+    const existingMaterials = uniqueNames.length
+      ? await this.materialRepository
+          .createQueryBuilder('material')
+          .withDeleted()
+          .select(['material.name'])
+          .where('material.organization_id = :organizationId', {
+            organizationId,
+          })
+          .andWhere('LOWER(TRIM(material.name)) IN (:...names)', {
+            names: uniqueNames,
+          })
+          .getMany()
+      : [];
+    const existingUnits = uniqueUnitNames.length
+      ? await this.unitRepository
+          .createQueryBuilder('uom')
+          .select(['uom.id', 'uom.name'])
+          .where('uom.organization_id = :organizationId', {
+            organizationId,
+          })
+          .andWhere('uom.deleted_at IS NULL')
+          .andWhere('LOWER(TRIM(uom.name)) IN (:...names)', {
+            names: uniqueUnitNames,
+          })
+          .getMany()
+      : [];
+    const existingMaterialGroups = uniqueMaterialGroupNames.length
+      ? await this.materialGroupRepository
+          .createQueryBuilder('materialGroup')
+          .select(['materialGroup.id', 'materialGroup.name'])
+          .where('materialGroup.organization_id = :organizationId', {
+            organizationId,
+          })
+          .andWhere('materialGroup.deleted_at IS NULL')
+          .andWhere('LOWER(TRIM(materialGroup.name)) IN (:...names)', {
+            names: uniqueMaterialGroupNames,
+          })
+          .getMany()
+      : [];
 
     const existingIdentitySet = new Set(
       existingMaterials
-        .flatMap((material) => [
-          material.name?.trim().toLowerCase() || '',
-          material.code?.trim().toLowerCase() || '',
-        ])
+        .map((material) => material.name?.trim().toLowerCase() || '')
         .filter((value): value is string => Boolean(value)),
     );
+    const materialGroupIdByName = new Map(
+      existingMaterialGroups.map((materialGroup) => [
+        materialGroup.name.trim().toLowerCase(),
+        materialGroup.id,
+      ]),
+    );
+    const unitIdByName = new Map(
+      existingUnits.map((unit) => [unit.name.trim().toLowerCase(), unit.id]),
+    );
+    const missingUnits = uniqueUnitNames.filter((name) => !unitIdByName.has(name));
+    const missingMaterialGroups = uniqueMaterialGroupNames.filter(
+      (name) => !materialGroupIdByName.has(name),
+    );
+
+    if (missingUnits.length || missingMaterialGroups.length) {
+      throw new BadRequestException({
+        message:
+          'Material upload could not be completed because required setup data is missing. Please add the missing records first, then upload the template again.',
+        uploadReport: {
+          inserted: 0,
+          skipped: rows.length,
+          missing: {
+            units: missingUnits,
+            materialGroups: missingMaterialGroups,
+          },
+        },
+      });
+    }
+
     const seenIdentitySet = new Set<string>();
 
     const materialsToCreate = rows
       .filter((row) => {
         const normalizedName = row.name.trim().toLowerCase();
-        const normalizedCode = row.code?.trim().toLowerCase() || '';
-        const identityKey = normalizedCode || normalizedName;
 
         if (!normalizedName) {
           return false;
@@ -148,15 +202,11 @@ export class MaterialService {
           return false;
         }
 
-        if (normalizedCode && existingIdentitySet.has(normalizedCode)) {
+        if (seenIdentitySet.has(normalizedName)) {
           return false;
         }
 
-        if (seenIdentitySet.has(identityKey)) {
-          return false;
-        }
-
-        seenIdentitySet.add(identityKey);
+        seenIdentitySet.add(normalizedName);
         return true;
       })
       .map((row) =>
@@ -164,8 +214,11 @@ export class MaterialService {
           name: row.name.trim(),
           code: row.code?.trim() || null,
           description: row.description?.trim() || null,
-          unitId: this.nullableNumber(row.unitId),
-          materialGroupId: row.materialGroupId?.trim() || null,
+          unitId: this.resolveUnitId(row.unit, unitIdByName),
+          materialGroupId: this.resolveMaterialGroupId(
+            row.materialGroup,
+            materialGroupIdByName,
+          ),
           isActive: row.isActive,
           organizationId,
           created_by_id: userId,
@@ -425,8 +478,51 @@ export class MaterialService {
     }
     if ('imageId' in dto) payload.imageId = this.nullableNumber(dto.imageId);
     if (dto.isActive !== undefined) payload.isActive = dto.isActive;
+    if ('updated_by_id' in dto) {
+      payload.updated_by_id = this.optionalString(dto.updated_by_id);
+    }
+    if (dto.updated_at instanceof Date) {
+      payload.updated_at = dto.updated_at;
+    }
+    if ('created_by_id' in dto) {
+      payload.created_by_id = this.optionalString(dto.created_by_id);
+    }
+    if (dto.created_at instanceof Date) {
+      payload.created_at = dto.created_at;
+    }
 
     return payload;
+  }
+
+  private normalizeLookupName(value: string | null | undefined) {
+    const normalizedValue = value?.trim().toLowerCase();
+    return normalizedValue || null;
+  }
+
+  private resolveMaterialGroupId(
+    materialGroupName: string | null | undefined,
+    materialGroupIdByName: Map<string, string>,
+  ) {
+    const normalizedName = this.normalizeLookupName(materialGroupName);
+
+    if (!normalizedName) {
+      return null;
+    }
+
+    return materialGroupIdByName.get(normalizedName) || null;
+  }
+
+  private resolveUnitId(
+    unitName: string | null | undefined,
+    unitIdByName: Map<string, number>,
+  ) {
+    const normalizedName = this.normalizeLookupName(unitName);
+
+    if (!normalizedName) {
+      return null;
+    }
+
+    return unitIdByName.get(normalizedName) || null;
   }
 
   private parseMaterialTemplate(content: string) {
@@ -452,8 +548,10 @@ export class MaterialService {
     const nameIndex = headers.indexOf('name');
     const codeIndex = headers.indexOf('code');
     const descriptionIndex = headers.indexOf('description');
-    const unitIndex = headers.indexOf('unitid');
-    const materialGroupIndex = headers.indexOf('materialgroupid');
+    const unitIndex = headers.indexOf('unit');
+    const legacyUnitIndex = headers.indexOf('unitid');
+    const materialGroupIndex = headers.indexOf('materialgroup');
+    const legacyMaterialGroupIndex = headers.indexOf('materialgroupid');
     const activeIndex = headers.indexOf('isactive');
 
     if (nameIndex === -1) {
@@ -478,11 +576,18 @@ export class MaterialService {
             descriptionIndex === -1
               ? ''
               : columns[descriptionIndex]?.trim() ?? '',
-          unitId: unitIndex === -1 ? '' : columns[unitIndex]?.trim() ?? '',
-          materialGroupId:
-            materialGroupIndex === -1
+          unit:
+            unitIndex === -1 && legacyUnitIndex === -1
               ? ''
-              : columns[materialGroupIndex]?.trim() ?? '',
+              : unitIndex !== -1
+                ? columns[unitIndex]?.trim() ?? ''
+                : columns[legacyUnitIndex]?.trim() ?? '',
+          materialGroup:
+            materialGroupIndex === -1 && legacyMaterialGroupIndex === -1
+              ? ''
+              : materialGroupIndex !== -1
+                ? columns[materialGroupIndex]?.trim() ?? ''
+                : columns[legacyMaterialGroupIndex]?.trim() ?? '',
           isActive:
             activeIndex === -1
               ? true
@@ -528,6 +633,11 @@ export class MaterialService {
   private nullableString(value: string | null | undefined) {
     const trimmedValue = value?.trim() ?? '';
     return trimmedValue || null;
+  }
+
+  private optionalString(value: string | null | undefined) {
+    const trimmedValue = value?.trim() ?? '';
+    return trimmedValue || undefined;
   }
 
   private nullableNumber(value: string | number | null | undefined) {

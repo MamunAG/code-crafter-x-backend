@@ -13,10 +13,6 @@ export class Unit extends BaseEntity {
   @Column({ name: 'name', nullable: false })
   name: string;
 
-  @ApiProperty({ description: 'UOM short name', example: 'KG' })
-  @Column({ name: 'short_name', nullable: false })
-  shortName: string;
-
   @ApiProperty({ description: 'Organization ID', example: 'd290f1ee-6c54-4b01-90e6-d701748f0851' })
   @Column({ name: 'organization_id', type: 'uuid', nullable: true })
   organizationId?: string | null;
