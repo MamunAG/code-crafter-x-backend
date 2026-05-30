@@ -44,6 +44,7 @@ import { EmployeeModule } from './hr-payroll/employee/employee.module';
 import { JobModule } from './merchandising/job/job.module';
 import { OrderPlacementModule } from './merchandising/order-placement/order-placement.module';
 import { FabricCostingModule } from './merchandising/fabric-costing/fabric-costing.module';
+import { GmtCostScopeModule } from './merchandising/master-data/gmt-cost-scope/gmt-cost-scope.module';
 
 @Module({
   imports: [
@@ -92,6 +93,7 @@ import { FabricCostingModule } from './merchandising/fabric-costing/fabric-costi
     JobModule,
     OrderPlacementModule,
     FabricCostingModule,
+    GmtCostScopeModule,
   ],
   controllers: [AppController, CommonController],
   providers: [

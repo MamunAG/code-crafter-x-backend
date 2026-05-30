@@ -8,6 +8,8 @@ import { FabricCostingCommonProcess } from './entity/fabric-costing-common-proce
 import { FabricCostingYarnProcess } from './entity/fabric-costing-yarn-process.entity';
 import { FabricCostingYarn } from './entity/fabric-costing-yarn.entity';
 import { FabricCosting } from './entity/fabric-costing.entity';
+import { FabricCostingYarnAdditionalCost } from './entity/fabric-costing-yarn-additional-cost.entity';
+import { GmtCostScope } from 'src/merchandising/master-data/gmt-cost-scope/entity/gmt-cost-scope.entity';
 import { FabricCostingController } from './fabric-costing.controller';
 import { FabricCostingService } from './fabric-costing.service';
 
@@ -22,6 +24,8 @@ import { FabricCostingService } from './fabric-costing.service';
       Unit,
       Currency,
       FabricProcess,
+      FabricCostingYarnAdditionalCost,
+      GmtCostScope,
     ]),
   ],
   controllers: [FabricCostingController],

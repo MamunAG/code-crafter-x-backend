@@ -53,6 +53,8 @@ import { FabricCosting } from './merchandising/fabric-costing/entity/fabric-cost
 import { FabricCostingYarn } from './merchandising/fabric-costing/entity/fabric-costing-yarn.entity';
 import { FabricCostingYarnProcess } from './merchandising/fabric-costing/entity/fabric-costing-yarn-process.entity';
 import { FabricCostingCommonProcess } from './merchandising/fabric-costing/entity/fabric-costing-common-process.entity';
+import { FabricCostingYarnAdditionalCost } from './merchandising/fabric-costing/entity/fabric-costing-yarn-additional-cost.entity';
+import { GmtCostScope } from './merchandising/master-data/gmt-cost-scope/entity/gmt-cost-scope.entity';
 
 const databaseLogger = new Logger('Database');
 
@@ -127,6 +129,8 @@ export function createTypeOrmOptions(
       FabricCostingYarn,
       FabricCostingYarnProcess,
       FabricCostingCommonProcess,
+      FabricCostingYarnAdditionalCost,
+      GmtCostScope,
     ],
     synchronize: false, // Never use synchronize in production
     logging: isDevelopment,

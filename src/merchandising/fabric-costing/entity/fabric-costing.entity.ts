@@ -29,6 +29,16 @@ export class FabricCosting extends BaseEntity {
   @Column({ name: 'qty', type: 'numeric', precision: 18, scale: 4, default: 1 })
   qty: number;
 
+  @ApiProperty({ example: 0 })
+  @Column({
+    name: 'finished_fabric_cost',
+    type: 'numeric',
+    precision: 18,
+    scale: 4,
+    default: 0,
+  })
+  finishedFabricCost: number;
+
   @ApiProperty({ required: false, nullable: true })
   @Column({ name: 'unit_id', type: 'integer', nullable: true })
   unitId?: number | null;

@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import { FabricCosting } from './fabric-costing.entity';
 import { FabricCostingYarnProcess } from './fabric-costing-yarn-process.entity';
+import { FabricCostingYarnAdditionalCost } from './fabric-costing-yarn-additional-cost.entity';
 
 @Entity('fabric_costing_yarn')
 export class FabricCostingYarn extends BaseEntity {
@@ -50,4 +51,11 @@ export class FabricCostingYarn extends BaseEntity {
     { cascade: true },
   )
   yarnWiseProcesses?: FabricCostingYarnProcess[];
+
+  @OneToMany(
+    () => FabricCostingYarnAdditionalCost,
+    (additionalCost) => additionalCost.fabricCostingYarn,
+    { cascade: true },
+  )
+  additionalMaterialCosts?: FabricCostingYarnAdditionalCost[];
 }

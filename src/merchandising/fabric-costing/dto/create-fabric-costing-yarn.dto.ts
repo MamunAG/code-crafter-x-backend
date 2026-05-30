@@ -2,6 +2,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { CreateFabricCostingYarnProcessDto } from './create-fabric-costing-yarn-process.dto';
+import { CreateFabricCostingYarnAdditionalCostDto } from './create-fabric-costing-yarn-additional-cost.dto';
 
 export class CreateFabricCostingYarnDto {
   @ApiPropertyOptional({ example: 'material-uuid' })
@@ -32,4 +33,10 @@ export class CreateFabricCostingYarnDto {
   @ValidateNested({ each: true })
   @Type(() => CreateFabricCostingYarnProcessDto)
   yarnWiseProcesses?: CreateFabricCostingYarnProcessDto[];
+
+  @ApiPropertyOptional({ type: () => [CreateFabricCostingYarnAdditionalCostDto] })
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => CreateFabricCostingYarnAdditionalCostDto)
+  additionalMaterialCosts?: CreateFabricCostingYarnAdditionalCostDto[];
 }

@@ -6,6 +6,7 @@ import { Unit } from 'src/app-configuration/unit/entity/unit.entity';
 import { PaginatedResponseDto } from 'src/common/dto/paginated-response.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { FabricProcess } from 'src/merchandising/master-data/fabric-process/entity/fabric-process.entity';
+import { GmtCostScope } from 'src/merchandising/master-data/gmt-cost-scope/entity/gmt-cost-scope.entity';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { CreateFabricCostingCommonProcessDto } from './dto/create-fabric-costing-common-process.dto';
 import { CreateFabricCostingDto } from './dto/create-fabric-costing.dto';
@@ -17,6 +18,8 @@ import { FabricCostingCommonProcess } from './entity/fabric-costing-common-proce
 import { FabricCostingYarnProcess } from './entity/fabric-costing-yarn-process.entity';
 import { FabricCostingYarn } from './entity/fabric-costing-yarn.entity';
 import { FabricCosting } from './entity/fabric-costing.entity';
+import { FabricCostingYarnAdditionalCost } from './entity/fabric-costing-yarn-additional-cost.entity';
+import { CreateFabricCostingYarnAdditionalCostDto } from './dto/create-fabric-costing-yarn-additional-cost.dto';
 
 type FabricCostingListFilters = Partial<FilterFabricCostingDto> & {
   deletedOnly?: string | boolean;
@@ -41,6 +44,9 @@ export class FabricCostingService {
 
     @InjectRepository(FabricProcess)
     private readonly fabricProcessRepository: Repository<FabricProcess>,
+
+    @InjectRepository(GmtCostScope)
+    private readonly gmtCostScopeRepository: Repository<GmtCostScope>,
   ) {}
 
   async create(dto: CreateFabricCostingDto, userId: string, organizationId: string) {
@@ -52,6 +58,7 @@ export class FabricCostingService {
       const fabricCosting = repository.create({
         fabricId: this.optionalUuid(dto.fabricId),
         qty: this.numberOrDefault(dto.qty, 1),
+        finishedFabricCost: this.numberOrDefault(dto.finishedFabricCost, 0),
         unitId: dto.unitId ?? null,
         currencyId: dto.currencyId,
         costName: this.optionalString(dto.costName),
@@ -88,6 +95,8 @@ export class FabricCostingService {
       .leftJoinAndSelect('yarn.yarn', 'yarnMaterial')
       .leftJoinAndSelect('yarn.yarnWiseProcesses', 'yarnProcess')
       .leftJoinAndSelect('yarnProcess.process', 'yarnFabricProcess')
+      .leftJoinAndSelect('yarn.additionalMaterialCosts', 'yarnAdditionalCost')
+      .leftJoinAndSelect('yarnAdditionalCost.gmtCostScope', 'yarnGmtCostScope')
       .leftJoinAndSelect('fabricCosting.commonProcesses', 'commonProcess')
       .leftJoinAndSelect('commonProcess.process', 'commonFabricProcess')
       .leftJoinAndSelect('fabricCosting.created_by_user', 'created_by_user')
@@ -99,6 +108,7 @@ export class FabricCostingService {
       .orderBy(deletedOnly ? 'fabricCosting.deleted_at' : 'fabricCosting.created_at', 'DESC')
       .addOrderBy('yarn.created_at', 'ASC')
       .addOrderBy('yarnProcess.created_at', 'ASC')
+      .addOrderBy('yarnAdditionalCost.created_at', 'ASC')
       .addOrderBy('commonProcess.created_at', 'ASC');
 
     if (deletedOnly) {
@@ -151,6 +161,8 @@ export class FabricCostingService {
       .leftJoinAndSelect('yarn.yarn', 'yarnMaterial')
       .leftJoinAndSelect('yarn.yarnWiseProcesses', 'yarnProcess')
       .leftJoinAndSelect('yarnProcess.process', 'yarnFabricProcess')
+      .leftJoinAndSelect('yarn.additionalMaterialCosts', 'yarnAdditionalCost')
+      .leftJoinAndSelect('yarnAdditionalCost.gmtCostScope', 'yarnGmtCostScope')
       .leftJoinAndSelect('fabricCosting.commonProcesses', 'commonProcess')
       .leftJoinAndSelect('commonProcess.process', 'commonFabricProcess')
       .leftJoinAndSelect('fabricCosting.created_by_user', 'created_by_user')
@@ -161,6 +173,7 @@ export class FabricCostingService {
       .andWhere('fabricCosting.deleted_at IS NULL')
       .orderBy('yarn.created_at', 'ASC')
       .addOrderBy('yarnProcess.created_at', 'ASC')
+      .addOrderBy('yarnAdditionalCost.created_at', 'ASC')
       .addOrderBy('commonProcess.created_at', 'ASC')
       .getOne();
 
@@ -190,6 +203,9 @@ export class FabricCostingService {
       Object.assign(fabricCosting, {
         ...(dto.fabricId !== undefined ? { fabricId: this.optionalUuid(dto.fabricId) } : {}),
         ...(dto.qty !== undefined ? { qty: this.numberOrDefault(dto.qty, 1) } : {}),
+        ...(dto.finishedFabricCost !== undefined
+          ? { finishedFabricCost: this.numberOrDefault(dto.finishedFabricCost, 0) }
+          : {}),
         ...(dto.unitId !== undefined ? { unitId: dto.unitId ?? null } : {}),
         ...(dto.currencyId !== undefined ? { currencyId: dto.currencyId } : {}),
         ...(dto.costName !== undefined ? { costName: this.optionalString(dto.costName) } : {}),
@@ -232,11 +248,17 @@ export class FabricCostingService {
     if (dto.yarns !== undefined) {
       const yarnRepository = manager.getRepository(FabricCostingYarn);
       const yarnProcessRepository = manager.getRepository(FabricCostingYarnProcess);
+      const yarnAdditionalCostRepository = manager.getRepository(FabricCostingYarnAdditionalCost);
       const existingYarns = await yarnRepository.find({ where: { fabricCostingId } });
       const existingYarnIds = existingYarns.map((yarn) => yarn.id);
 
       if (existingYarnIds.length) {
         await yarnProcessRepository
+          .createQueryBuilder()
+          .delete()
+          .where('fabric_costing_yarn_id IN (:...ids)', { ids: existingYarnIds })
+          .execute();
+        await yarnAdditionalCostRepository
           .createQueryBuilder()
           .delete()
           .where('fabric_costing_yarn_id IN (:...ids)', { ids: existingYarnIds })
@@ -256,6 +278,7 @@ export class FabricCostingService {
         });
         const savedYarn = await yarnRepository.save(yarn);
         await this.createYarnProcesses(savedYarn.id, yarnDto.yarnWiseProcesses ?? [], userId, manager);
+        await this.createYarnAdditionalCosts(savedYarn.id, yarnDto.additionalMaterialCosts ?? [], userId, manager);
       }
     }
 
@@ -301,6 +324,25 @@ export class FabricCostingService {
     }
   }
 
+  private async createYarnAdditionalCosts(
+    fabricCostingYarnId: string,
+    additionalCosts: CreateFabricCostingYarnAdditionalCostDto[],
+    userId: string,
+    manager: EntityManager,
+  ) {
+    const repository = manager.getRepository(FabricCostingYarnAdditionalCost);
+    const records = additionalCosts.map((additionalCostDto) =>
+      repository.create({
+        fabricCostingYarnId,
+        gmtCostScopeId: additionalCostDto.gmtCostScopeId,
+        percentage: this.numberOrDefault(additionalCostDto.percentage, 0),
+        directCost: this.numberOrDefault(additionalCostDto.directCost, 0),
+        created_by_id: userId,
+      }),
+    );
+    if (records.length) await repository.save(records);
+  }
+
   private async validateHeader(dto: Partial<CreateFabricCostingDto>, organizationId: string) {
     if (dto.fabricId !== undefined && dto.fabricId) {
       await this.findMaterialOrFail(dto.fabricId, organizationId, 'Fabric');
@@ -323,6 +365,26 @@ export class FabricCostingService {
 
       for (const process of yarn.yarnWiseProcesses ?? []) {
         await this.findFabricProcessOrFail(process.processId, organizationId);
+      }
+
+      const scopeIds = new Set<number>();
+      for (const additionalCost of yarn.additionalMaterialCosts ?? []) {
+        await this.findGmtCostScopeOrFail(additionalCost.gmtCostScopeId, organizationId);
+        if (scopeIds.has(additionalCost.gmtCostScopeId)) {
+          throw new BadRequestException('Each GMT cost scope can only be added once per material.');
+        }
+        scopeIds.add(additionalCost.gmtCostScopeId);
+        const percentage = this.numberOrDefault(additionalCost.percentage, 0);
+        const directCost = this.numberOrDefault(additionalCost.directCost, 0);
+        if (percentage < 0 || percentage > 100) {
+          throw new BadRequestException('Additional material cost percentage must be between 0 and 100.');
+        }
+        if (directCost < 0) {
+          throw new BadRequestException('Additional material direct cost cannot be negative.');
+        }
+        if ((percentage > 0) === (directCost > 0)) {
+          throw new BadRequestException('Enter either a percentage or a direct cost for each additional material cost.');
+        }
       }
     }
 
@@ -354,6 +416,12 @@ export class FabricCostingService {
     const process = await this.fabricProcessRepository.findOne({ where: { id, organizationId } });
     if (!process) throw new BadRequestException('Fabric process not found in the selected organization.');
     return process;
+  }
+
+  private async findGmtCostScopeOrFail(id: number, organizationId: string) {
+    const scope = await this.gmtCostScopeRepository.findOne({ where: { id, organizationId } });
+    if (!scope) throw new BadRequestException('GMT cost scope not found in the selected organization.');
+    return scope;
   }
 
   private async ensureFabricCostingExists(id: string, organizationId: string, includeDeleted = false) {
