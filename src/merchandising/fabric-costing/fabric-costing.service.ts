@@ -5,12 +5,10 @@ import { Material } from 'src/app-configuration/material/entity/material.entity'
 import { Unit } from 'src/app-configuration/unit/entity/unit.entity';
 import { PaginatedResponseDto } from 'src/common/dto/paginated-response.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
-import { FabricProcess } from 'src/merchandising/master-data/fabric-process/entity/fabric-process.entity';
+import { FabricProcess, FabricProcessType } from 'src/merchandising/master-data/fabric-process/entity/fabric-process.entity';
 import { GmtCostScope } from 'src/merchandising/master-data/gmt-cost-scope/entity/gmt-cost-scope.entity';
 import { DataSource, EntityManager, Repository } from 'typeorm';
-import { CreateFabricCostingCommonProcessDto } from './dto/create-fabric-costing-common-process.dto';
 import { CreateFabricCostingDto } from './dto/create-fabric-costing.dto';
-import { CreateFabricCostingYarnDto } from './dto/create-fabric-costing-yarn.dto';
 import { CreateFabricCostingYarnProcessDto } from './dto/create-fabric-costing-yarn-process.dto';
 import { FilterFabricCostingDto } from './dto/filter-fabric-costing.dto';
 import { UpdateFabricCostingDto } from './dto/update-fabric-costing.dto';
@@ -364,7 +362,10 @@ export class FabricCostingService {
       }
 
       for (const process of yarn.yarnWiseProcesses ?? []) {
-        await this.findFabricProcessOrFail(process.processId, organizationId);
+        const fabricProcess = await this.findFabricProcessOrFail(process.processId, organizationId);
+        if (fabricProcess?.processType === FabricProcessType.GROUP) {
+          throw new BadRequestException('A process group cannot be used as a yarn-wise process. Select a process step instead.');
+        }
       }
 
       const scopeIds = new Set<number>();
@@ -389,7 +390,17 @@ export class FabricCostingService {
     }
 
     for (const process of dto.commonProcesses ?? []) {
-      await this.findFabricProcessOrFail(process.processId, organizationId);
+      const fabricProcess = await this.findFabricProcessOrFail(process.processId, organizationId);
+      if (!fabricProcess) continue;
+
+      const rate = this.numberOrDefault(process.ratePerUnitFabric, 0);
+      const wastage = this.numberOrDefault(process.wastagePercentage, 0);
+      if (fabricProcess.processType === FabricProcessType.GROUP && rate > 0) {
+        throw new BadRequestException(`Process group "${fabricProcess.name}" can carry wastage only. Add its child steps for process costs.`);
+      }
+      if (fabricProcess.parentProcessId != null && wastage > 0) {
+        throw new BadRequestException(`Process step "${fabricProcess.name}" belongs to a group. Enter wastage on the parent group only.`);
+      }
     }
   }
 
