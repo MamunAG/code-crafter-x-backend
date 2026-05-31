@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 
 import { PaginatedResponseDto } from 'src/common/dto/paginated-response.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
-import { FabricProcess, FabricProcessStage, FabricProcessType } from './entity/fabric-process.entity';
+import { FabricProcess, FabricProcessStage } from './entity/fabric-process.entity';
 import { CreateFabricProcessDto } from './dto/create-fabric-process.dto';
 import { FilterFabricProcessDto } from './dto/filter-fabric-process.dto';
 import { UpdateFabricProcessDto } from './dto/update-fabric-process.dto';
@@ -18,12 +18,9 @@ export class FabricProcessService {
 
   async create(fabricProcessDto: CreateFabricProcessDto, organizationId: string) {
     await this.ensureNameIsUnique(fabricProcessDto.name, organizationId);
-    const parent = await this.validateHierarchy(fabricProcessDto, organizationId);
     const fabricProcess = this.fabricProcessRepository.create({
       ...fabricProcessDto,
-      processType: fabricProcessDto.processType ?? FabricProcessType.STEP,
-      stage: parent?.stage ?? fabricProcessDto.stage ?? FabricProcessStage.GREY_TO_FINISHED,
-      parentProcessId: fabricProcessDto.parentProcessId ?? null,
+      stage: fabricProcessDto.stage ?? FabricProcessStage.GREY_TO_FINISHED,
       sortOrder: fabricProcessDto.sortOrder ?? 0,
       organizationId,
     });
@@ -45,7 +42,6 @@ export class FabricProcessService {
       .leftJoinAndSelect('fabricProcess.created_by_user', 'created_by_user')
       .leftJoinAndSelect('fabricProcess.updated_by_user', 'updated_by_user')
       .leftJoinAndSelect('fabricProcess.deleted_by_user', 'deleted_by_user')
-      .leftJoinAndSelect('fabricProcess.parentProcess', 'parentProcess')
       .where('fabricProcess.organization_id = :organizationId', { organizationId })
       .skip(skip)
       .take(limit)
@@ -98,7 +94,6 @@ export class FabricProcessService {
       .leftJoinAndSelect('fabricProcess.created_by_user', 'created_by_user')
       .leftJoinAndSelect('fabricProcess.updated_by_user', 'updated_by_user')
       .leftJoinAndSelect('fabricProcess.deleted_by_user', 'deleted_by_user')
-      .leftJoinAndSelect('fabricProcess.parentProcess', 'parentProcess')
       .where('fabricProcess.organization_id = :organizationId', { organizationId })
       .andWhere('fabricProcess.id = :id', { id })
       .andWhere('fabricProcess.deleted_at IS NULL')
@@ -113,34 +108,20 @@ export class FabricProcessService {
   }
 
   async update(id: number, dto: UpdateFabricProcessDto, organizationId: string) {
-    const existing = await this.ensureFabricProcessExists(id, organizationId);
+    await this.ensureFabricProcessExists(id, organizationId);
     await this.ensureNameIsUnique(dto.name, organizationId, id);
-    const parent = await this.validateHierarchy(dto, organizationId, id, existing);
-    const stage = parent?.stage ?? dto.stage ?? existing.stage;
-    await this.fabricProcessRepository.update(
-      { id, organizationId },
-      {
-        ...dto,
-        stage,
-        ...(dto.parentProcessId !== undefined ? { parentProcessId: dto.parentProcessId ?? null } : {}),
-      },
-    );
-    if ((dto.processType ?? existing.processType) === FabricProcessType.GROUP && stage !== existing.stage) {
-      await this.fabricProcessRepository.update({ parentProcessId: id, organizationId }, { stage });
-    }
+    await this.fabricProcessRepository.update({ id, organizationId }, dto);
     return this.normalizeUpdatedAt(await this.findOne(id, organizationId));
   }
 
   async remove(id: number, deletedById: string, organizationId: string) {
     await this.ensureFabricProcessExists(id, organizationId);
-    await this.ensureGroupHasNoChildren(id, organizationId);
     await this.fabricProcessRepository.update({ id, organizationId }, { deleted_by_id: deletedById });
     return this.fabricProcessRepository.softDelete({ id, organizationId });
   }
 
   async permanentRemove(id: number, organizationId: string) {
     await this.ensureFabricProcessExists(id, organizationId, true);
-    await this.ensureGroupHasNoChildren(id, organizationId, true);
     return this.fabricProcessRepository.delete({ id, organizationId });
   }
 
@@ -190,50 +171,6 @@ export class FabricProcessService {
     }
 
     return fabricProcess;
-  }
-
-  private async validateHierarchy(dto: CreateFabricProcessDto, organizationId: string, currentId?: number, existing?: FabricProcess) {
-    const processType = dto.processType ?? existing?.processType ?? FabricProcessType.STEP;
-    const parentProcessId = dto.parentProcessId !== undefined ? dto.parentProcessId : existing?.parentProcessId ?? null;
-
-    if (processType === FabricProcessType.GROUP && parentProcessId !== null) {
-      throw new BadRequestException('A process group cannot be assigned to another parent process.');
-    }
-
-    if (currentId !== undefined && parentProcessId === currentId) {
-      throw new BadRequestException('A fabric process cannot be its own parent.');
-    }
-
-    if (currentId !== undefined && processType === FabricProcessType.STEP) {
-      const childCount = await this.fabricProcessRepository.count({ where: { parentProcessId: currentId, organizationId } });
-      if (childCount > 0) {
-        throw new BadRequestException('A process group with child processes cannot be changed to a step.');
-      }
-    }
-
-    if (parentProcessId === null) return null;
-
-    const parent = await this.fabricProcessRepository.findOne({ where: { id: parentProcessId, organizationId } });
-    if (!parent) throw new BadRequestException('Parent fabric process not found in the selected organization.');
-    if (parent.processType !== FabricProcessType.GROUP) {
-      throw new BadRequestException('Only a process group can be selected as the parent process.');
-    }
-
-    return parent;
-  }
-
-  private async ensureGroupHasNoChildren(id: number, organizationId: string, withDeleted = false) {
-    const queryBuilder = this.fabricProcessRepository
-      .createQueryBuilder('fabricProcess')
-      .where('fabricProcess.parent_process_id = :id', { id })
-      .andWhere('fabricProcess.organization_id = :organizationId', { organizationId });
-
-    if (withDeleted) queryBuilder.withDeleted();
-    else queryBuilder.andWhere('fabricProcess.deleted_at IS NULL');
-
-    if ((await queryBuilder.getCount()) > 0) {
-      throw new BadRequestException('Delete or reassign this group child processes first.');
-    }
   }
 
   private normalizeUpdatedAt<T extends { updated_at?: Date | null; updated_by_id?: string | null; updated_by_user?: unknown } | null>(
