@@ -271,6 +271,9 @@ export class FabricCostingService {
           yarnId: this.optionalUuid(yarnDto.yarnId),
           percentagePerUnitFabric: this.numberOrDefault(yarnDto.percentagePerUnitFabric, 0),
           yarnPricePerUnit: this.numberOrDefault(yarnDto.yarnPricePerUnit, 0),
+          greyFabricConsumptionQty: this.numberOrDefault(yarnDto.greyFabricConsumptionQty, 0),
+          yarnDyeingConsumptionQty: this.numberOrDefault(yarnDto.yarnDyeingConsumptionQty, 0),
+          totalYarnConsumption: this.numberOrDefault(yarnDto.totalYarnConsumption, 0),
           totalYarnPrice: this.numberOrDefault(yarnDto.totalYarnPrice, 0),
           created_by_id: userId,
         });
