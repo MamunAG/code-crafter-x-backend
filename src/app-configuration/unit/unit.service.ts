@@ -14,7 +14,7 @@ export class UnitService {
   constructor(
     @InjectRepository(Unit)
     private uomRepository: Repository<Unit>,
-  ) { }
+  ) {}
 
   async create(uomDto: CreateUnitDto, organizationId: string) {
     await this.ensureNameIsUnique(uomDto.name, organizationId);
@@ -26,9 +26,9 @@ export class UnitService {
     await this.uomRepository
       .createQueryBuilder()
       .update(Unit)
-        .set({
-          updated_by_id: null,
-          updated_at: () => 'NULL',
+      .set({
+        updated_by_id: null,
+        updated_at: () => 'NULL',
       } as unknown as Partial<Unit>)
       .where('id = :id', { id: saved.id })
       .andWhere('organization_id = :organizationId', { organizationId })
@@ -37,7 +37,7 @@ export class UnitService {
   }
 
   buildUploadTemplate() {
-    return 'name,shortName,isActive';
+    return 'name,isActive';
   }
 
   async importFromTemplate(file: Express.Multer.File | undefined, userId: string, organizationId: string) {
@@ -65,13 +65,14 @@ export class UnitService {
       })
       .getMany();
 
-    const existingNameSet = new Set(existingUnits.map((uom) => uom.name.trim().toLowerCase()));
+    const existingNameSet = new Set(
+      existingUnits.map((uom) => uom.name.trim().toLowerCase()),
+    );
     const newUnits = rows
       .filter((row) => !existingNameSet.has(row.name.trim().toLowerCase()))
       .map((row) =>
         this.uomRepository.create({
           name: row.name.trim(),
-          shortName: row.shortName.trim(),
           isActive: row.isActive,
           organizationId,
           created_by_id: userId,
@@ -124,12 +125,6 @@ export class UnitService {
     if (filters?.name) {
       queryBuilder.andWhere('uom.name ILIKE :name', {
         name: `%${filters.name}%`,
-      });
-    }
-
-    if (filters?.shortName) {
-      queryBuilder.andWhere('uom.shortName ILIKE :shortName', {
-        shortName: `%${filters.shortName}%`,
       });
     }
 
@@ -255,30 +250,30 @@ export class UnitService {
 
     const headers = this.parseCsvLine(lines[0]).map((header) => header.trim().toLowerCase());
     const nameIndex = headers.indexOf('name');
-    const shortNameIndex = headers.indexOf('shortname');
     const activeIndex = headers.indexOf('isactive');
 
-    if (nameIndex === -1 || shortNameIndex === -1) {
-      throw new BadRequestException('The uploaded template must include name and shortName columns.');
+    if (nameIndex === -1) {
+      throw new BadRequestException('The uploaded template must include a name column.');
     }
 
     return lines.slice(1).flatMap((line) => {
       const columns = this.parseCsvLine(line);
       const name = columns[nameIndex]?.trim() ?? '';
-      const shortName = columns[shortNameIndex]?.trim() ?? '';
 
-      if (!name || !shortName) {
+      if (!name) {
         return [];
       }
 
-        return [
-          {
-            name,
-            shortName,
-            isActive: activeIndex === -1 ? true : this.parseActiveValue(columns[activeIndex]),
-          },
-        ];
-      });
+      return [
+        {
+          name,
+          isActive:
+            activeIndex === -1
+              ? true
+              : this.parseActiveValue(columns[activeIndex]),
+        },
+      ];
+    });
   }
 
   private parseCsvLine(line: string) {

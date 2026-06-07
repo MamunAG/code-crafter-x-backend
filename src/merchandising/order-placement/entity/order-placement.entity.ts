@@ -36,6 +36,10 @@ export class OrderPlacement extends BaseEntity {
   @Column({ name: 'placement_date', type: 'date', nullable: false })
   placementDate: Date;
 
+  @ApiProperty({ description: 'Exchange rate BDT', example: 120.5 })
+  @Column({ name: 'exchange_rate_bdt', type: 'numeric', precision: 18, scale: 4, default: 1, nullable: false })
+  exchangeRateBDT: number;
+
   @ApiProperty({ description: 'Factory supplier ID', example: '8bf7d37e-4a62-47b1-b1e5-ded54c3cfb1f' })
   @Column({ name: 'factory_id', type: 'uuid', nullable: false })
   factoryId: string;

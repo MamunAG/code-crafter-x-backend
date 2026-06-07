@@ -62,8 +62,8 @@ export class OrderPlacementDetails extends BaseEntity {
   @Column({ name: 'remarks', type: 'text', nullable: true })
   remarks?: string | null;
 
-  @Column({ name: 'factory_cm', type: 'numeric', precision: 18, scale: 4, default: 0 })
-  factoryCm: number;
+  @Column({ name: 'factory_cm_per_dzn', type: 'numeric', precision: 18, scale: 4, default: 0 })
+  factoryCmPerDzn: number;
 
   @Column({ name: 'factory_fob', type: 'numeric', precision: 18, scale: 4, default: 0 })
   factoryFob: number;

@@ -16,6 +16,7 @@ import { FilesModule } from './files/files.module';
 import { UserLocationModule } from './user-location/user-location.module';
 import { ColorModule } from './merchandising/master-data/color/color.module';
 import { SizeModule } from './merchandising/master-data/size/size.module';
+import { FabricProcessModule } from './merchandising/master-data/fabric-process/fabric-process.module';
 import { EmbellishmentModule } from './merchandising/master-data/embellishment/embellishment.module';
 import { CurrencyModule } from './app-configuration/currency/currency.module';
 import { UnitModule } from './app-configuration/unit/unit.module';
@@ -35,11 +36,15 @@ import { CommonController } from './common/common.controller';
 import { NotificationsModule } from './notifications/notifications.module';
 import { FactoryModule } from './app-configuration/factory/factory.module';
 import { SupplierModule } from './app-configuration/supplier/supplier.module';
+import { MaterialModule } from './app-configuration/material/material.module';
+import { MaterialGroupModule } from './app-configuration/material-group/material-group.module';
 import { DepartmentModule } from './hr-payroll/master-data/department/department.module';
 import { DesignationModule } from './hr-payroll/master-data/designation/designation.module';
 import { EmployeeModule } from './hr-payroll/employee/employee.module';
 import { JobModule } from './merchandising/job/job.module';
 import { OrderPlacementModule } from './merchandising/order-placement/order-placement.module';
+import { FabricCostingModule } from './merchandising/fabric-costing/fabric-costing.module';
+import { GmtCostScopeModule } from './merchandising/master-data/gmt-cost-scope/gmt-cost-scope.module';
 
 @Module({
   imports: [
@@ -61,6 +66,7 @@ import { OrderPlacementModule } from './merchandising/order-placement/order-plac
     UserLocationModule,
     ColorModule,
     SizeModule,
+    FabricProcessModule,
     EmbellishmentModule,
     CurrencyModule,
     UnitModule,
@@ -79,11 +85,15 @@ import { OrderPlacementModule } from './merchandising/order-placement/order-plac
     TnaModule,
     FactoryModule,
     SupplierModule,
+    MaterialGroupModule,
+    MaterialModule,
     DepartmentModule,
     DesignationModule,
     EmployeeModule,
     JobModule,
     OrderPlacementModule,
+    FabricCostingModule,
+    GmtCostScopeModule,
   ],
   controllers: [AppController, CommonController],
   providers: [

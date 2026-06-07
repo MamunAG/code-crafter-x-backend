@@ -7,10 +7,6 @@ export class CreateUnitDto extends PartialType(Unit) {
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({ description: 'UOM short name', example: 'KG' })
-  @IsNotEmpty()
-  shortName: string;
-
   @ApiProperty({ description: 'Active status', example: true })
   @IsBoolean()
   isActive: boolean = true;

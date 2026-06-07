@@ -12,6 +12,7 @@ import { Contact } from './contact/entity/contact.entity';
 import { UserLocation } from './user-location/entities/user-location.entity';
 import { Color } from './merchandising/master-data/color/entity/color.entity';
 import { Size } from './merchandising/master-data/size/entity/size.entity';
+import { FabricProcess } from './merchandising/master-data/fabric-process/entity/fabric-process.entity';
 import { Embellishment } from './merchandising/master-data/embellishment/entity/embellishment.entity';
 import { TnaTask } from './merchandising/master-data/tna-task/entity/tna-task.entity';
 import { Currency } from './app-configuration/currency/entity/currency.entity';
@@ -33,6 +34,8 @@ import { Notification } from './notifications/entity/notification.entity';
 import { UserFirebaseToken } from './notifications/entity/user-firebase-token.entity';
 import { Factory } from './app-configuration/factory/entity/factory.entity';
 import { Supplier } from './app-configuration/supplier/entity/supplier.entity';
+import { Material } from './app-configuration/material/entity/material.entity';
+import { MaterialGroup } from './app-configuration/material-group/entity/material-group.entity';
 import { Designation } from './hr-payroll/master-data/designation/entity/designation.entity';
 import { Department } from './hr-payroll/master-data/department/entity/department.entity';
 import { Employee } from './hr-payroll/employee/entity/employee.entity';
@@ -46,6 +49,12 @@ import { getDatabasePoolConfig } from './config/database-pool.config';
 import { CurrencyExchangeRate } from './app-configuration/currency/entity/currency-exchange-rate.entity';
 import { OrderPlacement } from './merchandising/order-placement/entity/order-placement.entity';
 import { OrderPlacementDetails } from './merchandising/order-placement/entity/order-placement-details.entity';
+import { FabricCosting } from './merchandising/fabric-costing/entity/fabric-costing.entity';
+import { FabricCostingYarn } from './merchandising/fabric-costing/entity/fabric-costing-yarn.entity';
+import { FabricCostingYarnProcess } from './merchandising/fabric-costing/entity/fabric-costing-yarn-process.entity';
+import { FabricCostingCommonProcess } from './merchandising/fabric-costing/entity/fabric-costing-common-process.entity';
+import { FabricCostingYarnAdditionalCost } from './merchandising/fabric-costing/entity/fabric-costing-yarn-additional-cost.entity';
+import { GmtCostScope } from './merchandising/master-data/gmt-cost-scope/entity/gmt-cost-scope.entity';
 
 const databaseLogger = new Logger('Database');
 
@@ -80,6 +89,7 @@ export function createTypeOrmOptions(
       UserLocation,
       Color,
       Size,
+      FabricProcess,
       Embellishment,
       TnaTask,
       Currency,
@@ -101,6 +111,8 @@ export function createTypeOrmOptions(
       StyleToSizeMap,
       Factory,
       Supplier,
+      MaterialGroup,
+      Material,
       Designation,
       Department,
       Employee,
@@ -113,6 +125,12 @@ export function createTypeOrmOptions(
       CurrencyExchangeRate,
       OrderPlacement,
       OrderPlacementDetails,
+      FabricCosting,
+      FabricCostingYarn,
+      FabricCostingYarnProcess,
+      FabricCostingCommonProcess,
+      FabricCostingYarnAdditionalCost,
+      GmtCostScope,
     ],
     synchronize: false, // Never use synchronize in production
     logging: isDevelopment,
