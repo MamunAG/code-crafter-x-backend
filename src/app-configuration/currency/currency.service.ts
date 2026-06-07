@@ -430,6 +430,9 @@ export class CurrencyService {
   @Cron('0 0 0 * * *') // Runs every day at 12:00 AM
   async updateCurrencyRate() {
     try {
+      this.logger.log('Updating currency rates...');
+      console.log(process.env.EXCHANGERATE_BASE_URL)
+
       const res = await this.getLatestCurrencyFromExchangerate();
       const currencyDate = new Date(res.time_last_update_utc);
 
