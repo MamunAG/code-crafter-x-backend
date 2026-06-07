@@ -435,7 +435,6 @@ export class CurrencyService {
   async updateCurrencyRate() {
     try {
       this.logger.log('Updating currency rates...');
-      console.log(process.env.EXCHANGERATE_BASE_URL)
 
       const res = await this.getLatestCurrencyFromExchangerate();
       const currencyDate = new Date(res.time_last_update_utc);
@@ -464,7 +463,7 @@ export class CurrencyService {
       await this.currencyExchangeRateRepository.upsert(exchangeRates, ['currency_code', 'currency_date']);
 
       this.logger.log(
-        `Currency rates updated for ${currencyDate.toISOString()}: ${SELECTED_EXCHANGE_RATE_CURRENCIES.join(', ')}`,
+        `Currency rates updated for provider timestamp ${currencyDate.toISOString()}: ${SELECTED_EXCHANGE_RATE_CURRENCIES.join(', ')}`,
       );
 
       return this.currencyExchangeRateRepository.find({

@@ -12,5 +12,11 @@
       "dest": "src/main.ts",
       "methods": ["GET", "POST", "PUT", "PATCH", "HEAD", "DELETE", "OPTIONS"]
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/v1/currency/exchange-rates/cron/update",
+      "schedule": "0 21 * * *"
+    }
   ]
 }

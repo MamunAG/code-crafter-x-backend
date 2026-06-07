@@ -1,10 +1,11 @@
-import { BadRequestException, Body, Controller, Delete, Get, Header, Headers, Param, ParseIntPipe, Patch, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Header, Headers, Param, ParseIntPipe, Patch, Post, Query, UnauthorizedException, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type AuthUser from 'src/auth/dto/auth-user';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { MenuAccess } from '../../common/decorators/menu-access.decorator';
 import { Roles } from 'src/common/decorators/roles.decorator';
+import { Public } from 'src/common/decorators/public.decorator';
 import { BaseResponseDto } from 'src/common/dto/base-response.dto';
 import { RolesEnum } from 'src/common/enums/role.enum';
 import { CurrencyService } from './currency.service';
@@ -57,6 +58,20 @@ export class CurrencyController {
   @MenuAccess(MENU_NAME, 'canUpdate')
   @ApiOperation({ summary: 'Manually update latest currency exchange rates' })
   async updateExchangeRates() {
+    const rates = await this.currencyService.updateCurrencyRate();
+    return new BaseResponseDto(rates, 'Currency exchange rates updated successfully');
+  }
+
+  @Public()
+  @Get('exchange-rates/cron/update')
+  @ApiOperation({ summary: 'Cron update latest currency exchange rates' })
+  async updateExchangeRatesFromCron(@Headers('authorization') authorization?: string) {
+    const cronSecret = process.env.CRON_SECRET;
+
+    if (!cronSecret || authorization !== `Bearer ${cronSecret}`) {
+      throw new UnauthorizedException('Unauthorized cron request.');
+    }
+
     const rates = await this.currencyService.updateCurrencyRate();
     return new BaseResponseDto(rates, 'Currency exchange rates updated successfully');
   }
