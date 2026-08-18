@@ -12,6 +12,8 @@ import { Factory } from 'src/app-configuration/factory/entity/factory.entity';
 import { Department } from 'src/hr-payroll/master-data/department/entity/department.entity';
 import { Designation } from 'src/hr-payroll/master-data/designation/entity/designation.entity';
 import { Gender } from './dto/gender.enum';
+import { HrAuditEvent, HrMasterData } from '../common/entity';
+import { HrMasterDataType } from '../common/hr.enums';
 
 @Injectable()
 export class EmployeeService {
@@ -30,10 +32,21 @@ export class EmployeeService {
 
         @InjectRepository(Files)
         private filesRepository: Repository<Files>,
+
+        @InjectRepository(HrAuditEvent)
+        private auditRepository: Repository<HrAuditEvent>,
+
+        @InjectRepository(HrMasterData)
+        private hrMasterDataRepository: Repository<HrMasterData>,
     ) { }
+
+    auditPiiAccess(organizationId: string, userId: string, subjectId: string, metadata: Record<string, unknown> = {}) {
+        return this.auditRepository.save(this.auditRepository.create({ organizationId, actorId: userId, action: 'VIEW_PII', subjectType: 'Employee', subjectId, metadata }));
+    }
 
     async create(dto: CreateEmployeeDto, organizationId: string) {
         const factory = await this.findFactoryOrFail(dto.factoryId, organizationId);
+        await this.validateExtendedReferences(dto, organizationId);
         await this.ensureEmployeeCodeIsUnique(dto.employeeCode, dto.factoryId, organizationId);
         const image = dto.imageId != null ? await this.findFileOrFail(dto.imageId) : null;
 
@@ -158,6 +171,7 @@ export class EmployeeService {
 
     async update(id: string, dto: UpdateEmployeeDto, organizationId: string) {
         const employee = await this.ensureEmployeeExists(id, organizationId);
+        await this.validateExtendedReferences(dto, organizationId);
 
         if (dto.factoryId !== undefined) {
             employee.factory = await this.findFactoryOrFail(dto.factoryId, organizationId);
@@ -397,6 +411,24 @@ export class EmployeeService {
                 invalidJoiningDateRows,
             },
         };
+    }
+
+    private async validateExtendedReferences(dto: Partial<CreateEmployeeDto>, organizationId: string) {
+        const masterReferences: Array<[string | undefined, HrMasterDataType, string]> = [
+            [dto.employmentTypeId, HrMasterDataType.EmploymentType, 'Employment type'],
+            [dto.gradeId, HrMasterDataType.Grade, 'Grade'],
+            [dto.payGroupId, HrMasterDataType.PayGroup, 'Pay group'],
+            [dto.workLocationId, HrMasterDataType.WorkLocation, 'Work location'],
+        ];
+        for (const [id, type, label] of masterReferences) {
+            if (!id) continue;
+            const item = await this.hrMasterDataRepository.findOne({ where: { id, organizationId, type, isActive: true } });
+            if (!item) throw new BadRequestException(`${label} not found in the selected organization.`);
+        }
+        if (dto.supervisorId) {
+            const supervisor = await this.employeeRepository.findOne({ where: { id: dto.supervisorId, organizationId, isActive: true } });
+            if (!supervisor) throw new BadRequestException('Active supervisor not found in the selected organization.');
+        }
     }
 
     private async findFactoryOrFail(factoryId: string, organizationId: string) {

@@ -1,11 +1,9 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 
 @Injectable()
 export class AppleAuthService {
     private readonly appleJwksUrl = new URL('https://appleid.apple.com/auth/keys');
-    private readonly josePromise = import('jose');
 
     async verifyAppleIdToken(identityToken: string) {
         try {
@@ -18,7 +16,9 @@ export class AppleAuthService {
             const kid = decoded.header.kid;
             if (!kid) throw new UnauthorizedException('Apple token missing kid');
 
-            const { createRemoteJWKSet, jwtVerify } = await this.josePromise;
+            // Keep the ESM-only dependency lazy so application bootstrap and CommonJS
+            // test environments do not evaluate it unless Apple login is requested.
+            const { createRemoteJWKSet, jwtVerify } = await import('jose');
             const appleKeySet = createRemoteJWKSet(this.appleJwksUrl);
             const { payload } = await jwtVerify(identityToken, appleKeySet, {
                 algorithms: ['RS256'],

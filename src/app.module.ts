@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { CommandModule } from 'nestjs-command';
 import { AppController } from './app.controller';
 import { AppService, createTypeOrmOptions } from './app.service';
@@ -45,6 +45,22 @@ import { JobModule } from './merchandising/job/job.module';
 import { OrderPlacementModule } from './merchandising/order-placement/order-placement.module';
 import { FabricCostingModule } from './merchandising/fabric-costing/fabric-costing.module';
 import { GmtCostScopeModule } from './merchandising/master-data/gmt-cost-scope/gmt-cost-scope.module';
+import { AttendanceModule } from './hr-payroll/attendance/attendance.module';
+import { AuditModule } from './hr-payroll/audit/audit.module';
+import { HealthModule } from './hr-payroll/health/health.module';
+import { ImportsModule } from './hr-payroll/imports/imports.module';
+import { LeaveModule } from './hr-payroll/leave/leave.module';
+import { LoanModule } from './hr-payroll/loan/loan.module';
+import { MasterDataModule } from './hr-payroll/master-data/master-data/master-data.module';
+import { OrganizationSettingsModule } from './hr-payroll/master-data/organization-settings/organization-settings.module';
+import { SalaryStructureModule } from './hr-payroll/master-data/salary-structure/salary-structure.module';
+import { ShiftModule } from './hr-payroll/master-data/shift/shift.module';
+import { StatutoryRuleModule } from './hr-payroll/master-data/statutory-rule/statutory-rule.module';
+import { PayrollModule } from './hr-payroll/payroll/payroll.module';
+import { ReportsModule } from './hr-payroll/reports/reports.module';
+import { RosterModule } from './hr-payroll/roster/roster.module';
+import { SalaryModule } from './hr-payroll/salary/salary.module';
+import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 
 @Module({
   imports: [
@@ -94,6 +110,21 @@ import { GmtCostScopeModule } from './merchandising/master-data/gmt-cost-scope/g
     OrderPlacementModule,
     FabricCostingModule,
     GmtCostScopeModule,
+    AuditModule,
+    OrganizationSettingsModule,
+    MasterDataModule,
+    ShiftModule,
+    SalaryStructureModule,
+    StatutoryRuleModule,
+    AttendanceModule,
+    RosterModule,
+    LeaveModule,
+    SalaryModule,
+    LoanModule,
+    PayrollModule,
+    ImportsModule,
+    ReportsModule,
+    HealthModule,
   ],
   controllers: [AppController, CommonController],
   providers: [
@@ -113,4 +144,8 @@ import { GmtCostScopeModule } from './merchandising/master-data/gmt-cost-scope/g
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+  }
+}

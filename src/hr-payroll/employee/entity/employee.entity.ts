@@ -1,14 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { BaseEntity } from 'src/common/entities/base.entity';
 import { Organization } from 'src/app-configuration/organization/entity/organization.entity';
-import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { Factory } from 'src/app-configuration/factory/entity/factory.entity';
 import { Designation } from 'src/hr-payroll/master-data/designation/entity/designation.entity';
 import { Department } from 'src/hr-payroll/master-data/department/entity/department.entity';
 import { Files } from 'src/files/entities/file.entity';
 import { Gender } from '../dto/gender.enum';
+import { EncryptionTransformer } from 'src/common/transformers/encryption.transformer';
 
 @Entity('employees')
+@Index('uq_employee_org_factory_code_active', ['organizationId', 'factoryId', 'employeeCode'], { unique: true, where: 'deleted_at IS NULL' })
+@Index('idx_employee_payroll_scope', ['organizationId', 'factoryId', 'payGroupId', 'isActive'])
 export class Employee extends BaseEntity {
     @ApiProperty({ description: 'Primary ID' })
     @PrimaryGeneratedColumn('uuid')
@@ -59,8 +62,59 @@ export class Employee extends BaseEntity {
     joiningDate?: Date;
 
     @ApiProperty({ description: 'NID / ID card number', example: '1234567890' })
-    @Column({ name: 'nid_no', type: 'varchar', length: 100, nullable: true })
+    @Column({ name: 'nid_no', type: 'text', nullable: true, transformer: new EncryptionTransformer() })
     nidNo?: string;
+
+    @Column({ name: 'employment_type_id', type: 'uuid', nullable: true })
+    employmentTypeId?: string | null;
+
+    @Column({ name: 'grade_id', type: 'uuid', nullable: true })
+    gradeId?: string | null;
+
+    @Column({ name: 'pay_group_id', type: 'uuid', nullable: true })
+    payGroupId?: string | null;
+
+    @Column({ name: 'work_location_id', type: 'uuid', nullable: true })
+    workLocationId?: string | null;
+
+    @Column({ name: 'supervisor_id', type: 'uuid', nullable: true })
+    supervisorId?: string | null;
+
+    @Column({ name: 'date_of_birth', type: 'date', nullable: true })
+    dateOfBirth?: string | null;
+
+    @Column({ name: 'marital_status', type: 'varchar', length: 30, nullable: true })
+    maritalStatus?: string | null;
+
+    @Column({ name: 'employment_status', type: 'varchar', length: 30, default: 'ACTIVE' })
+    employmentStatus?: string;
+
+    @Column({ name: 'tax_status', type: 'varchar', length: 50, nullable: true })
+    taxStatus?: string | null;
+
+    @Column({ name: 'tax_identifier', type: 'text', nullable: true, transformer: new EncryptionTransformer() })
+    taxIdentifier?: string | null;
+
+    @Column({ name: 'bank_details', type: 'text', nullable: true, transformer: new EncryptionTransformer() })
+    bankDetails?: string | null;
+
+    @Column({ name: 'emergency_contact', type: 'text', nullable: true, transformer: new EncryptionTransformer() })
+    emergencyContact?: string | null;
+
+    @Column({ type: 'jsonb', default: () => "'[]'::jsonb" })
+    dependents?: Array<Record<string, unknown>>;
+
+    @Column({ name: 'probation_end_date', type: 'date', nullable: true })
+    probationEndDate?: string | null;
+
+    @Column({ name: 'confirmation_date', type: 'date', nullable: true })
+    confirmationDate?: string | null;
+
+    @Column({ name: 'contract_end_date', type: 'date', nullable: true })
+    contractEndDate?: string | null;
+
+    @Column({ name: 'separation_date', type: 'date', nullable: true })
+    separationDate?: string | null;
 
     @ApiProperty({ description: 'Address', example: 'Dhaka, Bangladesh' })
     @Column({ name: 'address', type: 'text', nullable: true })

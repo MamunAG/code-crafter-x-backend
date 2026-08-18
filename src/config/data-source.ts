@@ -17,13 +17,16 @@ export default new DataSource({
     process.env.NODE_ENV === 'development'
       ? 'src/**/*.entity.ts'
       : 'dist/**/*.entity.js',
+    process.env.NODE_ENV === 'development'
+      ? 'src/**/*.entities.ts'
+      : 'dist/**/*.entities.js',
   ],
   migrations: [
     process.env.NODE_ENV === 'development'
       ? 'src/migrations/*.ts'
       : 'dist/migrations/*.js',
   ],
-  synchronize: process.env.NODE_ENV === 'development',
+  synchronize: false,
   logging: process.env.NODE_ENV === 'development',
   extra: {
     max: poolConfig.max,

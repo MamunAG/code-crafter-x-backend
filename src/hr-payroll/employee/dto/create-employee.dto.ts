@@ -1,6 +1,6 @@
 import { ApiProperty, OmitType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsDateString, IsEmail, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsEmail, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
 import { Employee } from '../entity/employee.entity';
 import { Gender } from './gender.enum';
 
@@ -60,6 +60,24 @@ export class CreateEmployeeDto extends OmitType(Employee, ['factory', 'organizat
     @IsOptional()
     @IsString()
     nidNo?: string;
+
+    @ApiProperty({ required: false }) @IsOptional() @IsUUID() employmentTypeId?: string;
+    @ApiProperty({ required: false }) @IsOptional() @IsUUID() gradeId?: string;
+    @ApiProperty({ required: false }) @IsOptional() @IsUUID() payGroupId?: string;
+    @ApiProperty({ required: false }) @IsOptional() @IsUUID() workLocationId?: string;
+    @ApiProperty({ required: false }) @IsOptional() @IsUUID() supervisorId?: string;
+    @ApiProperty({ required: false }) @IsOptional() @IsDateString() dateOfBirth?: string;
+    @ApiProperty({ required: false }) @IsOptional() @IsString() maritalStatus?: string;
+    @ApiProperty({ required: false }) @IsOptional() @IsString() employmentStatus?: string;
+    @ApiProperty({ required: false }) @IsOptional() @IsString() taxStatus?: string;
+    @ApiProperty({ required: false }) @IsOptional() @IsString() taxIdentifier?: string;
+    @ApiProperty({ required: false }) @IsOptional() @IsString() bankDetails?: string;
+    @ApiProperty({ required: false }) @IsOptional() @IsString() emergencyContact?: string;
+    @ApiProperty({ required: false, type: [Object] }) @IsOptional() @IsArray() dependents?: Array<Record<string, unknown>>;
+    @ApiProperty({ required: false }) @IsOptional() @IsDateString() probationEndDate?: string;
+    @ApiProperty({ required: false }) @IsOptional() @IsDateString() confirmationDate?: string;
+    @ApiProperty({ required: false }) @IsOptional() @IsDateString() contractEndDate?: string;
+    @ApiProperty({ required: false }) @IsOptional() @IsDateString() separationDate?: string;
 
     @ApiProperty({ description: 'Address', example: 'Dhaka, Bangladesh', required: false })
     @IsOptional()

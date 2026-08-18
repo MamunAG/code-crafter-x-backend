@@ -1,0 +1,33 @@
+import { BadRequestException, Body, Controller, Get, Headers, Patch } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import type AuthUser from 'src/auth/dto/auth-user';
+import { CurrentUser } from 'src/common/decorators/current-user.decorator';
+import { MenuAccess } from 'src/common/decorators/menu-access.decorator';
+import { Roles } from 'src/common/decorators/roles.decorator';
+import { BaseResponseDto } from 'src/common/dto/base-response.dto';
+import { RolesEnum } from 'src/common/enums/role.enum';
+import { UpdateHrSettingsDto } from './dto/update-hr-settings.dto';
+import { OrganizationSettingsService } from './organization-settings.service';
+
+function organizationId(value?: string) {
+  if (!value?.trim()) throw new BadRequestException('x-organization-id header is required.');
+  return value.trim();
+}
+
+@ApiTags('HR Organization Settings')
+@ApiBearerAuth()
+@Roles(RolesEnum.admin, RolesEnum.user)
+@Controller('api/v1/hr/master-data/settings')
+export class OrganizationSettingsController {
+  constructor(private readonly service: OrganizationSettingsService) {}
+
+  @Get('current') @MenuAccess('HR Master Data', 'canView')
+  async get(@Headers('x-organization-id') organization: string) {
+    return new BaseResponseDto(await this.service.getSettings(organizationId(organization)));
+  }
+
+  @Patch('current') @MenuAccess('HR Master Data', 'canUpdate')
+  async update(@Headers('x-organization-id') organization: string, @CurrentUser() user: AuthUser, @Body() dto: UpdateHrSettingsDto) {
+    return new BaseResponseDto(await this.service.updateSettings(organizationId(organization), user.userId, dto));
+  }
+}

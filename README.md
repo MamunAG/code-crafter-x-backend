@@ -1,98 +1,104 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Code Crafter X Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+NestJS and PostgreSQL backend for the Code Crafter X platform. The HR and payroll domain supports organization/factory isolation, employee lifecycle history, shifts, attendance, leave, compensation, loans, Bangladesh statutory policies, background payroll calculation, approval/locking, payslips, imports, and reports.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Requirements
 
-## Description
+- Node.js 22+
+- Yarn 1.x
+- PostgreSQL with `uuid-ossp`; the existing project also enables PostGIS
+- A 32-byte or stronger `ENCRYPTION_KEY`
+- A Unicode Bangla TTF/OTF file for Bangla PDF output
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+Copy `.env.example` to `.env`, provide secrets, and install dependencies:
 
 ```bash
-$ yarn install
+yarn install
+yarn migration:run
+yarn build
 ```
 
-## Compile and run the project
+Run the API and the database-backed payroll/import worker as separate processes:
 
 ```bash
-# development
-$ yarn run start
-
-# watch mode
-$ yarn run start:dev
-
-# production mode
-$ yarn run start:prod
+yarn start:dev
+yarn start:worker:dev
 ```
 
-## Run tests
+Production uses `yarn start:prod` and `yarn start:worker` after building. Do not enable TypeORM synchronization; schema changes must use reviewed migrations.
+
+## HR and payroll modules
+
+HR/payroll code is organized by business domain. Organization settings, generic HR master data, shifts, salary structures, and statutory rules live under `src/hr-payroll/master-data`. Employee, attendance, roster, leave, salary assignment, loan, payroll, imports, reports, audit, and health are independent modules directly under `src/hr-payroll`. Every controller, database entity, and DTO is implemented in its owning module; DTOs and entities use one class per file. Shared enums, tenant pagination, the tenant base entity, TypeORM/DTO registry barrels, and internal cross-domain helpers live under `src/hr-payroll/common`; there is no consolidated `core` module or shared controller layer.
+
+## HR and payroll API
+
+Swagger is served at `/api/docs`. Existing department, designation, and employee routes remain under `/api/v1/hr`. New routes include:
+
+- `/master-data`, `/employees/:id/history`, `/shifts`, and `/rosters`
+- `/attendance`, `/integrations/attendance/punches`, and attendance corrections/overtime
+- `/leave`, `/compensation`, `/loans`, and `/statutory-rules`
+- `/payroll-runs`, `/payslips`, `/reports`, and `/imports`
+- `/health`, `/health/ready`, and authenticated admin `/health/metrics`
+
+Administrative requests require JWT authentication and `x-organization-id`. Payroll creation, calculation, and reversal requests require `Idempotency-Key`. Attendance integrations use a one-time generated `x-attendance-key`; only its bcrypt hash is stored.
+
+## Formula model
+
+Salary components use a non-evaluating expression parser. Allowed functions are `MIN`, `MAX`, `ROUND`, `FLOOR`, `CEIL`, `ABS`, `COALESCE`, and `IF`. Arithmetic and comparisons are supported; unknown variables, unsafe syntax, division by zero, and dependency cycles are rejected.
+
+Stable input variables include `BASE`, `CALENDAR_DAYS`, `WORKING_DAYS`, `PAYABLE_DAYS`, `PRESENT_DAYS`, `ABSENT_DAYS`, `UNPAID_LEAVE_DAYS`, `OVERTIME_HOURS`, `LATE_MINUTES`, `LOAN_DEDUCTION`, `ARREARS`, `BONUS`, `TAX_DEDUCTION`, `PF_EMPLOYEE`, `PF_EMPLOYER`, and `GRATUITY`. Earlier component codes may be referenced by later components.
+
+Example:
+
+```text
+BASIC = ROUND(BASE * 0.60, 2)
+HOUSE = ROUND(BASIC * 0.50, 2)
+OVERTIME = ROUND(OVERTIME_HOURS * (BASIC / 208) * 2, 2)
+INCOME_TAX = TAX_DEDUCTION
+LOAN = LOAN_DEDUCTION
+```
+
+Once used by payroll, salary structures and statutory rule packs are locked. Calculated employee rows retain their input snapshots, formula traces, rule versions, and rounding results.
+
+## Payroll workflow
+
+Payroll runs support weekly, biweekly, semimonthly, monthly, bonus, arrears, adjustment, final-settlement, and reversal processing.
+
+```text
+DRAFT -> CALCULATING -> PREPARED -> UNDER_REVIEW -> APPROVED -> LOCKED
+```
+
+The preparer, reviewer, and approver must be different users. Locked results cannot be edited. Corrections use adjustment or reversal runs. A locked reversal copies the original immutable snapshot with opposite values and marks the original run reversed.
+
+The worker claims queued jobs using PostgreSQL row locks with `SKIP LOCKED`, leases, bounded retries, chunked processing, progress updates, and stalled-job recovery. Redis is not required.
+
+## Imports and reports
+
+`POST /api/v1/hr/imports/:type` accepts the first worksheet of CSV/XLSX files for `employee-details`, `leave-balances`, `loans`, `salary-assignments`, or `payroll-ytd`. Imports are limited to 10,000 rows and return a background job ID with row-level errors.
+
+Reports support JSON pagination, XLSX, and PDF. Available types include attendance, overtime, headcount, leave, salary history, loans, payroll register/variance, deductions, tax, provident fund, gratuity, and final settlements. Payslips may be generated individually or for a locked run in English or Bangla.
+
+## Bangladesh compliance
+
+`POST /api/v1/hr/statutory-rules/bangladesh/default` creates a draft AY 2026-27 reference policy. It is intentionally inactive until a different user reviews and approves it. Every policy retains source URL, publication date, jurisdiction, effective dates, version, approval, and lock metadata.
+
+Compliance values must be reviewed by qualified payroll/legal staff against current NBR and Ministry of Labour publications before activation. Create a new effective-dated version for regulatory changes; never edit a locked version.
+
+## Operations and backup
+
+- Back up PostgreSQL before migrations and test restore procedures regularly.
+- Run at least one API process and one worker process; multiple workers are safe.
+- Monitor `/api/v1/hr/health/metrics` for failed/stalled jobs and payroll state counts.
+- Forward structured HTTP logs and `x-request-id` to the deployment log platform.
+- Preserve audit, locked payroll, and snapshot tables. No automatic HR/payroll retention deletion is enabled.
+- Rotate JWT, attendance, SMTP, storage, and encryption credentials through the deployment secret manager. Rotating `ENCRYPTION_KEY` requires a controlled data re-encryption migration.
+
+## Verification
 
 ```bash
-# unit tests
-$ yarn run test
-
-# e2e tests
-$ yarn run test:e2e
-
-# test coverage
-$ yarn run test:cov
+yarn build
+yarn test --runInBand
+yarn test:e2e --runInBand
+yarn migration:show
 ```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ yarn install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).

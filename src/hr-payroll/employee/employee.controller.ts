@@ -32,7 +32,7 @@ export class EmployeeController {
     @Get()
     @MenuAccess(MENU_NAME, 'canView')
     @ApiOperation({ summary: 'Get all employees' })
-    async findAll(@Query() filters: FilterEmployeeDto, @Headers('x-organization-id') organizationId?: string) {
+    async findAll(@CurrentUser() user: AuthUser, @Query() filters: FilterEmployeeDto, @Headers('x-organization-id') organizationId?: string) {
         const { page, limit, ...employeeFilters } = filters;
         const selectedOrganizationId = this.requireOrganizationId(organizationId);
 
@@ -42,7 +42,9 @@ export class EmployeeController {
             selectedOrganizationId,
         );
 
-        return new BaseResponseDto(result, 'Employees retrieved successfully');
+        if (user.role === RolesEnum.admin) await this.employeeService.auditPiiAccess(selectedOrganizationId, user.userId, 'LIST', { count: result.items.length });
+
+        return new BaseResponseDto(this.protectPii(result, user.role === RolesEnum.admin), 'Employees retrieved successfully');
     }
 
     @Get('template/upload')
@@ -58,10 +60,11 @@ export class EmployeeController {
     @Get(':id')
     @MenuAccess(MENU_NAME, 'canView')
     @ApiOperation({ summary: 'Get employee by id' })
-    async findOne(@Param('id', new ParseUUIDPipe()) id: string, @Headers('x-organization-id') organizationId?: string) {
+    async findOne(@CurrentUser() user: AuthUser, @Param('id', new ParseUUIDPipe()) id: string, @Headers('x-organization-id') organizationId?: string) {
         const selectedOrganizationId = this.requireOrganizationId(organizationId);
         const result = await this.employeeService.findOne(id, selectedOrganizationId);
-        return new BaseResponseDto(result, 'Employee retrieved successfully');
+        if (user.role === RolesEnum.admin) await this.employeeService.auditPiiAccess(selectedOrganizationId, user.userId, id);
+        return new BaseResponseDto(this.protectPii(result, user.role === RolesEnum.admin), 'Employee retrieved successfully');
     }
 
     @Post()
@@ -137,5 +140,21 @@ export class EmployeeController {
         const selectedOrganizationId = this.requireOrganizationId(organizationId);
         const result = await this.employeeService.restore(id, selectedOrganizationId);
         return new BaseResponseDto(result, 'Employee restored successfully');
+    }
+
+    private protectPii<T>(value: T, canViewPii: boolean): T {
+        if (canViewPii) return value;
+        const clone = JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+        const maskRecord = (record: Record<string, unknown>) => {
+            for (const field of ['nidNo', 'taxIdentifier', 'bankDetails', 'emergencyContact']) {
+                const raw = record[field];
+                if (typeof raw === 'string' && raw) record[field] = raw.length <= 4 ? '****' : `${'*'.repeat(Math.min(12, raw.length - 4))}${raw.slice(-4)}`;
+            }
+            return record;
+        };
+        const data = clone as { items?: Array<Record<string, unknown>> };
+        if (Array.isArray(data.items)) data.items = data.items.map(maskRecord);
+        else maskRecord(clone);
+        return clone as T;
     }
 }
