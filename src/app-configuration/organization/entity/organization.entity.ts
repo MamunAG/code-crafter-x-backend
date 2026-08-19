@@ -26,6 +26,10 @@ export class Organization extends BaseEntity {
   @Column({ name: 'contact', type: 'varchar', nullable: true })
   contact?: string | null;
 
+  @ApiProperty({ description: 'Whether the organization is active', default: true })
+  @Column({ name: 'is_active', type: 'boolean', default: true })
+  isActive: boolean;
+
   @ApiProperty({ description: 'User mappings', type: () => [UserToOranizationMap], required: false })
   @OneToMany(() => UserToOranizationMap, (mapping) => mapping.organization)
   userToOranizationMaps: UserToOranizationMap[];

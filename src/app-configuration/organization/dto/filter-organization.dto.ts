@@ -17,6 +17,22 @@ export class FilterOrganizationDto extends PaginationDto {
   @IsOptional()
   contact: string;
 
+  @ApiProperty({ description: 'Filter by active status', required: false })
+  @Transform(({ value }: TransformFnParams): boolean | string => {
+    if (value === true || value === 'true') {
+      return true;
+    }
+
+    if (value === false || value === 'false') {
+      return false;
+    }
+
+    return value;
+  })
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
+
   @ApiProperty({ description: 'Whether to fetch deleted items only', required: false, default: false })
   @Transform(({ value }: TransformFnParams): boolean | string => {
     if (value === true || value === 'true') {

@@ -34,6 +34,11 @@ export class MasterDataController {
     return new BaseResponseDto(await this.service.create(organizationId(organization), user.userId, dto), 'HR master data created successfully');
   }
 
+  @Get(':id') @MenuAccess('HR Master Data', 'canView')
+  async findOne(@Headers('x-organization-id') organization: string, @Param('id', ParseUUIDPipe) id: string) {
+    return new BaseResponseDto(await this.service.findOne(organizationId(organization), id), 'HR master data retrieved successfully');
+  }
+
   @Patch(':id') @MenuAccess('HR Master Data', 'canUpdate')
   async update(@Headers('x-organization-id') organization: string, @CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateMasterDataDto) {
     return new BaseResponseDto(await this.service.update(organizationId(organization), user.userId, id, dto), 'HR master data updated successfully');

@@ -35,6 +35,7 @@ export class OrganizationService {
         name: this.normalizeRequiredText(organizationDto.name),
         address: this.normalizeOptionalText(organizationDto.address),
         contact: this.normalizeOptionalText(organizationDto.contact),
+        isActive: organizationDto.isActive ?? true,
       });
       const savedOrganization = await organizationRepository.save(organization);
 
@@ -117,6 +118,12 @@ export class OrganizationService {
       });
     }
 
+    if (filters?.isActive !== undefined) {
+      queryBuilder.andWhere('organization.is_active = :isActive', {
+        isActive: filters.isActive,
+      });
+    }
+
     if (deletedOnly) {
       queryBuilder.andWhere('organization.deleted_at IS NOT NULL');
     } else {
@@ -159,6 +166,7 @@ export class OrganizationService {
       name: this.normalizeRequiredText(dto.name),
       address: this.normalizeOptionalText(dto.address),
       contact: this.normalizeOptionalText(dto.contact),
+      ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
     });
     return this.normalizeUpdatedAt(await this.findOne(id));
   }

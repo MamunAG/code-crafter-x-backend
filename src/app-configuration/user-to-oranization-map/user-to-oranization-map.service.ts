@@ -12,6 +12,7 @@ import { UpdateUserToOranizationMapDefaultDto } from './dto/update-user-to-orani
 import { UpdateUserToOranizationMapRoleDto } from './dto/update-user-to-oranization-map-role.dto';
 import { UserToOranizationMap } from './entity/user-to-oranization-map.entity';
 import { User } from 'src/users/entities/user.entity';
+import type AuthUser from 'src/auth/dto/auth-user';
 
 type OrganizationWithDefault = Organization & {
   isDefault: boolean;
@@ -165,6 +166,7 @@ export class UserToOranizationMapService {
       .leftJoinAndSelect('organization.updated_by_user', 'updated_by_user')
       .where('user_to_oranization_map.user_id = :userId', { userId })
       .andWhere('user_to_oranization_map.deleted_at IS NULL')
+      .andWhere('organization.is_active = true')
       .orderBy('user_to_oranization_map.is_default', 'DESC')
       .addOrderBy('organization.created_at', 'DESC')
       .getMany();
@@ -172,6 +174,27 @@ export class UserToOranizationMapService {
     return mappings.map((mapping) => ({
       ...mapping.organization,
       isDefault: mapping.isDefault,
+    }));
+  }
+
+  async findOrganizationsForCurrentUser(user: AuthUser): Promise<OrganizationWithDefault[]> {
+    if (user.role !== RolesEnum.admin) {
+      return this.findOrganizationsByUser(user.userId);
+    }
+
+    const organizations = await this.organizationRepository.find({
+      relations: {
+        created_by_user: true,
+        updated_by_user: true,
+      },
+      order: {
+        created_at: 'DESC',
+      },
+    });
+
+    return organizations.map((organization) => ({
+      ...organization,
+      isDefault: false,
     }));
   }
 

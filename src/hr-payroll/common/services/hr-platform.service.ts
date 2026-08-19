@@ -52,6 +52,7 @@ import {
   UpdateHrSettingsDto,
 } from '../dto';
 import { FormulaEngineService } from '../../payroll/formula-engine.service';
+import { Factory } from 'src/app-configuration/factory/entity/factory.entity';
 
 const EXTERNAL_FORMULA_VARIABLES = [
   'BASE', 'CALENDAR_DAYS', 'WORKING_DAYS', 'PAYABLE_DAYS', 'PRESENT_DAYS', 'ABSENT_DAYS',
@@ -95,19 +96,23 @@ export class HrMasterDataService {
     const qb = this.repository.createQueryBuilder('item')
       .where('item.organization_id = :organizationId', { organizationId })
       .orderBy('item.type', 'ASC').addOrderBy('item.name', 'ASC').skip((page - 1) * limit).take(limit);
+    if (query.deletedOnly === 'true') qb.withDeleted().andWhere('item.deleted_at IS NOT NULL');
+    else qb.andWhere('item.deleted_at IS NULL');
     if (type) qb.andWhere('item.type = :type', { type });
     if (query.search) qb.andWhere('(item.code ILIKE :search OR item.name ILIKE :search OR item.name_bn ILIKE :search)', { search: `%${query.search}%` });
+    if (query.isActive !== undefined) qb.andWhere('item.is_active = :isActive', { isActive: query.isActive === 'true' });
     const [items, total] = await qb.getManyAndCount();
     return this.paginate(items, total, page, limit);
   }
 
   async create(organizationId: string, userId: string, dto: CreateMasterDataDto) {
+    const settings = this.validateSettings(dto.type, dto.settings ?? {});
     const item = this.repository.create({
       ...dto,
       organizationId,
       code: dto.code.trim().toUpperCase(),
       name: dto.name.trim(),
-      settings: dto.settings ?? {},
+      settings,
       isActive: dto.isActive ?? true,
       createdById: userId,
     });
@@ -125,16 +130,231 @@ export class HrMasterDataService {
     const item = await this.findOne(organizationId, id);
     if (item.rowVersion !== dto.rowVersion) throw new ConflictException('The record was changed by another user. Refresh and retry.');
     const before = { ...item };
-    Object.assign(item, dto, { updatedById: userId });
+    const settings = dto.settings === undefined ? item.settings : this.validateSettings(item.type, dto.settings);
+    Object.assign(item, dto, {
+      name: dto.name?.trim() ?? item.name,
+      nameBn: dto.nameBn === undefined ? item.nameBn : dto.nameBn.trim() || null,
+      settings,
+      updatedById: userId,
+    });
     const saved = await this.repository.save(item);
     await this.audit.record(organizationId, userId, 'UPDATE', 'HrMasterData', id, before, saved);
     return saved;
   }
 
-  async findOne(organizationId: string, id: string) {
-    const item = await this.repository.findOne({ where: { id, organizationId } });
+  async findOne(organizationId: string, id: string, type?: HrMasterDataType, includeDeleted = false) {
+    const qb = this.repository.createQueryBuilder('item')
+      .where('item.id = :id', { id })
+      .andWhere('item.organization_id = :organizationId', { organizationId });
+    if (type) qb.andWhere('item.type = :type', { type });
+    if (includeDeleted) qb.withDeleted();
+    else qb.andWhere('item.deleted_at IS NULL');
+    const item = await qb.getOne();
     if (!item) throw new NotFoundException('HR master-data item not found.');
     return item;
+  }
+
+  async createForType(organizationId: string, userId: string, type: HrMasterDataType, dto: Omit<CreateMasterDataDto, 'type'>) {
+    const settings = this.validateSettings(type, dto.settings ?? {}, true);
+    await this.ensureSettingsReferences(organizationId, type, settings);
+    return this.create(organizationId, userId, { ...dto, type, settings });
+  }
+
+  async updateForType(organizationId: string, userId: string, type: HrMasterDataType, id: string, dto: UpdateMasterDataDto) {
+    await this.findOne(organizationId, id, type);
+    const settings = dto.settings === undefined ? undefined : this.validateSettings(type, dto.settings, true);
+    if (settings) await this.ensureSettingsReferences(organizationId, type, settings);
+    return this.update(organizationId, userId, id, { ...dto, settings });
+  }
+
+  async remove(organizationId: string, userId: string, type: HrMasterDataType, id: string) {
+    const item = await this.findOne(organizationId, id, type);
+    await this.repository.update({ id, organizationId, type }, { deletedById: userId });
+    await this.repository.softDelete({ id, organizationId, type });
+    await this.audit.record(organizationId, userId, 'DELETE', 'HrMasterData', id, item, null, { type });
+    return { id, deleted: true };
+  }
+
+  async restore(organizationId: string, userId: string, type: HrMasterDataType, id: string) {
+    const item = await this.findOne(organizationId, id, type, true);
+    if (!item.deletedAt) throw new BadRequestException('HR master-data item is not deleted.');
+    await this.repository.restore({ id, organizationId, type });
+    await this.repository.update({ id, organizationId, type }, { deletedById: null, updatedById: userId });
+    const restored = await this.findOne(organizationId, id, type);
+    await this.audit.record(organizationId, userId, 'RESTORE', 'HrMasterData', id, item, restored, { type });
+    return restored;
+  }
+
+  async permanentRemove(organizationId: string, userId: string, type: HrMasterDataType, id: string) {
+    const item = await this.findOne(organizationId, id, type, true);
+    if (!item.deletedAt) throw new BadRequestException('Soft delete the item before deleting it permanently.');
+    await this.audit.record(organizationId, userId, 'PERMANENT_DELETE', 'HrMasterData', id, item, null, { type });
+    await this.repository.delete({ id, organizationId, type });
+    return { id, permanentlyDeleted: true };
+  }
+
+  buildUploadTemplate(type: HrMasterDataType) {
+    return ['code', 'name', 'nameBn', ...this.settingsFields(type), 'isActive'].join(',');
+  }
+
+  async importFromTemplate(organizationId: string, userId: string, type: HrMasterDataType, file?: Express.Multer.File) {
+    if (!file?.buffer?.length) throw new BadRequestException('Please upload a CSV template file.');
+    const lines = file.buffer.toString('utf8').replace(/^\uFEFF/, '').split(/\r?\n/).filter((line) => line.trim());
+    if (lines.length < 2) return { inserted: 0, skipped: 0, errors: [] };
+    const headers = this.parseCsvLine(lines[0]).map((value) => value.trim());
+    for (const required of ['code', 'name', 'isActive']) {
+      if (!headers.includes(required)) throw new BadRequestException(`The uploaded template must include the ${required} column.`);
+    }
+    const settingFields = this.settingsFields(type);
+    const errors: Array<{ row: number; message: string }> = [];
+    let inserted = 0;
+    let skipped = 0;
+    const seen = new Set<string>();
+    for (let index = 1; index < lines.length; index += 1) {
+      const values = this.parseCsvLine(lines[index]);
+      const row = Object.fromEntries(headers.map((header, column) => [header, values[column]?.trim() ?? '']));
+      const code = row.code?.toUpperCase();
+      if (!code || !row.name) { errors.push({ row: index + 1, message: 'code and name are required.' }); skipped += 1; continue; }
+      if (seen.has(code)) { errors.push({ row: index + 1, message: `Duplicate code ${code} in the file.` }); skipped += 1; continue; }
+      seen.add(code);
+      try {
+        const exists = await this.repository.createQueryBuilder('item').withDeleted()
+          .where('item.organization_id = :organizationId', { organizationId }).andWhere('item.type = :type', { type })
+          .andWhere('item.code = :code', { code }).getOne();
+        if (exists) { errors.push({ row: index + 1, message: `Code ${code} already exists.` }); skipped += 1; continue; }
+        const settings = Object.fromEntries(settingFields.filter((field) => row[field] !== '').map((field) => [field, this.parseCsvValue(row[field])]));
+        await this.createForType(organizationId, userId, type, {
+          code, name: row.name, nameBn: row.nameBn || undefined, settings,
+          isActive: this.parseBoolean(row.isActive),
+        });
+        inserted += 1;
+      } catch (error) {
+        errors.push({ row: index + 1, message: error instanceof Error ? error.message : 'Invalid row.' });
+        skipped += 1;
+      }
+    }
+    await this.audit.record(organizationId, userId, 'IMPORT', 'HrMasterData', type, null, { inserted, skipped }, { type, errors });
+    return { inserted, skipped, errors };
+  }
+
+  private settingsFields(type: HrMasterDataType) {
+    const fields: Record<HrMasterDataType, string[]> = {
+      [HrMasterDataType.EmploymentType]: ['employmentCategory', 'defaultProbationDays', 'overtimeEligible', 'leaveEligible', 'benefitsEligible'],
+      [HrMasterDataType.Grade]: ['rank', 'managementLevel', 'overtimeEligible'],
+      [HrMasterDataType.PayGroup]: ['frequency', 'cutoffRule', 'paymentOffsetDays', 'defaultWorkingDays'],
+      [HrMasterDataType.WorkLocation]: ['locationType', 'factoryId', 'address', 'district', 'timezone'],
+      [HrMasterDataType.HolidayCalendar]: ['year', 'weeklyRestDays', 'holidays'],
+      [HrMasterDataType.LeaveType]: ['leaveClassification', 'dayUnit', 'countCalendarDays', 'approvalLevels', 'allowNegativeBalance', 'accrualFrequency', 'accrualRate', 'carryForwardAllowed', 'carryForwardCap', 'expiryMonths', 'encashable', 'halfDayAllowed', 'attachmentRequired', 'maxConsecutiveDays'],
+      [HrMasterDataType.SalaryComponent]: ['componentType', 'calculationMethod', 'formula', 'taxable', 'recurring', 'prorated', 'affectsGross', 'roundingPrecision'],
+      [HrMasterDataType.SeparationReason]: ['separationCategory', 'eligibleForRehire', 'noticeRequired', 'defaultNoticeDays'],
+    };
+    return fields[type];
+  }
+
+  private validateSettings(type: HrMasterDataType, source: Record<string, unknown>, strict = false) {
+    const allowed = new Set(this.settingsFields(type));
+    if (type === HrMasterDataType.HolidayCalendar) allowed.add('dates');
+    const unknown = Object.keys(source).filter((key) => !allowed.has(key));
+    if (strict && unknown.length) throw new BadRequestException(`Unsupported settings for ${type}: ${unknown.join(', ')}.`);
+    const settings = { ...source };
+    const required = (key: string) => {
+      if (strict && (settings[key] === undefined || settings[key] === null || settings[key] === '')) throw new BadRequestException(`${key} is required.`);
+    };
+    const enumValue = (key: string, values: string[]) => {
+      if (settings[key] !== undefined && !values.includes(this.scalarString(settings[key], key))) throw new BadRequestException(`${key} must be one of: ${values.join(', ')}.`);
+    };
+    const integer = (key: string, minimum = 0, maximum = Number.MAX_SAFE_INTEGER) => {
+      if (settings[key] !== undefined && (!Number.isInteger(Number(settings[key])) || Number(settings[key]) < minimum || Number(settings[key]) > maximum)) throw new BadRequestException(`${key} must be an integer from ${minimum} to ${maximum}.`);
+      if (settings[key] !== undefined) settings[key] = Number(settings[key]);
+    };
+    const number = (key: string, minimum = 0) => {
+      if (settings[key] !== undefined && (!Number.isFinite(Number(settings[key])) || Number(settings[key]) < minimum)) throw new BadRequestException(`${key} must be a number of at least ${minimum}.`);
+      if (settings[key] !== undefined) settings[key] = Number(settings[key]);
+    };
+    const boolean = (key: string) => { if (settings[key] !== undefined && typeof settings[key] !== 'boolean') throw new BadRequestException(`${key} must be boolean.`); };
+    switch (type) {
+      case HrMasterDataType.EmploymentType:
+        required('employmentCategory');
+        enumValue('employmentCategory', ['PERMANENT', 'CONTRACT', 'TEMPORARY', 'PROBATION', 'INTERN', 'CASUAL']); integer('defaultProbationDays', 0, 730);
+        ['overtimeEligible', 'leaveEligible', 'benefitsEligible'].forEach(boolean); break;
+      case HrMasterDataType.Grade:
+        integer('rank', 1, 9999); ['overtimeEligible'].forEach(boolean); break;
+      case HrMasterDataType.PayGroup:
+        required('frequency');
+        enumValue('frequency', ['WEEKLY', 'BIWEEKLY', 'SEMIMONTHLY', 'MONTHLY']); integer('paymentOffsetDays', 0, 90); number('defaultWorkingDays', 0); break;
+      case HrMasterDataType.WorkLocation:
+        required('locationType');
+        enumValue('locationType', ['FACTORY', 'OFFICE', 'WAREHOUSE', 'REMOTE', 'OTHER']);
+        if (settings.timezone) { try { new Intl.DateTimeFormat('en-US', { timeZone: this.scalarString(settings.timezone, 'timezone') }).format(); } catch { throw new BadRequestException('timezone must be a valid IANA timezone.'); } }
+        break;
+      case HrMasterDataType.HolidayCalendar: {
+        required('year');
+        integer('year', 2000, 2200);
+        if (settings.weeklyRestDays !== undefined && (!Array.isArray(settings.weeklyRestDays) || settings.weeklyRestDays.some((day) => !Number.isInteger(Number(day)) || Number(day) < 0 || Number(day) > 6))) throw new BadRequestException('weeklyRestDays must contain weekday numbers from 0 to 6.');
+        if (settings.holidays !== undefined && !Array.isArray(settings.holidays)) throw new BadRequestException('holidays must be an array.');
+        const holidays = settings.holidays as Array<Record<string, unknown>> | undefined;
+        if (holidays) {
+          for (const holiday of holidays) if (typeof holiday.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(holiday.date) || typeof holiday.name !== 'string' || !holiday.name.trim()) throw new BadRequestException('Each holiday requires a YYYY-MM-DD date and name.');
+          settings.dates = holidays.map((holiday) => holiday.date as string);
+        }
+        if (settings.dates !== undefined && (!Array.isArray(settings.dates) || settings.dates.some((date) => !/^\d{4}-\d{2}-\d{2}$/.test(String(date))))) throw new BadRequestException('dates must contain YYYY-MM-DD values.');
+        break;
+      }
+      case HrMasterDataType.LeaveType:
+        required('leaveClassification');
+        enumValue('leaveClassification', ['PAID', 'UNPAID']); enumValue('dayUnit', ['DAY', 'HOUR']); enumValue('accrualFrequency', ['NONE', 'MONTHLY', 'QUARTERLY', 'YEARLY']);
+        integer('approvalLevels', 1, 3); integer('expiryMonths', 0, 120); number('accrualRate', 0); number('carryForwardCap', 0); number('maxConsecutiveDays', 0);
+        ['countCalendarDays', 'allowNegativeBalance', 'carryForwardAllowed', 'encashable', 'halfDayAllowed', 'attachmentRequired'].forEach(boolean); break;
+      case HrMasterDataType.SalaryComponent:
+        required('componentType'); required('calculationMethod');
+        enumValue('componentType', ['EARNING', 'DEDUCTION', 'EMPLOYER_CONTRIBUTION', 'INFORMATIONAL']); enumValue('calculationMethod', ['FIXED', 'PERCENTAGE', 'FORMULA']); integer('roundingPrecision', 0, 4);
+        ['taxable', 'recurring', 'prorated', 'affectsGross'].forEach(boolean); break;
+      case HrMasterDataType.SeparationReason:
+        required('separationCategory');
+        enumValue('separationCategory', ['VOLUNTARY', 'INVOLUNTARY', 'RETIREMENT', 'OTHER']); integer('defaultNoticeDays', 0, 730); ['eligibleForRehire', 'noticeRequired'].forEach(boolean); break;
+    }
+    return settings;
+  }
+
+  private parseBoolean(value: unknown) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value !== 'string' && typeof value !== 'number') return false;
+    return ['true', 'yes', 'y', '1', 'active'].includes(String(value).trim().toLowerCase());
+  }
+
+  private async ensureSettingsReferences(organizationId: string, type: HrMasterDataType, settings: Record<string, unknown>) {
+    if (type !== HrMasterDataType.WorkLocation || !settings.factoryId) return;
+    const factoryId = this.scalarString(settings.factoryId, 'factoryId');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(factoryId)) throw new BadRequestException('factoryId must be a valid UUID.');
+    const factory = await this.repository.manager.getRepository(Factory).findOne({ where: { id: factoryId, organizationId, isActive: true } });
+    if (!factory) throw new BadRequestException('The selected factory is not active in this organization.');
+  }
+
+  private scalarString(value: unknown, field: string) {
+    if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') throw new BadRequestException(`${field} must be a scalar value.`);
+    return String(value);
+  }
+
+  private parseCsvValue(value: string) {
+    const trimmed = value.trim();
+    if (/^(true|false)$/i.test(trimmed)) return trimmed.toLowerCase() === 'true';
+    if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      try { return JSON.parse(trimmed) as unknown; } catch { throw new BadRequestException(`Invalid JSON value: ${trimmed}`); }
+    }
+    return trimmed;
+  }
+
+  private parseCsvLine(line: string) {
+    const values: string[] = []; let current = ''; let quoted = false;
+    for (let index = 0; index < line.length; index += 1) {
+      const character = line[index];
+      if (character === '"' && line[index + 1] === '"') { current += '"'; index += 1; }
+      else if (character === '"') quoted = !quoted;
+      else if (character === ',' && !quoted) { values.push(current); current = ''; }
+      else current += character;
+    }
+    values.push(current); return values;
   }
 
   private paginate<T>(items: T[], total: number, page: number, limit: number) {

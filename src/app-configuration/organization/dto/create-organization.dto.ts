@@ -15,6 +15,11 @@ export class CreateOrganizationDto extends PartialType(Organization) {
   @IsOptional()
   contact?: string | null;
 
+  @ApiProperty({ description: 'Whether the organization is active', required: false, default: true })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
   @ApiProperty({ description: 'Whether this organization should be default for the creator', required: false, default: false })
   @IsOptional()
   @IsBoolean()
