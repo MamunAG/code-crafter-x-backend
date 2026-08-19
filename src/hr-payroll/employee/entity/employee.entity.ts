@@ -7,7 +7,7 @@ import { Designation } from 'src/hr-payroll/master-data/designation/entity/desig
 import { Department } from 'src/hr-payroll/master-data/department/entity/department.entity';
 import { Files } from 'src/files/entities/file.entity';
 import { Gender } from '../dto/gender.enum';
-import { EncryptionTransformer } from 'src/common/transformers/encryption.transformer';
+import { EncryptionTransformer } from '../../../common/transformers/encryption.transformer';
 
 @Entity('employees')
 @Index('uq_employee_org_factory_code_active', ['organizationId', 'factoryId', 'employeeCode'], { unique: true, where: 'deleted_at IS NULL' })
