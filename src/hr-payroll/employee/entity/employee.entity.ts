@@ -8,6 +8,8 @@ import { Department } from 'src/hr-payroll/master-data/department/entity/departm
 import { Files } from 'src/files/entities/file.entity';
 import { Gender } from '../dto/gender.enum';
 import { EncryptionTransformer } from '../../../common/transformers/encryption.transformer';
+import { EncryptedJsonTransformer } from '../../../common/transformers/encrypted-json.transformer';
+import type { EmployeeProfileData } from '../employee-profile.types';
 
 @Entity('employees')
 @Index('uq_employee_org_factory_code_active', ['organizationId', 'factoryId', 'employeeCode'], { unique: true, where: 'deleted_at IS NULL' })
@@ -115,6 +117,14 @@ export class Employee extends BaseEntity {
 
     @Column({ name: 'separation_date', type: 'date', nullable: true })
     separationDate?: string | null;
+
+    @Column({
+        name: 'profile_data',
+        type: 'text',
+        nullable: true,
+        transformer: new EncryptedJsonTransformer<EmployeeProfileData>(),
+    })
+    profile?: EmployeeProfileData | null;
 
     @ApiProperty({ description: 'Address', example: 'Dhaka, Bangladesh' })
     @Column({ name: 'address', type: 'text', nullable: true })

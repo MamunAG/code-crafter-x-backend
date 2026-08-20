@@ -1,8 +1,9 @@
 import { ApiProperty, OmitType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsDateString, IsEmail, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsEmail, IsEnum, IsNotEmpty, IsNumber, IsObject, IsOptional, IsString, IsUUID } from 'class-validator';
 import { Employee } from '../entity/employee.entity';
 import { Gender } from './gender.enum';
+import type { EmployeeProfileData } from '../employee-profile.types';
 
 export class CreateEmployeeDto extends OmitType(Employee, ['factory', 'organization', 'image'] as const) {
     @ApiProperty({ description: 'Factory ID', example: 'uuid' })
@@ -78,6 +79,11 @@ export class CreateEmployeeDto extends OmitType(Employee, ['factory', 'organizat
     @ApiProperty({ required: false }) @IsOptional() @IsDateString() confirmationDate?: string;
     @ApiProperty({ required: false }) @IsOptional() @IsDateString() contractEndDate?: string;
     @ApiProperty({ required: false }) @IsOptional() @IsDateString() separationDate?: string;
+
+    @ApiProperty({ required: false, type: Object })
+    @IsOptional()
+    @IsObject()
+    profile?: EmployeeProfileData;
 
     @ApiProperty({ description: 'Address', example: 'Dhaka, Bangladesh', required: false })
     @IsOptional()

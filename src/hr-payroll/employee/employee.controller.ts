@@ -150,6 +150,26 @@ export class EmployeeController {
                 const raw = record[field];
                 if (typeof raw === 'string' && raw) record[field] = raw.length <= 4 ? '****' : `${'*'.repeat(Math.min(12, raw.length - 4))}${raw.slice(-4)}`;
             }
+            const profile = record.profile;
+            if (profile && typeof profile === 'object' && !Array.isArray(profile)) {
+                const details = profile as Record<string, unknown>;
+                const rules = details.rules;
+                if (rules && typeof rules === 'object' && !Array.isArray(rules)) {
+                    const ruleRecord = rules as Record<string, unknown>;
+                    if (typeof ruleRecord.bankAccountNo === 'string' && ruleRecord.bankAccountNo) {
+                        ruleRecord.bankAccountNo = `****${ruleRecord.bankAccountNo.slice(-4)}`;
+                    }
+                }
+                if (Array.isArray(details.nominees)) {
+                    const nominees = details.nominees as unknown[];
+                    details.nominees = nominees.map((nominee): unknown => {
+                        if (!nominee || typeof nominee !== 'object' || Array.isArray(nominee)) return nominee;
+                        const masked = nominee as Record<string, unknown>;
+                        if (typeof masked.nidNo === 'string' && masked.nidNo) masked.nidNo = `****${masked.nidNo.slice(-4)}`;
+                        return masked;
+                    });
+                }
+            }
             return record;
         };
         const data = clone as { items?: Array<Record<string, unknown>> };

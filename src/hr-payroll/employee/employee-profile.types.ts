@@ -1,0 +1,71 @@
+export type EmployeeAddressProfile = {
+  address?: string;
+  policeStation?: string;
+  postalCode?: string;
+  country?: string;
+  district?: string;
+};
+
+export type EmployeeProfileData = {
+  general?: {
+    salutation?: string;
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+    nickName?: string;
+    displayCode?: string;
+    punchCardNo?: string;
+    employeeOrigin?: string;
+    religion?: string;
+    nationality?: string;
+    bloodGroup?: string;
+    alternatePhone?: string;
+    referenceAddress?: string;
+    permanentAddressSameAsPresent?: boolean;
+    presentAddress?: EmployeeAddressProfile;
+    permanentAddress?: EmployeeAddressProfile;
+    spouseName?: string;
+    spouseOccupation?: string;
+    numberOfChildren?: number;
+  };
+  official?: {
+    positionName?: string;
+    unit?: string;
+    division?: string;
+    section?: string;
+    subSection?: string;
+    staffCategory?: string;
+    jobLocation?: string;
+    operation?: string;
+    costCenter?: string;
+    reportingManagerFunctionalId?: string;
+    reportingManagerAdminId?: string;
+    overtimeEligible?: boolean;
+    offDayOvertimeEligible?: boolean;
+    providentFundEligible?: boolean;
+    holidayBonusEligible?: boolean;
+    insuranceEligible?: boolean;
+    specialMedicalNote?: string;
+    separationCause?: string;
+    separationNotes?: string;
+  };
+  rules?: {
+    leavePolicyId?: string;
+    attendanceRule?: string;
+    paymentPolicy?: string;
+    currencyRule?: string;
+    shiftRule?: string;
+    defaultWorkOff?: string;
+    bankName?: string;
+    bankAccountNo?: string;
+    bankBranchName?: string;
+  };
+  custom?: Record<string, string>;
+  emergencyContacts?: Array<Record<string, unknown>>;
+  educationRecords?: Array<Record<string, unknown>>;
+  professionalQualifications?: Array<Record<string, unknown>>;
+  previousEmployment?: Array<Record<string, unknown>>;
+  languages?: Array<Record<string, unknown>>;
+  nominees?: Array<Record<string, unknown>>;
+  familyMembers?: Array<Record<string, unknown>>;
+};
