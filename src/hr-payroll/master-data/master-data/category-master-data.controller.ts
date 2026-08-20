@@ -10,7 +10,7 @@ import { RolesEnum } from 'src/common/enums/role.enum';
 import { TenantPaginationDto } from '../../common/dto/tenant-pagination.dto';
 import { HrMasterDataType } from '../../common/hr.enums';
 import { CreateCategoryMasterDataDto, MasterDataUploadDto, UpdateCategoryMasterDataDto } from './dto/category-master-data.dto';
-import { EmploymentTypeSettingsDto, GradeSettingsDto, HolidayCalendarSettingsDto, LeaveTypeSettingsDto, PayGroupSettingsDto, SalaryComponentSettingsDto, SeparationReasonSettingsDto, WorkLocationSettingsDto } from './dto/master-data-settings.dto';
+import { EmploymentTypeSettingsDto, GradeSettingsDto, HolidayCalendarSettingsDto, LeaveConfigurationSettingsDto, LeaveTypeSettingsDto, PayGroupSettingsDto, SalaryComponentSettingsDto, SeparationReasonSettingsDto, WorkLocationSettingsDto } from './dto/master-data-settings.dto';
 import { MasterDataService } from './master-data.service';
 
 type CategoryConfig = { type: HrMasterDataType; path: string; menuName: string; label: string; fileName: string; settingsModel: Type<unknown> };
@@ -104,7 +104,11 @@ export const PayGroupController = createCategoryController({ type: HrMasterDataT
 export const WorkLocationController = createCategoryController({ type: HrMasterDataType.WorkLocation, path: 'work-locations', menuName: 'Work Location Setup', label: 'Work locations', fileName: 'WorkLocation', settingsModel: WorkLocationSettingsDto });
 export const HolidayCalendarController = createCategoryController({ type: HrMasterDataType.HolidayCalendar, path: 'holiday-calendars', menuName: 'Holiday Calendar Setup', label: 'Holiday calendars', fileName: 'HolidayCalendar', settingsModel: HolidayCalendarSettingsDto });
 export const LeaveTypeController = createCategoryController({ type: HrMasterDataType.LeaveType, path: 'leave-types', menuName: 'Leave Type Setup', label: 'Leave types', fileName: 'LeaveType', settingsModel: LeaveTypeSettingsDto });
+export const LeavePolicyController = createCategoryController({ type: HrMasterDataType.LeavePolicy, path: 'leave-policies', menuName: 'Leave Management', label: 'Leave policies', fileName: 'LeavePolicy', settingsModel: LeaveConfigurationSettingsDto });
+export const LeavePolicyAssignmentController = createCategoryController({ type: HrMasterDataType.LeavePolicyAssignment, path: 'leave-policy-assignments', menuName: 'Leave Management', label: 'Leave policy assignments', fileName: 'LeavePolicyAssignment', settingsModel: LeaveConfigurationSettingsDto });
+export const LeaveWorkflowController = createCategoryController({ type: HrMasterDataType.LeaveWorkflow, path: 'leave-workflows', menuName: 'Leave Management', label: 'Leave approval workflows', fileName: 'LeaveWorkflow', settingsModel: LeaveConfigurationSettingsDto });
+export const LeaveWorkflowAssignmentController = createCategoryController({ type: HrMasterDataType.LeaveWorkflowAssignment, path: 'leave-workflow-assignments', menuName: 'Leave Management', label: 'Leave workflow assignments', fileName: 'LeaveWorkflowAssignment', settingsModel: LeaveConfigurationSettingsDto });
 export const SalaryComponentController = createCategoryController({ type: HrMasterDataType.SalaryComponent, path: 'salary-components', menuName: 'Salary Component Setup', label: 'Salary components', fileName: 'SalaryComponent', settingsModel: SalaryComponentSettingsDto });
 export const SeparationReasonController = createCategoryController({ type: HrMasterDataType.SeparationReason, path: 'separation-reasons', menuName: 'Separation Reason Setup', label: 'Separation reasons', fileName: 'SeparationReason', settingsModel: SeparationReasonSettingsDto });
 
-export const CATEGORY_MASTER_DATA_CONTROLLERS = [EmploymentTypeController, GradeController, PayGroupController, WorkLocationController, HolidayCalendarController, LeaveTypeController, SalaryComponentController, SeparationReasonController];
+export const CATEGORY_MASTER_DATA_CONTROLLERS = [EmploymentTypeController, GradeController, PayGroupController, WorkLocationController, HolidayCalendarController, LeaveTypeController, LeavePolicyController, LeavePolicyAssignmentController, LeaveWorkflowController, LeaveWorkflowAssignmentController, SalaryComponentController, SeparationReasonController];

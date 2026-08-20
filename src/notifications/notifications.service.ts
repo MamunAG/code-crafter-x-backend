@@ -187,18 +187,7 @@ export class NotificationsService {
     try {
       const response = await this.firebaseAdmin.messaging().sendEachForMulticast({
         tokens,
-        notification: {
-          title: payload.title,
-          body: payload.body,
-        },
         data: this.buildPushData(payload),
-        webpush: {
-          fcmOptions: payload.link
-            ? {
-                link: payload.link,
-              }
-            : undefined,
-        },
       });
 
       const invalidTokens = response.responses

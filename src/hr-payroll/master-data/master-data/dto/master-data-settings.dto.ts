@@ -44,9 +44,13 @@ export class HolidayCalendarSettingsDto {
 }
 
 export class LeaveTypeSettingsDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() color?: string;
+  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(0) sortOrder?: number;
   @ApiProperty({ enum: ['PAID', 'UNPAID'] }) @IsIn(['PAID', 'UNPAID']) leaveClassification: string;
   @ApiPropertyOptional({ enum: ['DAY', 'HOUR'] }) @IsOptional() @IsIn(['DAY', 'HOUR']) dayUnit?: string;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() countCalendarDays?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() hourlyAllowed?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1) @Max(3) approvalLevels?: number;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() allowNegativeBalance?: boolean;
   @ApiPropertyOptional({ enum: ['NONE', 'MONTHLY', 'QUARTERLY', 'YEARLY'] }) @IsOptional() @IsIn(['NONE', 'MONTHLY', 'QUARTERLY', 'YEARLY']) accrualFrequency?: string;
@@ -57,8 +61,12 @@ export class LeaveTypeSettingsDto {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() encashable?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() halfDayAllowed?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() attachmentRequired?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) documentationRequiredAfterDays?: number;
+  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(0) @Max(730) noticePeriodDays?: number;
   @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) maxConsecutiveDays?: number;
 }
+
+export class LeaveConfigurationSettingsDto {}
 
 export class SalaryComponentSettingsDto {
   @ApiProperty({ enum: ['EARNING', 'DEDUCTION', 'EMPLOYER_CONTRIBUTION', 'INFORMATIONAL'] }) @IsIn(['EARNING', 'DEDUCTION', 'EMPLOYER_CONTRIBUTION', 'INFORMATIONAL']) componentType: string;

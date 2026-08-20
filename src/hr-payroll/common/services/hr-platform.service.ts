@@ -53,6 +53,7 @@ import {
 } from '../dto';
 import { FormulaEngineService } from '../../payroll/formula-engine.service';
 import { Factory } from 'src/app-configuration/factory/entity/factory.entity';
+import { LeaveBalanceAdjustmentDto, LeaveQueryDto } from '../../leave/dto/leave-query.dto';
 
 const EXTERNAL_FORMULA_VARIABLES = [
   'BASE', 'CALENDAR_DAYS', 'WORKING_DAYS', 'PAYABLE_DAYS', 'PRESENT_DAYS', 'ABSENT_DAYS',
@@ -102,7 +103,7 @@ export class HrMasterDataService {
     if (query.search) qb.andWhere('(item.code ILIKE :search OR item.name ILIKE :search OR item.name_bn ILIKE :search)', { search: `%${query.search}%` });
     if (query.isActive !== undefined) qb.andWhere('item.is_active = :isActive', { isActive: query.isActive === 'true' });
     const [items, total] = await qb.getManyAndCount();
-    return this.paginate(items, total, page, limit);
+    return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit), hasNextPage: page * limit < total, hasPreviousPage: page > 1 } };
   }
 
   async create(organizationId: string, userId: string, dto: CreateMasterDataDto) {
@@ -157,6 +158,7 @@ export class HrMasterDataService {
   async createForType(organizationId: string, userId: string, type: HrMasterDataType, dto: Omit<CreateMasterDataDto, 'type'>) {
     const settings = this.validateSettings(type, dto.settings ?? {}, true);
     await this.ensureSettingsReferences(organizationId, type, settings);
+    await this.ensureLeaveAssignmentPeriod(organizationId, type, settings);
     return this.create(organizationId, userId, { ...dto, type, settings });
   }
 
@@ -244,7 +246,11 @@ export class HrMasterDataService {
       [HrMasterDataType.PayGroup]: ['frequency', 'cutoffRule', 'paymentOffsetDays', 'defaultWorkingDays'],
       [HrMasterDataType.WorkLocation]: ['locationType', 'factoryId', 'address', 'district', 'timezone'],
       [HrMasterDataType.HolidayCalendar]: ['year', 'weeklyRestDays', 'holidays'],
-      [HrMasterDataType.LeaveType]: ['leaveClassification', 'dayUnit', 'countCalendarDays', 'approvalLevels', 'allowNegativeBalance', 'accrualFrequency', 'accrualRate', 'carryForwardAllowed', 'carryForwardCap', 'expiryMonths', 'encashable', 'halfDayAllowed', 'attachmentRequired', 'maxConsecutiveDays'],
+      [HrMasterDataType.LeaveType]: ['description', 'color', 'sortOrder', 'leaveClassification', 'dayUnit', 'hourlyAllowed', 'countCalendarDays', 'approvalLevels', 'allowNegativeBalance', 'accrualFrequency', 'accrualRate', 'carryForwardAllowed', 'carryForwardCap', 'expiryMonths', 'encashable', 'halfDayAllowed', 'attachmentRequired', 'documentationRequiredAfterDays', 'noticePeriodDays', 'maxConsecutiveDays'],
+      [HrMasterDataType.LeavePolicy]: ['effectiveFrom', 'effectiveTo', 'status', 'rules'],
+      [HrMasterDataType.LeavePolicyAssignment]: ['employeeId', 'policyId', 'effectiveFrom', 'effectiveTo', 'active'],
+      [HrMasterDataType.LeaveWorkflow]: ['active', 'levels'],
+      [HrMasterDataType.LeaveWorkflowAssignment]: ['targetType', 'targetId', 'workflowId', 'effectiveFrom', 'effectiveTo', 'priority'],
       [HrMasterDataType.SalaryComponent]: ['componentType', 'calculationMethod', 'formula', 'taxable', 'recurring', 'prorated', 'affectsGross', 'roundingPrecision'],
       [HrMasterDataType.SeparationReason]: ['separationCategory', 'eligibleForRehire', 'noticeRequired', 'defaultNoticeDays'],
     };
@@ -303,8 +309,28 @@ export class HrMasterDataService {
       case HrMasterDataType.LeaveType:
         required('leaveClassification');
         enumValue('leaveClassification', ['PAID', 'UNPAID']); enumValue('dayUnit', ['DAY', 'HOUR']); enumValue('accrualFrequency', ['NONE', 'MONTHLY', 'QUARTERLY', 'YEARLY']);
-        integer('approvalLevels', 1, 3); integer('expiryMonths', 0, 120); number('accrualRate', 0); number('carryForwardCap', 0); number('maxConsecutiveDays', 0);
-        ['countCalendarDays', 'allowNegativeBalance', 'carryForwardAllowed', 'encashable', 'halfDayAllowed', 'attachmentRequired'].forEach(boolean); break;
+        integer('approvalLevels', 1, 3); integer('expiryMonths', 0, 120); integer('sortOrder', 0, 9999); integer('noticePeriodDays', 0, 730); number('documentationRequiredAfterDays', 0); number('accrualRate', 0); number('carryForwardCap', 0); number('maxConsecutiveDays', 0);
+        ['hourlyAllowed', 'countCalendarDays', 'allowNegativeBalance', 'carryForwardAllowed', 'encashable', 'halfDayAllowed', 'attachmentRequired'].forEach(boolean); break;
+      case HrMasterDataType.LeavePolicy:
+        required('effectiveFrom');
+        if (settings.rules !== undefined && !Array.isArray(settings.rules)) throw new BadRequestException('rules must be an array.');
+        break;
+      case HrMasterDataType.LeavePolicyAssignment:
+        required('employeeId'); required('policyId'); required('effectiveFrom');
+        boolean('active'); break;
+      case HrMasterDataType.LeaveWorkflow:
+        if (settings.levels !== undefined && !Array.isArray(settings.levels)) throw new BadRequestException('levels must be an array.');
+        if (Array.isArray(settings.levels)) {
+          const levels = settings.levels as Array<Record<string, unknown>>; const numbers = levels.map((level) => Number(level.levelNumber));
+          if (numbers.some((level) => !Number.isInteger(level) || level < 1) || new Set(numbers).size !== numbers.length) throw new BadRequestException('Workflow level numbers must be unique positive integers.');
+          const approverTypes = ['SPECIFIC_USER', 'ROLE', 'REPORTING_MANAGER', 'DEPARTMENT_HEAD', 'SECTION_HEAD', 'HR', 'DESIGNATION'];
+          for (const level of levels) { if (!approverTypes.includes(String(level.approverType))) throw new BadRequestException('A workflow level contains an unsupported approver type.'); if (level.approverType === 'SPECIFIC_USER' && !level.userId) throw new BadRequestException('Specific user levels require userId.'); if (level.approverType === 'ROLE' && !level.roleId) throw new BadRequestException('Role levels require roleId.'); if (level.approverType === 'DESIGNATION' && !level.designationId) throw new BadRequestException('Designation levels require designationId.'); }
+        }
+        boolean('active'); break;
+      case HrMasterDataType.LeaveWorkflowAssignment:
+        required('targetType'); required('workflowId');
+        enumValue('targetType', ['COMPANY', 'FACTORY', 'DEPARTMENT', 'SECTION', 'DESIGNATION', 'EMPLOYEE']);
+        break;
       case HrMasterDataType.SalaryComponent:
         required('componentType'); required('calculationMethod');
         enumValue('componentType', ['EARNING', 'DEDUCTION', 'EMPLOYER_CONTRIBUTION', 'INFORMATIONAL']); enumValue('calculationMethod', ['FIXED', 'PERCENTAGE', 'FORMULA']); integer('roundingPrecision', 0, 4);
@@ -328,6 +354,15 @@ export class HrMasterDataService {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(factoryId)) throw new BadRequestException('factoryId must be a valid UUID.');
     const factory = await this.repository.manager.getRepository(Factory).findOne({ where: { id: factoryId, organizationId, isActive: true } });
     if (!factory) throw new BadRequestException('The selected factory is not active in this organization.');
+  }
+
+  private async ensureLeaveAssignmentPeriod(organizationId: string, type: HrMasterDataType, settings: Record<string, unknown>) {
+    if (![HrMasterDataType.LeavePolicyAssignment, HrMasterDataType.LeaveWorkflowAssignment].includes(type)) return;
+    const identityKey = type === HrMasterDataType.LeavePolicyAssignment ? 'employeeId' : 'targetId';
+    const identity = String(settings[identityKey] ?? (type === HrMasterDataType.LeaveWorkflowAssignment ? 'COMPANY' : ''));
+    const from = String(settings.effectiveFrom ?? '0001-01-01'); const to = String(settings.effectiveTo ?? '9999-12-31');
+    const overlap = await this.repository.createQueryBuilder('item').where('item.organization_id = :organizationId AND item.type = :type AND item.deleted_at IS NULL', { organizationId, type }).andWhere(`COALESCE(item.settings ->> '${identityKey}', 'COMPANY') = :identity`, { identity }).andWhere(`COALESCE(item.settings ->> 'effectiveFrom', '0001-01-01') <= :to AND COALESCE(item.settings ->> 'effectiveTo', '9999-12-31') >= :from`, { from, to }).getOne();
+    if (overlap) throw new ConflictException('This assignment overlaps an existing effective period.');
   }
 
   private scalarString(value: unknown, field: string) {
@@ -582,28 +617,56 @@ export class WorkforceService {
       .andWhere('leave.status IN (:...statuses)', { statuses: [ApprovalStatus.Pending, ApprovalStatus.Approved] })
       .andWhere('leave.start_date <= :endDate AND leave.end_date >= :startDate', dto).getOne();
     if (overlap) throw new ConflictException('This employee already has a leave request overlapping these dates.');
-    const leaveDates = this.dateRange(dto.startDate, dto.endDate, 366);
-    const roster = await this.rosters.createQueryBuilder('roster').where('roster.organization_id = :organizationId AND roster.employee_id = :employeeId', { organizationId, employeeId: dto.employeeId })
-      .andWhere('roster.effective_from <= :endDate AND (roster.effective_to IS NULL OR roster.effective_to >= :startDate)', dto).orderBy('roster.effective_from', 'DESC').getOne();
-    const calendars = await this.masterData.find({ where: { organizationId, type: HrMasterDataType.HolidayCalendar, isActive: true } });
-    const holidays = new Set(calendars.flatMap((calendar) => Array.isArray(calendar.settings.dates) ? calendar.settings.dates.map(String) : []));
-    const payableLeaveDates = leaveType.settings.countCalendarDays ? leaveDates : leaveDates.filter((date) => !holidays.has(date) && !(roster?.weeklyOffDays ?? [5]).includes(new Date(`${date}T00:00:00Z`).getUTCDay()));
-    const days = dto.isHalfDay ? 0.5 : payableLeaveDates.length;
+    const preview = await this.previewLeave(organizationId, dto);
+    const days = preview.chargeableDays;
     if (days <= 0) throw new BadRequestException('The selected range contains no chargeable leave days.');
     const settings = await this.getSettings(organizationId);
-    const request = this.leaveRequests.create({ ...dto, days: String(days), organizationId, createdById: userId, status: ApprovalStatus.Pending, requiredApprovalLevels: Number(leaveType.settings.approvalLevels ?? settings.leaveApprovalLevels) });
+    const request = this.leaveRequests.create({ ...dto, applicationNumber: `LV-${Date.now().toString(36).toUpperCase()}`, durationType: dto.durationType ?? (dto.isHalfDay ? 'FIRST_HALF' : 'FULL_DAY'), isHalfDay: dto.isHalfDay ?? ['FIRST_HALF', 'SECOND_HALF'].includes(dto.durationType ?? ''), dayBreakdown: preview.dayBreakdown, days: String(days), organizationId, createdById: userId, status: ApprovalStatus.Pending, requiredApprovalLevels: Number(leaveType.settings.approvalLevels ?? settings.leaveApprovalLevels), approvalHistory: [{ decision: 'SUBMITTED', actorId: userId, at: new Date().toISOString() }] });
     return this.leaveRequests.save(request);
   }
 
+  async previewLeave(organizationId: string, dto: CreateLeaveRequestDto) {
+    await this.requireEmployee(organizationId, dto.employeeId);
+    const leaveType = await this.masterData.findOne({ where: { id: dto.leaveTypeId, organizationId, type: HrMasterDataType.LeaveType, isActive: true } });
+    if (!leaveType) throw new NotFoundException('Active leave type not found.');
+    if (dto.endDate < dto.startDate) throw new BadRequestException('Leave end date cannot precede the start date.');
+    const dates = this.dateRange(dto.startDate, dto.endDate, 366);
+    const roster = await this.rosters.createQueryBuilder('roster').where('roster.organization_id = :organizationId AND roster.employee_id = :employeeId', { organizationId, employeeId: dto.employeeId })
+      .andWhere('roster.effective_from <= :endDate AND (roster.effective_to IS NULL OR roster.effective_to >= :startDate)', dto).orderBy('roster.effective_from', 'DESC').getOne();
+    const calendars = await this.masterData.find({ where: { organizationId, type: HrMasterDataType.HolidayCalendar, isActive: true } });
+    const holidayRows = calendars.flatMap((calendar) => Array.isArray(calendar.settings.holidays) ? calendar.settings.holidays : Array.isArray(calendar.settings.dates) ? calendar.settings.dates : []);
+    const holidayMap = new Map(holidayRows.map((row) => typeof row === 'string' ? [row, 'Holiday'] : [String((row as Record<string, unknown>).date), String((row as Record<string, unknown>).name ?? 'Holiday')]));
+    const weeklyOffDays = roster?.weeklyOffDays ?? [5];
+    const halfDay = dto.isHalfDay || ['FIRST_HALF', 'SECOND_HALF'].includes(dto.durationType ?? '');
+    const dayBreakdown = dates.map((date) => {
+      const holiday = holidayMap.get(date); const weeklyOff = weeklyOffDays.includes(new Date(`${date}T00:00:00Z`).getUTCDay());
+      const dayType = holiday ? 'HOLIDAY' : weeklyOff ? 'WEEKLY_OFF' : 'WORKING_DAY';
+      const chargedDays = leaveType.settings.countCalendarDays || dayType === 'WORKING_DAY' ? (halfDay ? 0.5 : 1) : 0;
+      return { date, dayType, label: holiday ?? null, duration: chargedDays ? (dto.durationType ?? (halfDay ? 'FIRST_HALF' : 'FULL_DAY')) : null, chargedDays };
+    });
+    const chargeableDays = dayBreakdown.reduce((sum, row) => sum + row.chargedDays, 0);
+    if (chargeableDays <= 0) throw new BadRequestException('The selected range contains no chargeable leave days.');
+    const year = Number(dto.startDate.slice(0, 4));
+    const balance = await this.leaveBalances.findOne({ where: { organizationId, employeeId: dto.employeeId, leaveTypeId: dto.leaveTypeId, periodYear: year } });
+    const currentBalance = balance ? this.availableBalance(balance) : 0;
+    const maxDays = Number(leaveType.settings.maxConsecutiveDays ?? 0);
+    if (maxDays > 0 && chargeableDays > maxDays) throw new BadRequestException(`This leave type allows a maximum of ${maxDays} consecutive days.`);
+    if (leaveType.settings.attachmentRequired && !dto.attachmentUrl) throw new BadRequestException('An attachment is required for this leave type.');
+    if (!leaveType.settings.allowNegativeBalance && currentBalance < chargeableDays) throw new BadRequestException(`Insufficient leave balance. ${currentBalance} days are available.`);
+    return { currentBalance, calendarDays: dates.length, weeklyOffDays: dayBreakdown.filter((row) => row.dayType === 'WEEKLY_OFF').length, holidays: dayBreakdown.filter((row) => row.dayType === 'HOLIDAY').length, chargeableDays, balanceAfterApproval: currentBalance - chargeableDays, dayBreakdown, policy: { ...leaveType.settings, leaveTypeName: leaveType.name } };
+  }
+
   async decideLeave(organizationId: string, userId: string, id: string, dto: LeaveDecisionDto) {
-    if (![ApprovalStatus.Approved, ApprovalStatus.Rejected].includes(dto.decision)) throw new BadRequestException('Decision must be APPROVED or REJECTED.');
+    if (![ApprovalStatus.Approved, ApprovalStatus.Rejected, ApprovalStatus.Returned].includes(dto.decision)) throw new BadRequestException('Decision must be APPROVED, REJECTED, or RETURNED.');
     const request = await this.leaveRequests.findOne({ where: { id, organizationId } });
     if (!request) throw new NotFoundException('Leave request not found.');
     if (request.rowVersion !== dto.rowVersion) throw new ConflictException('The leave request was changed by another user.');
     if (request.status !== ApprovalStatus.Pending) throw new ConflictException('Only pending leave requests can be decided.');
+    if (request.createdById === userId) throw new ForbiddenException('You cannot approve your own leave request.');
+    if ([ApprovalStatus.Rejected, ApprovalStatus.Returned].includes(dto.decision) && !dto.comment?.trim()) throw new BadRequestException('A comment is required when rejecting or returning leave.');
     const historyEntry = { level: request.approvalLevel + 1, decision: dto.decision, actorId: userId, comment: dto.comment ?? null, at: new Date().toISOString() };
     request.approvalHistory = [...request.approvalHistory, historyEntry];
-    if (dto.decision === ApprovalStatus.Rejected) request.status = ApprovalStatus.Rejected;
+    if ([ApprovalStatus.Rejected, ApprovalStatus.Returned].includes(dto.decision)) request.status = dto.decision;
     else {
       request.approvalLevel += 1;
       if (request.approvalLevel >= request.requiredApprovalLevels) request.status = ApprovalStatus.Approved;
@@ -628,8 +691,73 @@ export class WorkforceService {
     return saved;
   }
 
-  listLeave(organizationId: string, query: TenantPaginationDto) {
-    return this.paginated(this.leaveRequests, organizationId, query, 'request');
+  async listLeave(organizationId: string, query: LeaveQueryDto, userId?: string, scope: 'all' | 'mine' | 'inbox' = 'all') {
+    const page = query.page ?? 1; const limit = query.limit ?? 20;
+    const qb = this.leaveRequests.createQueryBuilder('request').where('request.organization_id = :organizationId', { organizationId }).orderBy('request.created_at', 'DESC').skip((page - 1) * limit).take(limit);
+    if (scope === 'mine') qb.andWhere('request.created_by_id = :userId', { userId });
+    if (scope === 'inbox') qb.andWhere('request.status = :pending AND request.created_by_id IS DISTINCT FROM :userId', { pending: ApprovalStatus.Pending, userId });
+    if (query.search) qb.andWhere('(request.application_number ILIKE :search OR request.reason ILIKE :search)', { search: `%${query.search}%` });
+    if (query.employeeId) qb.andWhere('request.employee_id = :employeeId', query);
+    if (query.leaveTypeId) qb.andWhere('request.leave_type_id = :leaveTypeId', query);
+    if (query.status) qb.andWhere('request.status = :status', query);
+    if (query.fromDate) qb.andWhere('request.end_date >= :fromDate', query);
+    if (query.toDate) qb.andWhere('request.start_date <= :toDate', query);
+    const [items, total] = await qb.getManyAndCount();
+    return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit), hasNextPage: page * limit < total, hasPreviousPage: page > 1 } };
+  }
+
+  async leaveDetails(organizationId: string, id: string) {
+    const request = await this.leaveRequests.findOne({ where: { id, organizationId } });
+    if (!request) throw new NotFoundException('Leave request not found.');
+    const [employee, leaveType, balance] = await Promise.all([
+      this.employees.findOne({ where: { id: request.employeeId, organizationId }, relations: { factory: true, designation: true, department: true } }),
+      this.masterData.findOne({ where: { id: request.leaveTypeId, organizationId } }),
+      this.leaveBalances.findOne({ where: { organizationId, employeeId: request.employeeId, leaveTypeId: request.leaveTypeId, periodYear: Number(request.startDate.slice(0, 4)) } }),
+    ]);
+    return { ...request, employee, leaveType, currentBalance: balance ? this.availableBalance(balance) : 0 };
+  }
+
+  async leaveDashboard(organizationId: string, userId: string, userEmail?: string) {
+    const ownEmployee = userEmail ? await this.employees.findOne({ where: { organizationId, email: userEmail } }) : null;
+    const requests = await this.leaveRequests.find({ where: ownEmployee ? { organizationId, employeeId: ownEmployee.id } : { organizationId, createdById: userId }, order: { createdAt: 'DESC' }, take: 10 });
+    const resolvedEmployeeId = ownEmployee?.id ?? requests[0]?.employeeId;
+    const balances = resolvedEmployeeId ? await this.leaveBalances.find({ where: { organizationId, employeeId: resolvedEmployeeId, periodYear: new Date().getFullYear() } }) : [];
+    const types = await this.masterData.find({ where: { organizationId, type: HrMasterDataType.LeaveType, isActive: true } });
+    return { balances: types.map((type) => { const balance = balances.find((item) => item.leaveTypeId === type.id); const pending = requests.filter((item) => item.leaveTypeId === type.id && item.status === ApprovalStatus.Pending).reduce((sum, item) => sum + Number(item.days), 0); return { leaveTypeId: type.id, leaveTypeName: type.name, color: type.settings.color, opening: Number(balance?.opening ?? 0), accrued: Number(balance?.accrued ?? 0), adjusted: Number(balance?.adjusted ?? 0), carriedForward: Number(balance?.carriedForward ?? 0), used: Number(balance?.used ?? 0), encashed: Number(balance?.encashed ?? 0), expired: Number(balance?.expired ?? 0), available: balance ? this.availableBalance(balance) : 0, pending }; }), recentApplications: requests, upcomingLeave: requests.filter((item) => item.status === ApprovalStatus.Approved && item.endDate >= new Date().toISOString().slice(0, 10)), returned: requests.filter((item) => item.status === ApprovalStatus.Returned) };
+  }
+
+  async leaveBalancesFor(organizationId: string, employeeId: string, year = new Date().getFullYear()) {
+    await this.requireEmployee(organizationId, employeeId);
+    const [balances, types] = await Promise.all([this.leaveBalances.find({ where: { organizationId, employeeId, periodYear: year } }), this.masterData.find({ where: { organizationId, type: HrMasterDataType.LeaveType } })]);
+    return balances.map((balance) => ({ ...balance, leaveType: types.find((type) => type.id === balance.leaveTypeId), available: this.availableBalance(balance) }));
+  }
+
+  async assertLeaveEmployeeAccess(organizationId: string, employeeId: string, email: string) {
+    const employee = await this.employees.findOne({ where: { id: employeeId, organizationId, email } });
+    if (!employee) throw new ForbiddenException('You can only access leave data linked to your employee profile.');
+  }
+
+  async leaveLedger(organizationId: string, employeeId: string, query: LeaveQueryDto) {
+    const result = await this.listLeave(organizationId, { ...query, employeeId }, undefined, 'all');
+    return { ...result, items: result.items.filter((item) => [ApprovalStatus.Approved, ApprovalStatus.Cancelled].includes(item.status)).map((item) => ({ id: item.id, date: item.updatedAt, leaveTypeId: item.leaveTypeId, transactionType: item.status === ApprovalStatus.Cancelled ? 'CANCELLATION' : 'USAGE', reference: item.applicationNumber ?? item.id, credit: item.status === ApprovalStatus.Cancelled ? Number(item.days) : 0, debit: item.status === ApprovalStatus.Approved ? Number(item.days) : 0, description: item.reason })) };
+  }
+
+  async adjustLeaveBalance(organizationId: string, userId: string, dto: LeaveBalanceAdjustmentDto) {
+    await this.requireEmployee(organizationId, dto.employeeId);
+    const year = Number(dto.effectiveDate.slice(0, 4));
+    let balance = await this.leaveBalances.findOne({ where: { organizationId, employeeId: dto.employeeId, leaveTypeId: dto.leaveTypeId, periodYear: year } });
+    if (!balance) balance = this.leaveBalances.create({ organizationId, employeeId: dto.employeeId, leaveTypeId: dto.leaveTypeId, periodYear: year, opening: '0', accrued: '0', adjusted: '0', carriedForward: '0', used: '0', encashed: '0', expired: '0', createdById: userId });
+    const previousBalance = this.availableBalance(balance); balance.adjusted = String(Number(balance.adjusted) + dto.amount); balance.updatedById = userId;
+    const saved = await this.leaveBalances.save(balance); await this.audit.record(organizationId, userId, 'LEAVE_BALANCE_ADJUSTED', 'LeaveBalance', saved.id, null, saved, { amount: dto.amount, reason: dto.reason, reference: dto.reference, effectiveDate: dto.effectiveDate });
+    return { ...saved, previousBalance, adjustment: dto.amount, available: this.availableBalance(saved) };
+  }
+
+  async resubmitLeave(organizationId: string, userId: string, id: string) {
+    const request = await this.leaveRequests.findOne({ where: { id, organizationId, createdById: userId } });
+    if (!request) throw new NotFoundException('Leave request not found.');
+    if (request.status !== ApprovalStatus.Returned) throw new ConflictException('Only returned leave requests can be resubmitted.');
+    request.status = ApprovalStatus.Pending; request.approvalHistory = [...request.approvalHistory, { decision: 'RESUBMITTED', actorId: userId, at: new Date().toISOString() }]; request.updatedById = userId;
+    return this.leaveRequests.save(request);
   }
 
   async requestAttendanceCorrection(organizationId: string, userId: string, dto: CreateAttendanceCorrectionDto) {
@@ -687,8 +815,8 @@ export class WorkforceService {
   private async consumeLeaveBalance(request: LeaveRequest, userId: string) {
     const year = Number(request.startDate.slice(0, 4));
     let balance = await this.leaveBalances.findOne({ where: { organizationId: request.organizationId, employeeId: request.employeeId, leaveTypeId: request.leaveTypeId, periodYear: year } });
-    if (!balance) balance = this.leaveBalances.create({ organizationId: request.organizationId, employeeId: request.employeeId, leaveTypeId: request.leaveTypeId, periodYear: year, opening: '0', accrued: '0', used: '0', adjusted: '0', encashed: '0', createdById: userId });
-    const available = Number(balance.opening) + Number(balance.accrued) + Number(balance.adjusted) - Number(balance.used) - Number(balance.encashed);
+    if (!balance) balance = this.leaveBalances.create({ organizationId: request.organizationId, employeeId: request.employeeId, leaveTypeId: request.leaveTypeId, periodYear: year, opening: '0', accrued: '0', used: '0', adjusted: '0', carriedForward: '0', encashed: '0', expired: '0', createdById: userId });
+    const available = this.availableBalance(balance);
     const leaveType = await this.masterData.findOne({ where: { id: request.leaveTypeId, organizationId: request.organizationId } });
     if (available < Number(request.days) && !leaveType?.settings.allowNegativeBalance) throw new ConflictException('Insufficient leave balance. Approval was not applied.');
     balance.used = String(Number(balance.used) + Number(request.days));
@@ -702,6 +830,10 @@ export class WorkforceService {
     balance.used = String(Number(balance.used) - Number(request.days));
     balance.updatedById = userId;
     await this.leaveBalances.save(balance);
+  }
+
+  private availableBalance(balance: LeaveBalance) {
+    return Number(balance.opening) + Number(balance.accrued) + Number(balance.adjusted) + Number(balance.carriedForward ?? 0) - Number(balance.used) - Number(balance.encashed) - Number(balance.expired ?? 0);
   }
 
   private deriveDay(workDate: string, punches: AttendancePunch[], shift: Shift | undefined, leave: boolean, weeklyOff: boolean, holiday: boolean, timezone: string, roundingMinutes: number, overtimeCap?: number | null) {

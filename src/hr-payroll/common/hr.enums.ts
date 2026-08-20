@@ -5,6 +5,10 @@ export enum HrMasterDataType {
   WorkLocation = 'WORK_LOCATION',
   HolidayCalendar = 'HOLIDAY_CALENDAR',
   LeaveType = 'LEAVE_TYPE',
+  LeavePolicy = 'LEAVE_POLICY',
+  LeavePolicyAssignment = 'LEAVE_POLICY_ASSIGNMENT',
+  LeaveWorkflow = 'LEAVE_WORKFLOW',
+  LeaveWorkflowAssignment = 'LEAVE_WORKFLOW_ASSIGNMENT',
   SalaryComponent = 'SALARY_COMPONENT',
   SeparationReason = 'SEPARATION_REASON',
 }
@@ -41,6 +45,7 @@ export enum ApprovalStatus {
   Pending = 'PENDING',
   Approved = 'APPROVED',
   Rejected = 'REJECTED',
+  Returned = 'RETURNED',
   Cancelled = 'CANCELLED',
 }
 

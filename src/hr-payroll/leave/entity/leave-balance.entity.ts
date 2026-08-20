@@ -11,5 +11,7 @@ export class LeaveBalance extends HrTenantEntity {
   @Column({ type: 'numeric', precision: 10, scale: 2, default: 0 }) accrued: string;
   @Column({ type: 'numeric', precision: 10, scale: 2, default: 0 }) used: string;
   @Column({ type: 'numeric', precision: 10, scale: 2, default: 0 }) adjusted: string;
+  @Column({ name: 'carried_forward', type: 'numeric', precision: 10, scale: 2, default: 0 }) carriedForward: string;
   @Column({ type: 'numeric', precision: 10, scale: 2, default: 0 }) encashed: string;
+  @Column({ type: 'numeric', precision: 10, scale: 2, default: 0 }) expired: string;
 }
