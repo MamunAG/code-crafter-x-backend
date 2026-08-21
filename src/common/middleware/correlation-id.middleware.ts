@@ -4,12 +4,15 @@ import { randomUUID } from 'crypto';
 import type { NextFunction, Request, Response } from 'express';
 import type AuthUser from 'src/auth/dto/auth-user';
 import type { AuditErrorContext } from '../filters/audit-exception.filter';
-import { AuditService } from 'src/hr-payroll/audit/audit.service';
-import { AuditCategory, AuditStatus } from 'src/hr-payroll/audit/audit.types';
+import { AuditService } from '../../hr-payroll/audit/audit.service';
+import {
+  AuditCategory,
+  AuditStatus,
+} from '../../hr-payroll/audit/audit.types';
 import {
   resolveAuditModule,
   shouldAuditRequest,
-} from 'src/hr-payroll/audit/audit-module.resolver';
+} from '../../hr-payroll/audit/audit-module.resolver';
 
 type AuditedRequest = Request & {
   requestId?: string;
