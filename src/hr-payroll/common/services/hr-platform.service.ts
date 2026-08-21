@@ -465,7 +465,12 @@ export class WorkforceService {
         supervisorId: dto.supervisorId ?? employee.supervisorId,
         gradeId: dto.gradeId ?? employee.gradeId,
         payGroupId: dto.payGroupId ?? employee.payGroupId,
-        employmentStatus: this.statusForAction(dto.action),
+        isActive: ![
+          EmployeeLifecycleAction.Suspend,
+          EmployeeLifecycleAction.Resign,
+          EmployeeLifecycleAction.Terminate,
+          EmployeeLifecycleAction.Retire,
+        ].includes(dto.action),
         separationDate: [EmployeeLifecycleAction.Resign, EmployeeLifecycleAction.Terminate, EmployeeLifecycleAction.Retire].includes(dto.action) ? dto.effectiveFrom : employee.separationDate,
       });
       await manager.save(employee);
@@ -881,12 +886,6 @@ export class WorkforceService {
       const rows = await this.dataSource.query<Array<{ id: string }>>(`SELECT id FROM "${table}" WHERE id = $1 AND organization_id = $2 LIMIT 1`, [id, organizationId]);
       if (!rows.length) throw new BadRequestException(`${label} not found in the selected organization.`);
     }
-  }
-
-  private statusForAction(action: EmployeeLifecycleAction) {
-    if ([EmployeeLifecycleAction.Resign, EmployeeLifecycleAction.Terminate, EmployeeLifecycleAction.Retire].includes(action)) return 'SEPARATED';
-    if (action === EmployeeLifecycleAction.Suspend) return 'SUSPENDED';
-    return 'ACTIVE';
   }
 
   private validateTime(value: string) { if (!/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(value)) throw new BadRequestException(`Invalid time: ${value}.`); }

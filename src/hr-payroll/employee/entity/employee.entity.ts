@@ -88,9 +88,6 @@ export class Employee extends BaseEntity {
     @Column({ name: 'marital_status', type: 'varchar', length: 30, nullable: true })
     maritalStatus?: string | null;
 
-    @Column({ name: 'employment_status', type: 'varchar', length: 30, default: 'ACTIVE' })
-    employmentStatus?: string;
-
     @Column({ name: 'tax_status', type: 'varchar', length: 50, nullable: true })
     taxStatus?: string | null;
 

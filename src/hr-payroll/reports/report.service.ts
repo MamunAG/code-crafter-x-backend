@@ -77,8 +77,8 @@ export class HrReportService {
         return (await qb.getMany()).map((item) => ({ employeeId: item.employeeId, workDate: item.workDate, overtimeMinutes: item.overtimeMinutes }));
       }
       case 'headcount': {
-        const rows = await this.employees.createQueryBuilder('employee').select('employee.employment_status', 'status').addSelect('COUNT(*)', 'count')
-          .where('employee.organization_id = :organizationId AND employee.deleted_at IS NULL', { organizationId }).groupBy('employee.employment_status').getRawMany<{ status: string; count: string }>();
+        const rows = await this.employees.createQueryBuilder('employee').select("CASE WHEN employee.is_active = true THEN 'ACTIVE' ELSE 'INACTIVE' END", 'status').addSelect('COUNT(*)', 'count')
+          .where('employee.organization_id = :organizationId AND employee.deleted_at IS NULL', { organizationId }).groupBy('employee.is_active').getRawMany<{ status: string; count: string }>();
         return rows;
       }
       case 'salary-history': {

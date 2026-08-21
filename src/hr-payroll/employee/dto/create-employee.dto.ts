@@ -69,7 +69,6 @@ export class CreateEmployeeDto extends OmitType(Employee, ['factory', 'organizat
     @ApiProperty({ required: false }) @IsOptional() @IsUUID() supervisorId?: string;
     @ApiProperty({ required: false }) @IsOptional() @IsDateString() dateOfBirth?: string;
     @ApiProperty({ required: false }) @IsOptional() @IsString() maritalStatus?: string;
-    @ApiProperty({ required: false }) @IsOptional() @IsString() employmentStatus?: string;
     @ApiProperty({ required: false }) @IsOptional() @IsString() taxStatus?: string;
     @ApiProperty({ required: false }) @IsOptional() @IsString() taxIdentifier?: string;
     @ApiProperty({ required: false }) @IsOptional() @IsString() bankDetails?: string;
