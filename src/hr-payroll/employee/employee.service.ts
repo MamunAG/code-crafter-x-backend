@@ -12,8 +12,9 @@ import { Factory } from 'src/app-configuration/factory/entity/factory.entity';
 import { Department } from 'src/hr-payroll/master-data/department/entity/department.entity';
 import { Designation } from 'src/hr-payroll/master-data/designation/entity/designation.entity';
 import { Gender } from './dto/gender.enum';
-import { HrAuditEvent, HrMasterData } from '../common/entity';
+import { HrMasterData } from '../common/entity';
 import { HrMasterDataType } from '../common/hr.enums';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class EmployeeService {
@@ -33,15 +34,14 @@ export class EmployeeService {
         @InjectRepository(Files)
         private filesRepository: Repository<Files>,
 
-        @InjectRepository(HrAuditEvent)
-        private auditRepository: Repository<HrAuditEvent>,
+        private readonly audit: AuditService,
 
         @InjectRepository(HrMasterData)
         private hrMasterDataRepository: Repository<HrMasterData>,
     ) { }
 
     auditPiiAccess(organizationId: string, userId: string, subjectId: string, metadata: Record<string, unknown> = {}) {
-        return this.auditRepository.save(this.auditRepository.create({ organizationId, actorId: userId, action: 'VIEW_PII', subjectType: 'Employee', subjectId, metadata }));
+        return this.audit.record(organizationId, userId, 'VIEW_PII', 'Employee', subjectId, null, null, metadata);
     }
 
     async create(dto: CreateEmployeeDto, organizationId: string) {

@@ -7,7 +7,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { RolesGuard } from './common/guards/roles.guard';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { WinstonModule } from 'nest-winston';
+import * as winston from 'winston';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { MenuAccessGuard } from './common/guards/menu-access.guard';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -61,6 +63,17 @@ import { ReportsModule } from './hr-payroll/reports/reports.module';
 import { RosterModule } from './hr-payroll/roster/roster.module';
 import { SalaryModule } from './hr-payroll/salary/salary.module';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
+import { AuditExceptionFilter } from './common/filters/audit-exception.filter';
+
+const redactAuditConsole = winston.format((info) => {
+  if (!info.auditEvent || typeof info.auditEvent !== 'object') return info;
+  const safeEvent = {
+    ...(info.auditEvent as Record<string, unknown>),
+  };
+  delete safeEvent.beforeState;
+  delete safeEvent.afterState;
+  return { ...info, auditEvent: safeEvent };
+});
 
 @Module({
   imports: [
@@ -72,6 +85,20 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: createTypeOrmOptions,
+    }),
+    WinstonModule.forRoot({
+      format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.errors({ stack: true }),
+      ),
+      transports: [
+        new winston.transports.Console({
+          format: winston.format.combine(
+            redactAuditConsole(),
+            winston.format.json(),
+          ),
+        }),
+      ],
     }),
     ScheduleModule.forRoot(),
     AuthModule,
@@ -129,6 +156,10 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
   controllers: [AppController, CommonController],
   providers: [
     AppService,
+    {
+      provide: APP_FILTER,
+      useClass: AuditExceptionFilter,
+    },
     // AuditInterceptorProvider,
     {
       provide: APP_GUARD,

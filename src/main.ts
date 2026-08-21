@@ -1,6 +1,4 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { NestFactory, Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
@@ -9,12 +7,23 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { join } from 'path';
 import { SwaggerTheme, SwaggerThemeNameEnum } from 'swagger-themes';
 import { JwtAuthOrPublicGuard } from './common/guards/jwt-auth-or-public.guard';
+import {
+  WINSTON_MODULE_NEST_PROVIDER,
+  WINSTON_MODULE_PROVIDER,
+} from 'nest-winston';
+import type { Logger } from 'winston';
+import { DataSource } from 'typeorm';
+import { AuditDatabaseTransport } from './hr-payroll/audit/audit-database.transport';
 
 async function bootstrap() {
   console.log('🚀 Starting Rillo API server...');
   console.log('📂 Environment:', process.env.NODE_ENV);
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const winstonLogger = app.get<Logger>(WINSTON_MODULE_PROVIDER);
+  winstonLogger.add(new AuditDatabaseTransport(app.get(DataSource)));
+  app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
+  if (process.env.TRUST_PROXY === 'true') app.set('trust proxy', 1);
   app.enableCors({
     origin: '*',
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],

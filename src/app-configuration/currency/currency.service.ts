@@ -13,6 +13,8 @@ import { ExchangeRateApiResponseDto } from './dto/exchangerate-api-response.dto'
 import { firstValueFrom } from 'rxjs';
 import { HttpService } from '@nestjs/axios';
 import { CurrencyExchangeRate } from './entity/currency-exchange-rate.entity';
+import { AuditCronService } from 'src/hr-payroll/audit/audit-cron.service';
+import { AuditModuleName } from 'src/hr-payroll/audit/audit.types';
 
 const SELECTED_EXCHANGE_RATE_CURRENCIES = ['USD', 'EUR', 'GBP'] as const;
 type SelectedExchangeRateCurrency = (typeof SELECTED_EXCHANGE_RATE_CURRENCIES)[number];
@@ -24,6 +26,7 @@ export class CurrencyService {
 
   constructor(
     private readonly httpService: HttpService,
+    private readonly auditCron: AuditCronService,
 
     @InjectRepository(Currency)
     private currencyRepository: Repository<Currency>,
@@ -433,6 +436,20 @@ export class CurrencyService {
     timeZone: CURRENCY_RATE_CRON_TIMEZONE,
   })
   async updateCurrencyRate() {
+    return this.auditCron.run(
+      {
+        moduleName: AuditModuleName.AppConfig,
+        jobName: 'currency-rate-daily-update',
+        schedule: '0 0 3 * * * Asia/Dhaka',
+        scheduledFor: this.currencyRateScheduledFor(),
+        delayedAfterSeconds: 90,
+        missedAfterSeconds: 60 * 60,
+      },
+      () => this.performCurrencyRateUpdate(),
+    );
+  }
+
+  private async performCurrencyRateUpdate() {
     try {
       this.logger.log('Updating currency rates...');
 
@@ -479,6 +496,21 @@ export class CurrencyService {
       this.logger.error('Currency rate update failed.', error instanceof Error ? error.stack : String(error));
       throw error;
     }
+  }
+
+  private currencyRateScheduledFor() {
+    const dhakaNow = new Date(Date.now() + 6 * 60 * 60 * 1000);
+    return new Date(
+      Date.UTC(
+        dhakaNow.getUTCFullYear(),
+        dhakaNow.getUTCMonth(),
+        dhakaNow.getUTCDate(),
+        21,
+        0,
+        0,
+      ) -
+        24 * 60 * 60 * 1000,
+    );
   }
 
   async getLatestExchangeRateByCurrencyCode(currencyCode: string) {

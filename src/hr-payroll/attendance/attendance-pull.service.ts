@@ -13,6 +13,8 @@ import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
+import { AuditCronService } from '../audit/audit-cron.service';
+import { AuditModuleName } from '../audit/audit.types';
 import { AttendanceDirection } from '../common/hr.enums';
 import { AttendanceService } from './attendance.service';
 import {
@@ -49,6 +51,7 @@ export class AttendancePullService {
     private readonly integrations: Repository<AttendancePullIntegration>,
     private readonly attendance: AttendanceService,
     private readonly audit: AuditService,
+    private readonly auditCron: AuditCronService,
     private readonly config: ConfigService,
   ) {}
 
@@ -220,10 +223,28 @@ export class AttendancePullService {
       .take(25)
       .getMany();
     for (const integration of due) {
+      const scheduledFor = integration.nextRunAt ?? new Date();
       try {
-        await this.run(integration, 'SCHEDULED');
+        await this.auditCron.run(
+          {
+            moduleName: AuditModuleName.HrPayroll,
+            organizationId: integration.organizationId,
+            jobName: 'attendance-pull-integrations',
+            schedule: `every ${integration.scheduleIntervalMinutes} minute(s)`,
+            subjectId: integration.id,
+            metadata: {
+              integrationName: integration.name,
+              source: integration.source,
+            },
+            delayedAfterSeconds: 90,
+            missedAfterSeconds:
+              (integration.scheduleIntervalMinutes ?? 1) * 60,
+            scheduledFor,
+          },
+          () => this.run(integration, 'SCHEDULED'),
+        );
       } catch {
-        /* persisted by run */
+        // The integration result and audited cron error are already persisted.
       }
     }
   }

@@ -1,8 +1,10 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, Optional, UnauthorizedException } from '@nestjs/common';
+import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomBytes } from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import { Brackets, DataSource, IsNull, Repository } from 'typeorm';
+import type { Logger } from 'winston';
 import { Employee } from '../../employee/entity/employee.entity';
 import {
   AttendanceDay,
@@ -54,6 +56,7 @@ import {
 import { FormulaEngineService } from '../../payroll/formula-engine.service';
 import { Factory } from 'src/app-configuration/factory/entity/factory.entity';
 import { LeaveBalanceAdjustmentDto, LeaveQueryDto } from '../../leave/dto/leave-query.dto';
+import { AuditCategory, AuditModuleName, AuditScheduleStatus, AuditStatus, type AuditEventInput } from '../../audit/audit.types';
 
 const EXTERNAL_FORMULA_VARIABLES = [
   'BASE', 'CALENDAR_DAYS', 'WORKING_DAYS', 'PAYABLE_DAYS', 'PRESENT_DAYS', 'ABSENT_DAYS',
@@ -63,10 +66,16 @@ const EXTERNAL_FORMULA_VARIABLES = [
 
 @Injectable()
 export class HrAuditService {
-  constructor(@InjectRepository(HrAuditEvent) private readonly repository: Repository<HrAuditEvent>) {}
+  constructor(
+    @InjectRepository(HrAuditEvent) private readonly repository: Repository<HrAuditEvent>,
+    @Optional() @Inject(WINSTON_MODULE_PROVIDER) private readonly logger?: Logger,
+  ) {}
 
   record(organizationId: string, actorId: string | null | undefined, action: string, subjectType: string, subjectId: string, beforeState?: unknown, afterState?: unknown, metadata: Record<string, unknown> = {}) {
-    return this.repository.save(this.repository.create({
+    return this.recordEvent({
+      moduleName: AuditModuleName.HrPayroll,
+      category: AuditCategory.Business,
+      status: AuditStatus.Success,
       organizationId,
       actorId,
       action,
@@ -75,7 +84,102 @@ export class HrAuditService {
       beforeState: this.asRecord(beforeState),
       afterState: this.asRecord(afterState),
       metadata,
-    }));
+    });
+  }
+
+  recordEvent(event: AuditEventInput) {
+    if (!this.logger)
+      return this.repository.save(this.repository.create(event)).then(() => undefined);
+    this.logger.log('info', 'audit_event', { auditEvent: event });
+    return Promise.resolve();
+  }
+
+  async listRecent(
+    organizationId: string,
+    query: {
+      page?: number;
+      limit?: number;
+      category?: AuditCategory;
+      status?: AuditStatus;
+      scheduleStatus?: AuditScheduleStatus;
+    } = {},
+  ) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 50;
+    const base = this.repository
+      .createQueryBuilder('event')
+      .leftJoin('users', 'actor', 'actor.id = event.actor_id')
+      .where('event.module_name = :moduleName', {
+        moduleName: AuditModuleName.HrPayroll,
+      })
+      .andWhere('event.organization_id = :organizationId', { organizationId });
+    if (query.category)
+      base.andWhere('event.category = :category', { category: query.category });
+    if (query.status)
+      base.andWhere('event.status = :status', { status: query.status });
+    if (query.scheduleStatus)
+      base.andWhere('event.schedule_status = :scheduleStatus', {
+        scheduleStatus: query.scheduleStatus,
+      });
+    const total = await base.getCount();
+    const events = await base
+      .clone()
+      .select([
+        'event.id AS "id"',
+        'event.module_name AS "moduleName"',
+        'event.category AS "category"',
+        'event.status AS "status"',
+        'event.organization_id AS "organizationId"',
+        'event.actor_id AS "actorId"',
+        'COALESCE(event.actor_name, actor.name, actor.email) AS "actorName"',
+        'event.action AS "action"',
+        'event.subject_type AS "subjectType"',
+        'event.subject_id AS "subjectId"',
+        'event.http_method AS "httpMethod"',
+        'event.route AS "route"',
+        'event.status_code AS "statusCode"',
+        'event.request_id AS "requestId"',
+        'event.duration_ms AS "durationMs"',
+        'event.error_code AS "errorCode"',
+        'event.error_message AS "errorMessage"',
+        'event.client_ip AS "clientIp"',
+        'event.user_agent AS "userAgent"',
+        'event.job_name AS "jobName"',
+        'event.schedule AS "schedule"',
+        'event.run_id AS "runId"',
+        'event.scheduled_for AS "scheduledFor"',
+        'event.started_at AS "startedAt"',
+        'event.completed_at AS "completedAt"',
+        'event.schedule_status AS "scheduleStatus"',
+        'event.metadata AS "metadata"',
+        'event.created_at AS "createdAt"',
+      ])
+      .orderBy('event.created_at', 'DESC')
+      .addOrderBy('event.id', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getRawMany<Record<string, unknown>>();
+    const stats = await base
+      .clone()
+      .select('COUNT(*)', 'total')
+      .addSelect(`COUNT(*) FILTER (WHERE event.category = 'CRON' AND event.status IN ('SUCCESS', 'ERROR', 'ABORTED'))`, 'cronTotal')
+      .addSelect(`COUNT(*) FILTER (WHERE event.category = 'CRON' AND event.status = 'SUCCESS' AND event.schedule_status = 'ON_SCHEDULE')`, 'cronOnSchedule')
+      .addSelect(`COUNT(*) FILTER (WHERE event.status != 'STARTED' AND (event.status IN ('ERROR', 'ABORTED') OR event.schedule_status IN ('DELAYED', 'MISSED', 'FAILED')))`, 'issues')
+      .getRawOne<Record<string, string>>();
+    return {
+      generatedAt: new Date(),
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+      stats: {
+        total: Number(stats?.total ?? 0),
+        cronTotal: Number(stats?.cronTotal ?? 0),
+        cronOnSchedule: Number(stats?.cronOnSchedule ?? 0),
+        issues: Number(stats?.issues ?? 0),
+      },
+      events,
+    };
   }
 
   private asRecord(value: unknown) {
