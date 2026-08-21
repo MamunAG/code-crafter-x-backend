@@ -23,6 +23,6 @@ export { AssignSalaryDto } from '../../salary/dto/assign-salary.dto';
 export { CreateLoanDto } from '../../loan/dto/create-loan.dto';
 export { LoanStatusDto } from '../../loan/dto/loan-status.dto';
 export { CreateRulePackDto } from '../../master-data/statutory-rule/dto/create-rule-pack.dto';
-export { CreatePayrollRunDto } from '../../payroll/dto/create-payroll-run.dto';
+export { CreatePayrollRunDto, PayrollScopeOptionsDto } from '../../payroll/dto/create-payroll-run.dto';
 export { PayrollTransitionDto } from '../../payroll/dto/payroll-transition.dto';
 export { ReportQueryDto } from '../../reports/dto/report-query.dto';

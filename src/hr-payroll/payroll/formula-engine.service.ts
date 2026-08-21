@@ -29,6 +29,8 @@ const FUNCTIONS: Record<string, (args: number[]) => number> = {
   IF: ([condition, whenTrue, whenFalse = 0]) => condition !== 0 ? whenTrue : whenFalse,
 };
 
+const CUSTOM_INPUT_PREFIX = 'INPUT_';
+
 @Injectable()
 export class FormulaEngineService {
   private tokens: Token[] = [];
@@ -71,7 +73,7 @@ export class FormulaEngineService {
     for (const definition of definitions) {
       const code = definition.code.toUpperCase();
       const refs = this.getDependencies(definition.formula).map((ref) => ref.toUpperCase());
-      const unknown = refs.filter((ref) => !byCode.has(ref) && !external.has(ref));
+      const unknown = refs.filter((ref) => !byCode.has(ref) && !external.has(ref) && !ref.startsWith(CUSTOM_INPUT_PREFIX));
       if (unknown.length) {
         throw new BadRequestException(`Formula ${definition.code} contains unknown variables: ${unknown.join(', ')}.`);
       }

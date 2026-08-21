@@ -56,6 +56,11 @@ export enum PayrollFrequency {
   Monthly = 'MONTHLY',
 }
 
+export enum PayrollProcessingMode {
+  Individual = 'INDIVIDUAL',
+  Bulk = 'BULK',
+}
+
 export enum PayrollRunType {
   Regular = 'REGULAR',
   Bonus = 'BONUS',

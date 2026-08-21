@@ -22,6 +22,14 @@ describe('FormulaEngineService', () => {
     expect(ordered.map((item) => item.code)).toEqual(['BASIC', 'HOUSE', 'GROSS']);
   });
 
+  it('allows explicitly named custom payroll inputs', () => {
+    const ordered = service.orderDefinitions([
+      { code: 'OVERTIME_PAY', formula: 'OVERTIME_HOURS * INPUT_OT_RATE' },
+    ], ['OVERTIME_HOURS']);
+    expect(ordered).toHaveLength(1);
+    expect(service.evaluate(ordered[0].formula, { OVERTIME_HOURS: 3, INPUT_OT_RATE: 125 }).value).toBe(375);
+  });
+
   it('rejects circular dependencies and unsafe syntax', () => {
     expect(() => service.orderDefinitions([
       { code: 'A', formula: 'B + 1' },

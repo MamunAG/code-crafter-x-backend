@@ -1,16 +1,19 @@
 import { Column, Entity, Index, JoinColumn, ManyToOne, Unique } from 'typeorm';
 import { Factory } from 'src/app-configuration/factory/entity/factory.entity';
-import { PayrollFrequency, PayrollRunStatus, PayrollRunType } from '../../common/hr.enums';
+import { PayrollFrequency, PayrollProcessingMode, PayrollRunStatus, PayrollRunType } from '../../common/hr.enums';
 import { HrTenantEntity } from '../../common/entity/hr-tenant.entity';
 
 @Entity('hr_payroll_runs')
-@Unique('uq_hr_payroll_run_scope', ['organizationId', 'factoryId', 'payGroupId', 'periodStart', 'periodEnd', 'runType', 'sequence'])
+@Unique('uq_hr_payroll_run_scope', ['organizationId', 'factoryId', 'payGroupId', 'periodStart', 'periodEnd', 'runType', 'sequence', 'processingMode', 'selectionCriteria'])
 @Unique('uq_hr_payroll_idempotency', ['organizationId', 'idempotencyKey'])
 export class PayrollRun extends HrTenantEntity {
   @Column({ name: 'idempotency_key', type: 'varchar', length: 120 }) idempotencyKey: string;
   @Column({ name: 'factory_id', type: 'uuid' }) factoryId: string;
   @ManyToOne(() => Factory, { nullable: false }) @JoinColumn({ name: 'factory_id' }) factory: Factory;
   @Column({ name: 'pay_group_id', type: 'uuid' }) payGroupId: string;
+  @Column({ name: 'processing_mode', type: 'enum', enum: PayrollProcessingMode, default: PayrollProcessingMode.Bulk }) processingMode: PayrollProcessingMode;
+  @Column({ name: 'selection_criteria', type: 'jsonb', default: () => "'{}'::jsonb" }) selectionCriteria: Record<string, unknown>;
+  @Column({ name: 'formula_inputs', type: 'jsonb', default: () => "'{}'::jsonb" }) formulaInputs: Record<string, number>;
   @Column({ type: 'enum', enum: PayrollFrequency }) frequency: PayrollFrequency;
   @Column({ name: 'run_type', type: 'enum', enum: PayrollRunType }) runType: PayrollRunType;
   @Column({ type: 'smallint', default: 1 }) sequence: number;

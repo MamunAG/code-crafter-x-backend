@@ -7,7 +7,7 @@ import { Roles } from 'src/common/decorators/roles.decorator';
 import { BaseResponseDto } from 'src/common/dto/base-response.dto';
 import { RolesEnum } from 'src/common/enums/role.enum';
 import { TenantPaginationDto } from '../common/dto/tenant-pagination.dto';
-import { CreatePayrollRunDto } from './dto/create-payroll-run.dto';
+import { CreatePayrollRunDto, PayrollScopeOptionsDto } from './dto/create-payroll-run.dto';
 import { PayrollTransitionDto } from './dto/payroll-transition.dto';
 import { PayrollService } from './payroll.service';
 
@@ -23,6 +23,7 @@ function organizationId(value?: string) {
 export class PayrollController {
   constructor(private readonly service: PayrollService) {}
   @Get() @MenuAccess('Payroll Processing', 'canView') async list(@Headers('x-organization-id') organization: string, @Query() query: TenantPaginationDto) { return new BaseResponseDto(await this.service.list(organizationId(organization), query)); }
+  @Get('scope-options') @MenuAccess('Payroll Processing', 'canView') async scopeOptions(@Headers('x-organization-id') organization: string, @Query() query: PayrollScopeOptionsDto) { return new BaseResponseDto(await this.service.scopeOptions(organizationId(organization), query)); }
   @Get(':id') @MenuAccess('Payroll Processing', 'canView') async one(@Headers('x-organization-id') organization: string, @Param('id', ParseUUIDPipe) id: string) { return new BaseResponseDto(await this.service.findOne(organizationId(organization), id)); }
   @Get(':id/details') @MenuAccess('Payroll Processing', 'canView') async details(@Headers('x-organization-id') organization: string, @Param('id', ParseUUIDPipe) id: string, @Query() query: TenantPaginationDto) { return new BaseResponseDto(await this.service.details(organizationId(organization), id, query)); }
   @Post() @MenuAccess('Payroll Processing', 'canCreate') async create(@Headers('x-organization-id') organization: string, @Headers('idempotency-key') key: string, @CurrentUser() user: AuthUser, @Body() dto: CreatePayrollRunDto) { return new BaseResponseDto(await this.service.create(organizationId(organization), user.userId, key, dto), 'Payroll run created successfully'); }

@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
 import { DataSource, In, Repository } from 'typeorm';
 import { Employee } from '../employee/entity/employee.entity';
-import { CreatePayrollRunDto, PayrollTransitionDto, TenantPaginationDto } from '../common/dto';
+import { CreatePayrollRunDto, PayrollScopeOptionsDto, PayrollTransitionDto, TenantPaginationDto } from '../common/dto';
 import {
   AttendanceDay,
   EmployeeLoan,
@@ -12,6 +12,7 @@ import {
   HrJob,
   HrMasterData,
   LeaveBalance,
+  LeaveRequest,
   LoanInstallment,
   PayrollEmployee,
   PayrollLine,
@@ -20,7 +21,7 @@ import {
   SalaryStructureComponent,
   StatutoryRulePack,
 } from '../common/entity';
-import { ApprovalStatus, HrJobStatus, LoanStatus, PayrollComponentType, PayrollRunStatus, PayrollRunType } from '../common/hr.enums';
+import { ApprovalStatus, HrJobStatus, LoanStatus, PayrollComponentType, PayrollProcessingMode, PayrollRunStatus, PayrollRunType } from '../common/hr.enums';
 import { FormulaEngineService } from './formula-engine.service';
 import { EXTERNAL_FORMULA_VARIABLES, HrAuditService } from '../common/services/hr-platform.service';
 import { BangladeshPayrollPolicyService, BangladeshTaxRules } from './bangladesh-payroll-policy.service';
@@ -41,6 +42,7 @@ export class PayrollService {
     @InjectRepository(HrJob) private readonly jobs: Repository<HrJob>,
     @InjectRepository(StatutoryRulePack) private readonly rulePacks: Repository<StatutoryRulePack>,
     @InjectRepository(Factory) private readonly factories: Repository<Factory>,
+    @InjectRepository(Employee) private readonly employees: Repository<Employee>,
     @InjectRepository(HrMasterData) private readonly masterData: Repository<HrMasterData>,
     @InjectRepository(EmployeeLoan) private readonly loans: Repository<EmployeeLoan>,
     @InjectRepository(LoanInstallment) private readonly installments: Repository<LoanInstallment>,
@@ -57,14 +59,36 @@ export class PayrollService {
     ]);
     if (!factory) throw new BadRequestException('Active factory not found in the selected organization.');
     if (!payGroup) throw new BadRequestException('Active pay group not found in the selected organization.');
+    const processingMode = dto.processingMode ?? PayrollProcessingMode.Bulk;
+    const selectionCriteria = this.selectionCriteria(dto, processingMode);
+    const formulaInputs = this.formulaInputs(dto.formulaInputs);
+    const eligibleEmployees = await this.findEligibleEmployees(organizationId, dto.factoryId, dto.payGroupId, dto.periodStart, dto.periodEnd, selectionCriteria);
+    if (!eligibleEmployees.length) throw new BadRequestException('No active employee matches the selected payroll scope and period.');
     const replay = await this.runs.findOne({ where: { organizationId, idempotencyKey: idempotencyKey.trim() } });
     if (replay) return replay;
-    if (dto.rulePackId) {
-      const pack = await this.rulePacks.findOne({ where: { id: dto.rulePackId, organizationId } });
+    let selectedRulePackId = dto.rulePackId;
+    if (selectedRulePackId) {
+      const pack = await this.rulePacks.findOne({ where: { id: selectedRulePackId, organizationId } });
       if (!pack || pack.reviewStatus !== ApprovalStatus.Approved) throw new BadRequestException('Payroll requires an approved statutory rule pack.');
       if (pack.effectiveFrom > dto.periodEnd || (pack.effectiveTo && pack.effectiveTo < dto.periodStart)) throw new BadRequestException('Statutory rule pack is not effective for this payroll period.');
+    } else {
+      const defaultPack = await this.rulePacks.createQueryBuilder('pack')
+        .where('pack.organization_id = :organizationId', { organizationId })
+        .andWhere('pack.review_status = :reviewStatus', { reviewStatus: ApprovalStatus.Approved })
+        .andWhere('pack.effective_from <= :periodEnd', { periodEnd: dto.periodEnd })
+        .andWhere('(pack.effective_to IS NULL OR pack.effective_to >= :periodStart)', { periodStart: dto.periodStart })
+        .orderBy('pack.effective_from', 'DESC')
+        .addOrderBy('pack.version', 'DESC')
+        .getOne();
+      selectedRulePackId = defaultPack?.id;
     }
-    const run = this.runs.create({ ...dto, sequence: dto.sequence ?? 1, currency: dto.currency ?? 'BDT', organizationId, idempotencyKey: idempotencyKey.trim(), createdById: userId, preparedById: userId });
+    const run = this.runs.create({
+      factoryId: dto.factoryId, payGroupId: dto.payGroupId, frequency: dto.frequency, runType: dto.runType,
+      periodStart: dto.periodStart, periodEnd: dto.periodEnd, paymentDate: dto.paymentDate, rulePackId: selectedRulePackId,
+      sequence: dto.sequence ?? 1, currency: dto.currency ?? 'BDT', processingMode, selectionCriteria, formulaInputs,
+      organizationId, idempotencyKey: idempotencyKey.trim(), createdById: userId, preparedById: userId,
+      snapshotMetadata: { eligibleEmployeeCount: eligibleEmployees.length },
+    });
     try {
       const saved = await this.runs.save(run);
       await this.audit.record(organizationId, userId, 'CREATE', 'PayrollRun', saved.id, null, saved, { idempotencyKey });
@@ -77,10 +101,41 @@ export class PayrollService {
 
   async list(organizationId: string, query: TenantPaginationDto) {
     const page = query.page ?? 1; const limit = query.limit ?? 20;
-    const qb = this.runs.createQueryBuilder('run').where('run.organization_id = :organizationId', { organizationId }).orderBy('run.created_at', 'DESC').skip((page - 1) * limit).take(limit);
+    const qb = this.runs.createQueryBuilder('run').leftJoinAndSelect('run.factory', 'factory').where('run.organization_id = :organizationId', { organizationId }).orderBy('run.created_at', 'DESC').skip((page - 1) * limit).take(limit);
     if (query.search) qb.andWhere('(CAST(run.id AS text) ILIKE :search OR CAST(run.status AS text) ILIKE :search)', { search: `%${query.search}%` });
     const [items, total] = await qb.getManyAndCount(); const totalPages = Math.ceil(total / limit);
     return { items, meta: { total, page, limit, totalPages, hasNextPage: page < totalPages, hasPreviousPage: page > 1 } };
+  }
+
+  async scopeOptions(organizationId: string, query: PayrollScopeOptionsDto) {
+    const employees = await this.employees.createQueryBuilder('employee')
+      .leftJoinAndSelect('employee.department', 'department')
+      .leftJoinAndSelect('employee.designation', 'designation')
+      .where('employee.organization_id = :organizationId', { organizationId })
+      .andWhere('employee.factory_id = :factoryId', { factoryId: query.factoryId })
+      .andWhere('employee.pay_group_id = :payGroupId', { payGroupId: query.payGroupId })
+      .andWhere('employee.is_active = true')
+      .andWhere('employee.deleted_at IS NULL')
+      .orderBy('employee.employee_code', 'ASC')
+      .getMany();
+    const items = employees.map((employee) => ({
+      id: employee.id,
+      employeeCode: employee.employeeCode,
+      employeeName: employee.employeeName,
+      departmentId: employee.departmentId ?? null,
+      departmentName: employee.department?.departmentName ?? null,
+      designationId: employee.designationId ?? null,
+      designationName: employee.designation?.designationName ?? null,
+      sectionName: employee.profile?.official?.section?.trim() || null,
+    }));
+    const unique = <T extends { id: string; name: string }>(values: T[]) => [...new Map(values.map((item) => [item.id, item])).values()].sort((a, b) => a.name.localeCompare(b.name));
+    return {
+      employees: items,
+      departments: unique(items.flatMap((item) => item.departmentId && item.departmentName ? [{ id: item.departmentId, name: item.departmentName }] : [])),
+      designations: unique(items.flatMap((item) => item.designationId && item.designationName ? [{ id: item.designationId, name: item.designationName }] : [])),
+      sections: [...new Set(items.map((item) => item.sectionName).filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b)),
+      formulaVariables: [...EXTERNAL_FORMULA_VARIABLES, 'INPUT_*'],
+    };
   }
 
   async findOne(organizationId: string, id: string) {
@@ -96,8 +151,10 @@ export class PayrollService {
     await this.requireRun(organizationId, id);
     const page = query.page ?? 1; const limit = query.limit ?? 20;
     const qb = this.payrollEmployees.createQueryBuilder('payroll').where('payroll.payroll_run_id = :id', { id }).orderBy("payroll.employee_snapshot->>'employeeCode'", 'ASC').skip((page - 1) * limit).take(limit);
+    if (query.search) qb.andWhere("(payroll.employee_snapshot->>'employeeCode' ILIKE :search OR payroll.employee_snapshot->>'employeeName' ILIKE :search)", { search: `%${query.search}%` });
     const [items, total] = await qb.getManyAndCount(); const totalPages = Math.ceil(total / limit);
-    return { items, meta: { total, page, limit, totalPages, hasNextPage: page < totalPages, hasPreviousPage: page > 1 } };
+    const lines = items.length ? await this.payrollLines.find({ where: { payrollEmployeeId: In(items.map((item) => item.id)) }, order: { componentCode: 'ASC' } }) : [];
+    return { items: items.map((item) => ({ ...item, lines: lines.filter((line) => line.payrollEmployeeId === item.id) })), meta: { total, page, limit, totalPages, hasNextPage: page < totalPages, hasPreviousPage: page > 1 } };
   }
 
   async calculate(organizationId: string, userId: string, id: string, dto: PayrollTransitionDto, idempotencyKey: string) {
@@ -184,6 +241,7 @@ export class PayrollService {
       organizationId, factoryId: original.factoryId, payGroupId: original.payGroupId, frequency: original.frequency,
       runType: PayrollRunType.Reversal, sequence: original.sequence, periodStart: original.periodStart, periodEnd: original.periodEnd,
       paymentDate: original.paymentDate, currency: original.currency, rulePackId: original.rulePackId, reversalOfRunId: original.id,
+      processingMode: original.processingMode, selectionCriteria: original.selectionCriteria, formulaInputs: original.formulaInputs,
       idempotencyKey, createdById: userId, preparedById: userId, snapshotMetadata: { originalRunId: original.id },
     }));
     await this.audit.record(organizationId, userId, 'CREATE_REVERSAL', 'PayrollRun', reversal.id, original, reversal, { comment: dto.comment ?? null });
@@ -204,6 +262,62 @@ export class PayrollService {
     const saved = await this.runs.save(run);
     await this.audit.record(run.organizationId, userId, action, 'PayrollRun', run.id, null, saved, { comment: comment ?? null });
     return saved;
+  }
+
+  private selectionCriteria(dto: CreatePayrollRunDto, processingMode: PayrollProcessingMode) {
+    if (processingMode === PayrollProcessingMode.Individual) {
+      if (!dto.employeeId) throw new BadRequestException('Select an employee for individual payroll processing.');
+      return { employeeIds: [dto.employeeId] };
+    }
+    const sectionNames = dto.sectionName?.trim() ? [dto.sectionName.trim()] : [];
+    const criteria = {
+      departmentIds: dto.departmentId ? [dto.departmentId] : [],
+      designationIds: dto.designationId ? [dto.designationId] : [],
+      sectionNames,
+      includeAllEligible: dto.includeAllEligible === true,
+    };
+    if (!criteria.includeAllEligible && !criteria.departmentIds.length && !criteria.designationIds.length && !criteria.sectionNames.length) {
+      throw new BadRequestException('Select a department, section, or designation, or enable all eligible employees for bulk payroll.');
+    }
+    return criteria;
+  }
+
+  private formulaInputs(value?: Record<string, unknown>) {
+    const result: Record<string, number> = {};
+    for (const [rawKey, rawValue] of Object.entries(value ?? {})) {
+      const key = rawKey.trim().toUpperCase();
+      const numeric = typeof rawValue === 'number' ? rawValue : Number.NaN;
+      if (!/^[A-Z_][A-Z0-9_]*$/.test(key)) throw new BadRequestException(`Formula input ${rawKey} is not a valid variable name.`);
+      if (!EXTERNAL_FORMULA_VARIABLES.includes(key) && !key.startsWith('INPUT_')) throw new BadRequestException(`Custom formula input ${rawKey} must start with INPUT_.`);
+      if (!Number.isFinite(numeric)) throw new BadRequestException(`Formula input ${rawKey} must be numeric.`);
+      result[key] = numeric;
+    }
+    return result;
+  }
+
+  private async findEligibleEmployees(organizationId: string, factoryId: string, payGroupId: string, periodStart: string, periodEnd: string, criteria: Record<string, unknown>) {
+    const qb = this.employees.createQueryBuilder('employee')
+      .where('employee.organization_id = :organizationId', { organizationId })
+      .andWhere('employee.factory_id = :factoryId', { factoryId })
+      .andWhere('employee.pay_group_id = :payGroupId', { payGroupId })
+      .andWhere('employee.is_active = true')
+      .andWhere('employee.joining_date <= :periodEnd', { periodEnd })
+      .andWhere('(employee.separation_date IS NULL OR employee.separation_date >= :periodStart)', { periodStart })
+      .andWhere('employee.deleted_at IS NULL');
+    const employeeIds = this.criteriaStrings(criteria, 'employeeIds');
+    const departmentIds = this.criteriaStrings(criteria, 'departmentIds');
+    const designationIds = this.criteriaStrings(criteria, 'designationIds');
+    if (employeeIds.length) qb.andWhere('employee.id IN (:...employeeIds)', { employeeIds });
+    if (departmentIds.length) qb.andWhere('employee.department_id IN (:...departmentIds)', { departmentIds });
+    if (designationIds.length) qb.andWhere('employee.designation_id IN (:...designationIds)', { designationIds });
+    const employees = await qb.getMany();
+    const sections = this.criteriaStrings(criteria, 'sectionNames').map((item) => item.trim().toLocaleLowerCase());
+    return sections.length ? employees.filter((employee) => sections.includes(employee.profile?.official?.section?.trim().toLocaleLowerCase() ?? '')) : employees;
+  }
+
+  private criteriaStrings(criteria: Record<string, unknown>, key: string) {
+    const value = criteria[key];
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())) : [];
   }
 
   private async requireRun(organizationId: string, id: string) {
@@ -240,6 +354,7 @@ export class PayrollWorkerService {
     @InjectRepository(StatutoryRulePack) private readonly rulePacks: Repository<StatutoryRulePack>,
     @InjectRepository(HrMasterData) private readonly masterData: Repository<HrMasterData>,
     @InjectRepository(LeaveBalance) private readonly leaveBalances: Repository<LeaveBalance>,
+    @InjectRepository(LeaveRequest) private readonly leaveRequests: Repository<LeaveRequest>,
     @InjectRepository(EmployeePayrollOpening) private readonly openings: Repository<EmployeePayrollOpening>,
     private readonly formulas: FormulaEngineService,
     private readonly policy: BangladeshPayrollPolicyService,
@@ -290,8 +405,25 @@ export class PayrollWorkerService {
       await this.processReversal(run, job);
       return;
     }
-    const employees = await this.employees.createQueryBuilder('employee').where('employee.organization_id = :organizationId AND employee.factory_id = :factoryId AND employee.pay_group_id = :payGroupId', run)
-      .andWhere('employee.joining_date <= :periodEnd', run).andWhere('(employee.separation_date IS NULL OR employee.separation_date >= :periodStart)', run).andWhere('employee.deleted_at IS NULL').orderBy('employee.id', 'ASC').getMany();
+    const employeeQuery = this.employees.createQueryBuilder('employee')
+      .leftJoinAndSelect('employee.department', 'department')
+      .leftJoinAndSelect('employee.designation', 'designation')
+      .where('employee.organization_id = :organizationId AND employee.factory_id = :factoryId AND employee.pay_group_id = :payGroupId', run)
+      .andWhere('employee.is_active = true')
+      .andWhere('employee.joining_date <= :periodEnd', run)
+      .andWhere('(employee.separation_date IS NULL OR employee.separation_date >= :periodStart)', run)
+      .andWhere('employee.deleted_at IS NULL')
+      .orderBy('employee.id', 'ASC');
+    const employeeIds = this.selectionStrings(run.selectionCriteria, 'employeeIds');
+    const departmentIds = this.selectionStrings(run.selectionCriteria, 'departmentIds');
+    const designationIds = this.selectionStrings(run.selectionCriteria, 'designationIds');
+    if (employeeIds.length) employeeQuery.andWhere('employee.id IN (:...employeeIds)', { employeeIds });
+    if (departmentIds.length) employeeQuery.andWhere('employee.department_id IN (:...departmentIds)', { departmentIds });
+    if (designationIds.length) employeeQuery.andWhere('employee.designation_id IN (:...designationIds)', { designationIds });
+    let employees = await employeeQuery.getMany();
+    const sectionNames = this.selectionStrings(run.selectionCriteria, 'sectionNames').map((item) => item.trim().toLocaleLowerCase());
+    if (sectionNames.length) employees = employees.filter((employee) => sectionNames.includes(employee.profile?.official?.section?.trim().toLocaleLowerCase() ?? ''));
+    if (!employees.length) throw new Error('No active employee matches the payroll scope at calculation time.');
     await this.payrollLines.createQueryBuilder().delete().where('payroll_employee_id IN (SELECT id FROM hr_payroll_employees WHERE payroll_run_id = :runId)', { runId }).execute();
     await this.payrollEmployees.delete({ payrollRunId: runId });
     const assignments = employees.length ? await this.assignments.createQueryBuilder('assignment').where('assignment.organization_id = :organizationId', run)
@@ -303,7 +435,10 @@ export class PayrollWorkerService {
     const attendance: AttendanceAggregate[] = employees.length ? await this.attendanceDays.createQueryBuilder('day').select('day.employee_id', 'employeeId')
       .addSelect('COUNT(*)', 'calendarDays').addSelect("COUNT(*) FILTER (WHERE day.status = 'PRESENT')", 'presentDays')
       .addSelect("COUNT(*) FILTER (WHERE day.status = 'ABSENT')", 'absentDays').addSelect("COUNT(*) FILTER (WHERE day.status = 'LEAVE')", 'leaveDays')
-      .addSelect('COALESCE(SUM(day.overtime_minutes), 0)', 'overtimeMinutes').addSelect('COALESCE(SUM(day.late_minutes), 0)', 'lateMinutes')
+      .addSelect("COUNT(*) FILTER (WHERE day.status = 'HOLIDAY')", 'holidayDays').addSelect("COUNT(*) FILTER (WHERE day.status = 'WEEKLY_OFF')", 'weeklyOffDays')
+      .addSelect("COUNT(*) FILTER (WHERE day.status = 'MISSING_PUNCH')", 'missingPunchDays')
+      .addSelect('COALESCE(SUM(day.worked_minutes), 0)', 'workedMinutes').addSelect('COALESCE(SUM(day.overtime_minutes), 0)', 'overtimeMinutes')
+      .addSelect('COALESCE(SUM(day.late_minutes), 0)', 'lateMinutes').addSelect('COALESCE(SUM(day.early_exit_minutes), 0)', 'earlyExitMinutes')
       .where('day.organization_id = :organizationId', run).andWhere('day.employee_id IN (:...employeeIds)', { employeeIds: employees.map((item) => item.id) })
       .andWhere('day.work_date BETWEEN :periodStart AND :periodEnd', run).groupBy('day.employee_id').getRawMany<AttendanceAggregate>() : [];
     const activeLoans = employees.length ? await this.loans.find({ where: { organizationId: run.organizationId, employeeId: In(employees.map((item) => item.id)), status: LoanStatus.Active } }) : [];
@@ -311,6 +446,14 @@ export class PayrollWorkerService {
       .andWhere('installment.due_date <= :periodEnd AND installment.paid_at IS NULL', run).getMany() : [];
     const rulePack = run.rulePackId ? await this.rulePacks.findOne({ where: { id: run.rulePackId, organizationId: run.organizationId } }) : null;
     const openingRows = employees.length ? await this.openings.find({ where: { organizationId: run.organizationId, employeeId: In(employees.map((item) => item.id)), taxYear: Number(run.periodEnd.slice(0, 4)) } }) : [];
+    const leaveRequests = employees.length ? await this.leaveRequests.createQueryBuilder('request')
+      .where('request.organization_id = :organizationId', run)
+      .andWhere('request.employee_id IN (:...employeeIds)', { employeeIds: employees.map((item) => item.id) })
+      .andWhere('request.status = :leaveStatus', { leaveStatus: ApprovalStatus.Approved })
+      .andWhere('request.start_date <= :periodEnd AND request.end_date >= :periodStart', run)
+      .getMany() : [];
+    const leaveTypeIds = [...new Set(leaveRequests.map((item) => item.leaveTypeId))];
+    const leaveTypes = leaveTypeIds.length ? await this.masterData.find({ where: { organizationId: run.organizationId, id: In(leaveTypeIds), type: HrMasterDataType.LeaveType } }) : [];
     let processed = 0; let failed = 0;
     for (const chunk of this.chunk(employees, 250)) {
       for (const employee of chunk) {
@@ -320,15 +463,26 @@ export class PayrollWorkerService {
           const structure = structures.find((item) => item.id === assignment.salaryStructureId);
           if (!structure) throw new Error('Salary structure not found.');
           const components = componentRows.filter((item) => item.salaryStructureId === structure.id);
-          const ordered = this.formulas.orderDefinitions(components, EXTERNAL_FORMULA_VARIABLES);
           const attendanceRow: Partial<AttendanceAggregate> = attendance.find((item) => item.employeeId === employee.id) ?? {};
           const employeeLoans = activeLoans.filter((item) => item.employeeId === employee.id);
           const dueInstallments = loanInstallments.filter((item) => employeeLoans.some((loan) => loan.id === item.loanId));
+          const leave = this.leaveSummary(employee.id, run.periodStart, run.periodEnd, leaveRequests, leaveTypes);
+          const attendanceLeaveDays = Number(attendanceRow.leaveDays ?? 0);
+          const unmatchedLeaveDays = Math.max(0, attendanceLeaveDays - leave.totalDays);
+          const paidLeaveDays = leave.paidDays;
+          const unpaidLeaveDays = leave.unpaidDays + unmatchedLeaveDays;
+          const formulaInputs = this.numericInputs(run.formulaInputs);
           const context: Record<string, number> = {
-            BASE: Number(assignment.baseAmount), CALENDAR_DAYS: Number(attendanceRow.calendarDays ?? 0), WORKING_DAYS: Number(attendanceRow.calendarDays ?? 0),
-            PAYABLE_DAYS: Number(attendanceRow.presentDays ?? 0) + Number(attendanceRow.leaveDays ?? 0), PRESENT_DAYS: Number(attendanceRow.presentDays ?? 0),
-            ABSENT_DAYS: Number(attendanceRow.absentDays ?? 0), UNPAID_LEAVE_DAYS: 0, OVERTIME_HOURS: Number(attendanceRow.overtimeMinutes ?? 0) / 60,
-            LATE_MINUTES: Number(attendanceRow.lateMinutes ?? 0), LOAN_DEDUCTION: dueInstallments.reduce((sum, item) => sum + Math.min(Number(item.amount) - Number(item.paidAmount), Number(employeeLoans.find((loan) => loan.id === item.loanId)?.outstandingAmount ?? 0)), 0),
+            BASE: Number(assignment.baseAmount), CALENDAR_DAYS: Number(attendanceRow.calendarDays ?? 0),
+            WORKING_DAYS: Number(attendanceRow.presentDays ?? 0) + Number(attendanceRow.absentDays ?? 0) + attendanceLeaveDays + Number(attendanceRow.missingPunchDays ?? 0),
+            PAYABLE_DAYS: Number(attendanceRow.presentDays ?? 0) + paidLeaveDays + Number(attendanceRow.holidayDays ?? 0) + Number(attendanceRow.weeklyOffDays ?? 0),
+            PRESENT_DAYS: Number(attendanceRow.presentDays ?? 0), ABSENT_DAYS: Number(attendanceRow.absentDays ?? 0),
+            LEAVE_DAYS: Math.max(attendanceLeaveDays, leave.totalDays), PAID_LEAVE_DAYS: paidLeaveDays, UNPAID_LEAVE_DAYS: unpaidLeaveDays,
+            HOLIDAY_DAYS: Number(attendanceRow.holidayDays ?? 0), WEEKLY_OFF_DAYS: Number(attendanceRow.weeklyOffDays ?? 0), MISSING_PUNCH_DAYS: Number(attendanceRow.missingPunchDays ?? 0),
+            WORKED_HOURS: Number(attendanceRow.workedMinutes ?? 0) / 60, OVERTIME_HOURS: Number(attendanceRow.overtimeMinutes ?? 0) / 60,
+            APPROVED_OT_MINUTES: Number(attendanceRow.overtimeMinutes ?? 0), LATE_MINUTES: Number(attendanceRow.lateMinutes ?? 0), EARLY_EXIT_MINUTES: Number(attendanceRow.earlyExitMinutes ?? 0),
+            LOAN_DEDUCTION: dueInstallments.reduce((sum, item) => sum + Math.min(Number(item.amount) - Number(item.paidAmount), Number(employeeLoans.find((loan) => loan.id === item.loanId)?.outstandingAmount ?? 0)), 0),
+            LOAN_OUTSTANDING: employeeLoans.reduce((sum, loan) => sum + Number(loan.outstandingAmount), 0),
             ARREARS: 0, BONUS: 0, TAX_DEDUCTION: 0, PF_EMPLOYEE: 0, PF_EMPLOYER: 0, GRATUITY: 0,
           };
           const rules = rulePack?.rules ?? {};
@@ -341,7 +495,9 @@ export class PayrollWorkerService {
             context.PF_EMPLOYEE = Number(assignment.baseAmount) * Number(providentFund.employeeRate ?? 0);
             context.PF_EMPLOYER = Number(assignment.baseAmount) * Number(providentFund.employerRate ?? 0);
           }
+          Object.assign(context, formulaInputs);
           Object.assign(context, Object.fromEntries(Object.entries(assignment.componentOverrides ?? {}).map(([key, value]) => [key.toUpperCase(), Number(value)])));
+          const ordered = this.formulas.orderDefinitions(components, [...EXTERNAL_FORMULA_VARIABLES, ...Object.keys(formulaInputs)]);
           const calculated = ordered.map((component) => {
             const result = this.formulas.evaluate(component.formula, context); context[component.code.toUpperCase()] = result.value;
             return { component, result };
@@ -349,10 +505,16 @@ export class PayrollWorkerService {
           const gross = calculated.filter((item) => item.component.type === PayrollComponentType.Earning).reduce((sum, item) => sum + item.result.value, 0);
           const deductions = calculated.filter((item) => item.component.type === PayrollComponentType.Deduction).reduce((sum, item) => sum + item.result.value, 0);
           const employer = calculated.filter((item) => item.component.type === PayrollComponentType.EmployerContribution).reduce((sum, item) => sum + item.result.value, 0);
+          const warnings = [
+            ...(Number(attendanceRow.calendarDays ?? 0) === 0 ? ['NO_ATTENDANCE_DATA'] : []),
+            ...(unmatchedLeaveDays > 0 ? ['LEAVE_WITHOUT_APPROVED_POLICY'] : []),
+            ...(Number(attendanceRow.missingPunchDays ?? 0) > 0 ? ['MISSING_PUNCH'] : []),
+            ...(gross - deductions < 0 ? ['NEGATIVE_NET_PAY'] : []),
+          ];
           const payrollEmployee = await this.payrollEmployees.save(this.payrollEmployees.create({ payrollRunId: run.id, employeeId: employee.id,
-            employeeSnapshot: { employeeCode: employee.employeeCode, employeeName: employee.employeeName, factoryId: employee.factoryId, departmentId: employee.departmentId, designationId: employee.designationId, payGroupId: employee.payGroupId },
-            inputSnapshot: { salaryAssignment: assignment, attendance: attendanceRow, calculationContext: context, rulePack: rulePack ? { id: rulePack.id, code: rulePack.code, version: rulePack.version, rules: rulePack.rules } : null, loans: dueInstallments },
-            grossAmount: this.money(gross), deductionAmount: this.money(deductions), employerContributionAmount: this.money(employer), netAmount: this.money(gross - deductions), warnings: gross - deductions < 0 ? ['NEGATIVE_NET_PAY'] : [],
+            employeeSnapshot: { employeeCode: employee.employeeCode, employeeName: employee.employeeName, factoryId: employee.factoryId, departmentId: employee.departmentId, departmentName: employee.department?.departmentName ?? null, designationId: employee.designationId, designationName: employee.designation?.designationName ?? null, sectionName: employee.profile?.official?.section?.trim() || null, payGroupId: employee.payGroupId },
+            inputSnapshot: { salaryAssignment: assignment, attendance: attendanceRow, leave, calculationContext: context, formulaInputs, rulePack: rulePack ? { id: rulePack.id, code: rulePack.code, version: rulePack.version, rules: rulePack.rules } : null, loans: dueInstallments },
+            grossAmount: this.money(gross), deductionAmount: this.money(deductions), employerContributionAmount: this.money(employer), netAmount: this.money(gross - deductions), warnings,
           }));
           await this.payrollLines.save(calculated.map(({ component, result }) => this.payrollLines.create({ payrollEmployeeId: payrollEmployee.id, componentCode: component.code, componentName: component.name, componentNameBn: component.nameBn, type: component.type, amount: this.money(result.value), formula: component.formula, formulaVersion: structure.version, calculationTrace: result.trace })));
         } catch (error) {
@@ -462,6 +624,33 @@ export class PayrollWorkerService {
   }
 
   private chunk<T>(values: T[], size: number) { return Array.from({ length: Math.ceil(values.length / size) }, (_, index) => values.slice(index * size, (index + 1) * size)); }
+  private selectionStrings(criteria: Record<string, unknown> | null | undefined, key: string) { const value = criteria?.[key]; return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())) : []; }
+  private numericInputs(inputs: Record<string, number> | null | undefined) { return Object.fromEntries(Object.entries(inputs ?? {}).filter(([, value]) => Number.isFinite(Number(value))).map(([key, value]) => [key.toUpperCase(), Number(value)])); }
+  private leaveSummary(employeeId: string, periodStart: string, periodEnd: string, requests: LeaveRequest[], leaveTypes: HrMasterData[]) {
+    let paidDays = 0; let unpaidDays = 0;
+    const details: Array<{ requestId: string; leaveTypeId: string; classification: string; days: number }> = [];
+    for (const request of requests.filter((item) => item.employeeId === employeeId)) {
+      const type = leaveTypes.find((item) => item.id === request.leaveTypeId);
+      const rawClassification = type?.settings?.leaveClassification;
+      const classification = typeof rawClassification === 'string' && rawClassification.toUpperCase() === 'UNPAID' ? 'UNPAID' : 'PAID';
+      const breakdownDays = (request.dayBreakdown ?? []).reduce((sum, row) => {
+        const date = typeof row.date === 'string' ? row.date : '';
+        return date >= periodStart && date <= periodEnd ? sum + Number(row.chargedDays ?? 0) : sum;
+      }, 0);
+      const days = breakdownDays > 0 ? breakdownDays : this.overlappingLeaveDays(request, periodStart, periodEnd);
+      if (classification === 'UNPAID') unpaidDays += days; else paidDays += days;
+      details.push({ requestId: request.id, leaveTypeId: request.leaveTypeId, classification, days });
+    }
+    return { paidDays, unpaidDays, totalDays: paidDays + unpaidDays, details };
+  }
+  private overlappingLeaveDays(request: LeaveRequest, periodStart: string, periodEnd: string) {
+    const start = new Date(`${request.startDate > periodStart ? request.startDate : periodStart}T00:00:00Z`);
+    const end = new Date(`${request.endDate < periodEnd ? request.endDate : periodEnd}T00:00:00Z`);
+    if (end < start) return 0;
+    const overlapCalendarDays = Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
+    const requestCalendarDays = Math.floor((new Date(`${request.endDate}T00:00:00Z`).getTime() - new Date(`${request.startDate}T00:00:00Z`).getTime()) / 86400000) + 1;
+    return Number(request.days) * overlapCalendarDays / Math.max(1, requestCalendarDays);
+  }
   private money(value: number) { return (Math.round((value + Number.EPSILON) * 10000) / 10000).toFixed(4); }
   private optionalText(row: Record<string, unknown>, key: string) { const match = Object.keys(row).find((item) => item.replace(/[ _-]/g, '').toLowerCase() === key.toLowerCase()); const value = match ? row[match] : undefined; if (value == null || !['string', 'number', 'boolean'].includes(typeof value)) return undefined; const text = `${value as string | number | boolean}`.trim(); return text || undefined; }
   private text(row: Record<string, unknown>, key: string) { return this.optionalText(row, key) ?? ''; }
@@ -475,6 +664,11 @@ type AttendanceAggregate = {
   presentDays: string;
   absentDays: string;
   leaveDays: string;
+  holidayDays: string;
+  weeklyOffDays: string;
+  missingPunchDays: string;
+  workedMinutes: string;
   overtimeMinutes: string;
   lateMinutes: string;
+  earlyExitMinutes: string;
 };
