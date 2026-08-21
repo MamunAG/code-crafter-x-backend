@@ -5,6 +5,7 @@ import { EmployeeEmploymentHistory } from '../../employee/entity/employee-employ
 import { Shift } from '../../master-data/shift/entity/shift.entity';
 import { RosterAssignment } from '../../roster/entity/roster-assignment.entity';
 import { AttendanceIntegrationCredential } from '../../attendance/entity/attendance-integration-credential.entity';
+import { AttendancePullIntegration } from '../../attendance/entity/attendance-pull-integration.entity';
 import { AttendancePunch } from '../../attendance/entity/attendance-punch.entity';
 import { AttendanceDay } from '../../attendance/entity/attendance-day.entity';
 import { AttendanceCorrection } from '../../attendance/entity/attendance-correction.entity';
@@ -25,7 +26,7 @@ import { HrJob } from '../../payroll/entity/hr-job.entity';
 
 export {
   OrganizationSettings as HrOrganizationSettings, MasterData as HrMasterData, AuditEvent as HrAuditEvent,
-  EmployeeEmploymentHistory, Shift, RosterAssignment, AttendanceIntegrationCredential, AttendancePunch,
+  EmployeeEmploymentHistory, Shift, RosterAssignment, AttendanceIntegrationCredential, AttendancePullIntegration, AttendancePunch,
   AttendanceDay, AttendanceCorrection, OvertimeRequest, LeaveBalance, LeaveRequest, SalaryStructure,
   SalaryStructureComponent, EmployeeSalaryAssignment, EmployeePayrollOpening, EmployeeLoan,
   LoanInstallment, StatutoryRulePack, PayrollRun, PayrollEmployee, PayrollLine, HrJob,
@@ -33,7 +34,7 @@ export {
 
 export const HR_PAYROLL_ENTITIES = [
   MasterData, OrganizationSettings, AuditEvent, EmployeeEmploymentHistory, Shift, RosterAssignment,
-  AttendanceIntegrationCredential, AttendancePunch, AttendanceDay, AttendanceCorrection, OvertimeRequest,
+  AttendanceIntegrationCredential, AttendancePullIntegration, AttendancePunch, AttendanceDay, AttendanceCorrection, OvertimeRequest,
   LeaveBalance, LeaveRequest, SalaryStructure, SalaryStructureComponent, EmployeeSalaryAssignment,
   EmployeePayrollOpening, EmployeeLoan, LoanInstallment, StatutoryRulePack, PayrollRun, PayrollEmployee,
   PayrollLine, HrJob,

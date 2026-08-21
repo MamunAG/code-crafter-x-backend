@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Headers, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type AuthUser from 'src/auth/dto/auth-user';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
@@ -14,6 +14,8 @@ import { DeriveAttendanceDto } from './dto/derive-attendance.dto';
 import { ManualAttendanceDto } from './dto/manual-attendance.dto';
 import { OvertimeDecisionDto } from './dto/overtime-decision.dto';
 import { AttendanceService } from './attendance.service';
+import { AttendancePullService } from './attendance-pull.service';
+import { CreateAttendancePullIntegrationDto, TestAttendancePullIntegrationDto, UpdateAttendancePullIntegrationDto } from './dto/attendance-pull-integration.dto';
 
 function organizationId(value?: string) {
   if (!value?.trim()) throw new BadRequestException('x-organization-id header is required.');
@@ -25,7 +27,19 @@ function organizationId(value?: string) {
 @Roles(RolesEnum.admin, RolesEnum.user)
 @Controller('api/v1/hr/attendance')
 export class AttendanceController {
-  constructor(private readonly workforce: AttendanceService) {}
+  constructor(private readonly workforce: AttendanceService, private readonly pull: AttendancePullService) {}
+  @Get('pull-integrations') @MenuAccess('Attendance Management', 'canView')
+  async pullIntegrations(@Headers('x-organization-id') organization: string) { return new BaseResponseDto(await this.pull.list(organizationId(organization))); }
+  @Post('pull-integrations') @MenuAccess('Attendance Management', 'canCreate')
+  async createPullIntegration(@Headers('x-organization-id') organization: string, @CurrentUser() user: AuthUser, @Body() dto: CreateAttendancePullIntegrationDto) { return new BaseResponseDto(await this.pull.create(organizationId(organization), user.userId, dto), 'Attendance pull integration created'); }
+  @Patch('pull-integrations/:id') @MenuAccess('Attendance Management', 'canUpdate')
+  async updatePullIntegration(@Headers('x-organization-id') organization: string, @CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAttendancePullIntegrationDto) { return new BaseResponseDto(await this.pull.update(organizationId(organization), user.userId, id, dto), 'Attendance pull integration updated'); }
+  @Delete('pull-integrations/:id') @MenuAccess('Attendance Management', 'canDelete')
+  async deletePullIntegration(@Headers('x-organization-id') organization: string, @CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) { return new BaseResponseDto(await this.pull.remove(organizationId(organization), user.userId, id), 'Attendance pull integration deleted'); }
+  @Post('pull-integrations/test-request') @MenuAccess('Attendance Management', 'canCreate')
+  async testPullIntegration(@Headers('x-organization-id') organization: string, @Body() dto: TestAttendancePullIntegrationDto) { return new BaseResponseDto(await this.pull.test(organizationId(organization), dto), 'Vendor response inspected'); }
+  @Post('pull-integrations/:id/sync') @MenuAccess('Attendance Management', 'canUpdate')
+  async syncPullIntegration(@Headers('x-organization-id') organization: string, @CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) { return new BaseResponseDto(await this.pull.syncNow(organizationId(organization), user.userId, id), 'Attendance synchronization completed'); }
   @Post('derive') @MenuAccess('Attendance Management', 'canUpdate')
   async derive(@Headers('x-organization-id') organization: string, @CurrentUser() user: AuthUser, @Body() dto: DeriveAttendanceDto) { return new BaseResponseDto(await this.workforce.deriveAttendance(organizationId(organization), user.userId, dto), 'Attendance derived successfully'); }
   @Post('punches/manual') @MenuAccess('Attendance Management', 'canCreate')

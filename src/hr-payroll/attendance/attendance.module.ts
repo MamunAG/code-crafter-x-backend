@@ -8,11 +8,12 @@ import { AuditModule } from '../audit/audit.module';
 import { AttendanceController } from './attendance.controller';
 import { AttendanceIntegrationController } from './attendance-integration.controller';
 import { AttendanceService } from './attendance.service';
+import { AttendancePullService } from './attendance-pull.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Employee, Factory, ...HR_PAYROLL_ENTITIES]), AuditModule],
   controllers: [AttendanceController, AttendanceIntegrationController],
-  providers: [AttendanceService, FormulaEngineService],
+  providers: [AttendanceService, AttendancePullService, FormulaEngineService],
   exports: [AttendanceService, TypeOrmModule],
 })
 export class AttendanceModule {}
