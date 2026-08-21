@@ -1,12 +1,25 @@
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  Matches,
+  Max,
+  Min,
+} from 'class-validator';
 import {
   AuditCategory,
+  AuditModuleName,
   AuditScheduleStatus,
   AuditStatus,
 } from '../audit.types';
 
 export class AuditLogQueryDto {
+  @IsOptional()
+  @IsEnum(AuditModuleName)
+  moduleName?: AuditModuleName;
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -31,4 +44,14 @@ export class AuditLogQueryDto {
   @IsOptional()
   @IsEnum(AuditScheduleStatus)
   scheduleStatus?: AuditScheduleStatus;
+
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  @IsDateString({ strict: true })
+  fromDate?: string;
+
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  @IsDateString({ strict: true })
+  toDate?: string;
 }

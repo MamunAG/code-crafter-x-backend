@@ -50,7 +50,12 @@ export function resolveAuditModule(path: string) {
 
 export function shouldAuditRequest(method: string, path: string) {
   if (method === 'OPTIONS' || !path.startsWith('/api/')) return false;
-  return !['/api/docs', '/api/v1/hr/health', '/api/v1/hr/audit-log'].some(
-    (prefix) => path.startsWith(prefix),
-  );
+  return ![
+    '/api/docs',
+    '/api/v1/hr/health',
+    '/api/v1/audit-log',
+    '/api/v1/hr/audit-log',
+    '/api/v1/merchandising/audit-log',
+    '/api/v1/iam/audit-log',
+  ].some((prefix) => path.startsWith(prefix));
 }

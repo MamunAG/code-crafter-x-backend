@@ -19,6 +19,11 @@ describe('audit module resolver', () => {
     expect(shouldAuditRequest('GET', '/api/v1/hr/health')).toBe(false);
     expect(shouldAuditRequest('GET', '/api/docs')).toBe(false);
     expect(shouldAuditRequest('GET', '/api/v1/hr/audit-log')).toBe(false);
+    expect(shouldAuditRequest('GET', '/api/v1/audit-log')).toBe(false);
+    expect(shouldAuditRequest('GET', '/api/v1/merchandising/audit-log')).toBe(
+      false,
+    );
+    expect(shouldAuditRequest('GET', '/api/v1/iam/audit-log')).toBe(false);
     expect(shouldAuditRequest('OPTIONS', '/api/v1/style')).toBe(false);
     expect(shouldAuditRequest('POST', '/api/v1/hr/attendance')).toBe(true);
   });
