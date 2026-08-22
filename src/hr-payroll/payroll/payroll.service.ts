@@ -101,7 +101,7 @@ export class PayrollService {
 
   async list(organizationId: string, query: TenantPaginationDto) {
     const page = query.page ?? 1; const limit = query.limit ?? 20;
-    const qb = this.runs.createQueryBuilder('run').leftJoinAndSelect('run.factory', 'factory').where('run.organization_id = :organizationId', { organizationId }).orderBy('run.created_at', 'DESC').skip((page - 1) * limit).take(limit);
+    const qb = this.runs.createQueryBuilder('run').leftJoinAndSelect('run.factory', 'factory').where('run.organization_id = :organizationId', { organizationId }).orderBy('run.createdAt', 'DESC').skip((page - 1) * limit).take(limit);
     if (query.search) qb.andWhere('(CAST(run.id AS text) ILIKE :search OR CAST(run.status AS text) ILIKE :search)', { search: `%${query.search}%` });
     const [items, total] = await qb.getManyAndCount(); const totalPages = Math.ceil(total / limit);
     return { items, meta: { total, page, limit, totalPages, hasNextPage: page < totalPages, hasPreviousPage: page > 1 } };
